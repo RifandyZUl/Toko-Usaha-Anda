@@ -1,0 +1,15 @@
+{
+  "name": "@toko/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    "./components": "./components/index.js",
+    "./utils": "./utils/index.js"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "lucide-react": "^0.294.0"
+  }
+}
+

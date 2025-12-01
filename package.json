@@ -1,14 +1,26 @@
 {
-  "name": "3-macam-10000-landing-page",
+  "name": "toko-usaha-anda-monorepo",
   "version": "2.0.0",
-  "description": "Landing page modern dengan React, Vite, dan Tailwind CSS untuk toko 3 Macam 10.000",
+  "description": "Monorepo untuk Landing Page dan E-Commerce Toko Usaha Anda",
   "type": "module",
+  "private": true,
+  "workspaces": [
+    "frontend/*",
+    "shared",
+    "backend"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "format": "prettier --write \"src/**/*.{js,jsx,css,md}\""
+    "dev:landing": "npm run dev --workspace=frontend/landing",
+    "dev:shop": "npm run dev --workspace=frontend/shop",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev": "npm run dev:landing",
+    "build:landing": "npm run build --workspace=frontend/landing",
+    "build:shop": "npm run build --workspace=frontend/shop",
+    "build": "npm run build:landing && npm run build:shop",
+    "preview:landing": "npm run preview --workspace=frontend/landing",
+    "preview:shop": "npm run preview --workspace=frontend/shop",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write \"**/*.{js,jsx,css,md}\""
   },
   "dependencies": {
     "react": "^18.2.0",

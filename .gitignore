@@ -30,3 +30,10 @@ dist-ssr
 .env.test.local
 .env.production.local
 
+# Backend specific
+backend/.env
+backend/.env.local
+backend/node_modules/
+backend/dist/
+backend/prisma/migrations/
+

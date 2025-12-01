@@ -1,0 +1,272 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-weight: 400;
+    color: #1a1a1a;
+    background-color: #fafafa;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: #1a1a1a;
+  }
+
+  /* GLOBAL: Remove ALL default blue colors from browser and Tailwind */
+  * {
+    --tw-ring-color: #786b5d !important;
+  }
+
+  /* Force remove all blue colors - override browser defaults */
+  * {
+    --blue-50: #f5f3f0 !important;
+    --blue-100: #e8e2d9 !important;
+    --blue-200: #d4c9b8 !important;
+    --blue-300: #b8a990 !important;
+    --blue-400: #9d8f6e !important;
+    --blue-500: #8b7d5f !important;
+    --blue-600: #786b52 !important;
+    --blue-700: #645948 !important;
+    --blue-800: #534b3e !important;
+    --blue-900: #474135 !important;
+  }
+
+  /* Remove default blue link colors - ALL states */
+  a, a:link, a:visited, a:active, a:hover {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  /* Remove blue underline from links */
+  a, a:link, a:visited {
+    text-decoration-color: transparent !important;
+    -webkit-text-decoration-color: transparent !important;
+  }
+
+  a:focus-visible {
+    outline: 2px solid #786b52 !important;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Override ALL default blue focus rings */
+  *:focus,
+  *:focus-visible,
+  *:focus-within {
+    outline-color: #786b52 !important;
+    border-color: #786b52 !important;
+    --tw-ring-color: #786b52 !important;
+  }
+
+  *:focus-visible {
+    outline: 2px solid #786b52 !important;
+    outline-offset: 2px;
+  }
+
+  /* Remove any default blue colors from form elements */
+  input:focus,
+  textarea:focus,
+  select:focus,
+  button:focus,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  button:focus-visible {
+    outline: 2px solid #786b52 !important;
+    outline-offset: 2px;
+    border-color: #786b52 !important;
+    --tw-ring-color: #786b52 !important;
+  }
+
+  /* Remove blue selection color */
+  ::selection {
+    background-color: #786b52 !important;
+    color: white !important;
+  }
+
+  ::-moz-selection {
+    background-color: #786b52 !important;
+    color: white !important;
+  }
+}
+
+@layer components {
+  .container-custom {
+    @apply max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Button base styles */
+  .btn-base {
+    @apply inline-flex items-center justify-center rounded-lg font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+
+  /* Elegant Button Styles */
+  .btn-elegant {
+    @apply transition-all duration-300 ease-in-out;
+    @apply uppercase tracking-[0.05em] text-xs font-semibold;
+    letter-spacing: 0.1em;
+  }
+
+  /* Product Card Styles */
+  .product-card {
+    @apply bg-transparent;
+    @apply transition-all duration-300;
+  }
+
+  .product-card:hover {
+    transform: translateY(-4px);
+  }
+  
+  .product-card {
+    @apply transition-all duration-300;
+  }
+
+  .product-image-wrapper {
+    @apply relative overflow-hidden bg-gray-50;
+    aspect-ratio: 1 / 1;
+  }
+
+  .product-image {
+    @apply w-full h-full object-cover transition-transform duration-700;
+  }
+
+  .product-card:hover .product-image {
+    transform: scale(1.05);
+  }
+
+  /* Brand Signature Accent */
+  .brand-accent {
+    position: relative;
+  }
+
+  .brand-accent::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to right, transparent, #786b52, transparent);
+  }
+
+  /* Elegant Typography */
+  .text-elegant-heading {
+    font-family: 'Playfair Display', serif;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  .text-elegant-body {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+  }
+
+  /* Gradient Text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-primary-800;
+  }
+
+  /* Accent Line Animation */
+  @keyframes slideIn {
+    from {
+      width: 0;
+    }
+    to {
+      width: 100%;
+    }
+  }
+
+  .accent-line {
+    @apply relative;
+  }
+
+  .accent-line::after {
+    content: '';
+    @apply absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-primary-400 via-primary-500 to-primary-600;
+    animation: slideIn 0.3s ease-out;
+  }
+
+  /* Unique Geometric Pattern */
+  .pattern-geometric {
+    background-image: 
+      repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(120, 107, 82, 0.03) 35px, rgba(120, 107, 82, 0.03) 36px),
+      repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(100, 89, 72, 0.03) 35px, rgba(100, 89, 72, 0.03) 36px);
+  }
+
+  /* Corner Accent Style */
+  .corner-accent {
+    position: relative;
+  }
+
+  .corner-accent::before,
+  .corner-accent::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 2px solid;
+    z-index: 10;
+  }
+
+  .corner-accent::before {
+    top: 0;
+    left: 0;
+    border-right: none;
+    border-bottom: none;
+  }
+
+  .corner-accent::after {
+    bottom: 0;
+    right: 0;
+    border-left: none;
+    border-top: none;
+  }
+}
+
+/* Custom Scrollbar - Vintage Color */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #786b52;
+}
+
+/* Smooth Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
