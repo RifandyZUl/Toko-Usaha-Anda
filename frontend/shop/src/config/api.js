@@ -84,6 +84,7 @@ class ApiClient {
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: this.getHeaders(),
+      credentials: 'include',
     })
 
     return this.handleResponse(response)
@@ -96,6 +97,7 @@ class ApiClient {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'POST',
       headers: this.getHeaders(),
+      credentials: 'include',
       body: JSON.stringify(data),
     })
 
@@ -109,6 +111,7 @@ class ApiClient {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'PUT',
       headers: this.getHeaders(),
+      credentials: 'include',
       body: JSON.stringify(data),
     })
 
@@ -122,6 +125,7 @@ class ApiClient {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
+      credentials: 'include',
     })
 
     return this.handleResponse(response)

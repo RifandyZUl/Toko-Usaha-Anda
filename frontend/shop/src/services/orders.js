@@ -1,4 +1,5 @@
 import { apiClient } from '../config/api.js'
+import { logError } from '../utils/logger.js'
 
 /**
  * Orders API Service
@@ -20,7 +21,7 @@ export const createOrder = async orderData => {
       message: response.message,
     }
   } catch (error) {
-    console.error('Error creating order:', error)
+    logError('Error creating order', error)
     return {
       success: false,
       error: error.message,
@@ -39,7 +40,7 @@ export const getOrders = async () => {
       orders: response.orders || [],
     }
   } catch (error) {
-    console.error('Error fetching orders:', error)
+    logError('Error fetching orders', error)
     return {
       success: false,
       error: error.message,
@@ -47,6 +48,11 @@ export const getOrders = async () => {
     }
   }
 }
+
+/**
+ * Get all user orders (alias for getOrders)
+ */
+export const getAllOrders = getOrders
 
 /**
  * Get order by ID
@@ -60,7 +66,7 @@ export const getOrderById = async orderId => {
       order: response.order,
     }
   } catch (error) {
-    console.error('Error fetching order:', error)
+    logError('Error fetching order', error)
     return {
       success: false,
       error: error.message,

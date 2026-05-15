@@ -1,169 +1,80 @@
-import prisma from '../config/database.js'
+/**
+ * Product Controller
+ * Handles all product-related API requests
+ */
+
+import productService from '../services/productService.js'
+import { asyncHandler } from '../utils/asyncHandler.js'
 import { validateProduct } from '../utils/validators.js'
+import { HTTP_STATUS, SUCCESS_MESSAGES } from '../constants/index.js'
+import { ValidationError } from '../utils/errors.js'
 
 /**
  * Get all products
  */
-export const getProducts = async (req, res, next) => {
-  try {
-    const { category, search, page = 1, limit = 20 } = req.query
-
-    const skip = (parseInt(page) - 1) * parseInt(limit)
-    const take = parseInt(limit)
-
-    const where = {
-      isActive: true,
-      ...(category && { category: { slug: category } }),
-      ...(search && {
-        OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-        ],
-      }),
-    }
-
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            },
-          },
-        },
-        skip,
-        take,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.product.count({ where }),
-    ])
-
-    res.json({
-      products,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit)),
-      },
-    })
-  } catch (error) {
-    next(error)
-  }
-}
+export const getProducts = asyncHandler(async (req, res) => {
+  const result = await productService.getAllProducts({
+    ...req.query,
+    isAdmin: req.user?.role === 'ADMIN'
+  })
+  res.status(HTTP_STATUS.OK).json(result)
+})
 
 /**
  * Get product by ID
  */
-export const getProductById = async (req, res, next) => {
-  try {
-    const { id } = req.params
-
-    const product = await prisma.product.findUnique({
-      where: { id },
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          },
-        },
-      },
-    })
-
-    if (!product) {
-      return res.status(404).json({ error: 'Product not found' })
-    }
-
-    res.json({ product })
-  } catch (error) {
-    next(error)
-  }
-}
+export const getProductById = asyncHandler(async (req, res) => {
+  const product = await productService.getProductById(req.params.id)
+  res.status(HTTP_STATUS.OK).json({ product })
+})
 
 /**
  * Get all categories
  */
-export const getCategories = async (req, res, next) => {
-  try {
-    const categories = await prisma.category.findMany({
-      orderBy: { name: 'asc' },
-    })
-
-    res.json({ categories })
-  } catch (error) {
-    next(error)
-  }
-}
+export const getCategories = asyncHandler(async (req, res) => {
+  const categories = await productService.getAllCategories()
+  res.status(HTTP_STATUS.OK).json({ categories })
+})
 
 /**
  * Create product (Admin only)
  */
-export const createProduct = async (req, res, next) => {
-  try {
-    const validation = validateProduct(req.body)
-    if (!validation.isValid) {
-      return res.status(400).json({ errors: validation.errors })
-    }
-
-    const product = await prisma.product.create({
-      data: req.body,
-      include: {
-        category: true,
-      },
-    })
-
-    res.status(201).json({
-      message: 'Product created successfully',
-      product,
-    })
-  } catch (error) {
-    next(error)
+export const createProduct = asyncHandler(async (req, res) => {
+  const validation = validateProduct(req.body)
+  if (!validation.isValid) {
+    throw new ValidationError('Product validation failed', validation.errors)
   }
-}
+
+  const product = await productService.createProduct(req.body)
+  res.status(HTTP_STATUS.CREATED).json({
+    message: SUCCESS_MESSAGES.PRODUCT_CREATED,
+    product
+  })
+})
 
 /**
  * Update product (Admin only)
  */
-export const updateProduct = async (req, res, next) => {
-  try {
-    const { id } = req.params
-
-    const product = await prisma.product.update({
-      where: { id },
-      data: req.body,
-      include: {
-        category: true,
-      },
-    })
-
-    res.json({
-      message: 'Product updated successfully',
-      product,
-    })
-  } catch (error) {
-    next(error)
+export const updateProduct = asyncHandler(async (req, res) => {
+  const validation = validateProduct(req.body)
+  if (!validation.isValid) {
+    throw new ValidationError('Product validation failed', validation.errors)
   }
-}
+
+  const product = await productService.updateProduct(req.params.id, req.body)
+  res.status(HTTP_STATUS.OK).json({
+    message: SUCCESS_MESSAGES.PRODUCT_UPDATED,
+    product
+  })
+})
 
 /**
  * Delete product (Admin only)
  */
-export const deleteProduct = async (req, res, next) => {
-  try {
-    const { id } = req.params
-
-    await prisma.product.delete({
-      where: { id },
-    })
-
-    res.json({ message: 'Product deleted successfully' })
-  } catch (error) {
-    next(error)
-  }
-}
+export const deleteProduct = asyncHandler(async (req, res) => {
+  await productService.deleteProduct(req.params.id)
+  res.status(HTTP_STATUS.OK).json({
+    message: SUCCESS_MESSAGES.PRODUCT_DELETED
+  })
+})
 

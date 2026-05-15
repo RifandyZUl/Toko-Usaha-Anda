@@ -24,9 +24,9 @@ async function main() {
   // Create categories
   const categories = [
     {
-      name: 'Kebutuhan Sehari Hari',
+      name: 'Peralatan Rumah Tangga',
       slug: 'household',
-      description: 'Peralatan rumah tangga dan kebutuhan sehari-hari',
+      description: 'Peralatan rumah tangga lengkap dan berkualitas',
     },
     {
       name: 'Perkakas',
@@ -44,11 +44,14 @@ async function main() {
   for (const category of categories) {
     const created = await prisma.category.upsert({
       where: { slug: category.slug },
-      update: {},
+      update: {
+        name: category.name,
+        description: category.description,
+      },
       create: category,
     })
     createdCategories.push(created)
-    console.log(`✅ Category created: ${created.name}`)
+    console.log(`✅ Category created/updated: ${created.name}`)
   }
 
   // Create sample products

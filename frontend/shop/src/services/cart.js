@@ -1,4 +1,5 @@
 import { apiClient } from '../config/api.js'
+import { logError } from '../utils/logger.js'
 
 /**
  * Cart API Service
@@ -16,7 +17,7 @@ export const getCart = async () => {
       total: response.total || 0,
     }
   } catch (error) {
-    console.error('Error fetching cart:', error)
+    logError('Error fetching cart', error)
     return {
       success: false,
       error: error.message,
@@ -41,7 +42,7 @@ export const addToCart = async ({ productId, quantity = 1 }) => {
       message: response.message,
     }
   } catch (error) {
-    console.error('Error adding to cart:', error)
+    logError('Error adding to cart', error)
     return {
       success: false,
       error: error.message,
@@ -63,7 +64,7 @@ export const updateCartItem = async (itemId, quantity) => {
       message: response.message,
     }
   } catch (error) {
-    console.error('Error updating cart item:', error)
+    logError('Error updating cart item', error)
     return {
       success: false,
       error: error.message,
@@ -82,7 +83,7 @@ export const removeFromCart = async itemId => {
       success: true,
     }
   } catch (error) {
-    console.error('Error removing from cart:', error)
+    logError('Error removing from cart', error)
     return {
       success: false,
       error: error.message,
@@ -107,7 +108,7 @@ export const clearCart = async () => {
 
     return { success: true }
   } catch (error) {
-    console.error('Error clearing cart:', error)
+    logError('Error clearing cart', error)
     return {
       success: false,
       error: error.message,
@@ -140,7 +141,7 @@ export const syncCartToBackend = async localItems => {
 
     return { success: true }
   } catch (error) {
-    console.error('Error syncing cart:', error)
+    logError('Error syncing cart', error)
     return {
       success: false,
       error: error.message,

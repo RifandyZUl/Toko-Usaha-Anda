@@ -16,6 +16,8 @@ import {
   AtSign,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Menu,
   X,
   Building2,
@@ -54,6 +56,8 @@ const iconMap = {
   Instagram: AtSign, // Using AtSign as alternative for Instagram
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Menu,
   X,
   Building2,

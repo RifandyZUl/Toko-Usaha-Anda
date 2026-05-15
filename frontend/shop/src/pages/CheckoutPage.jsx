@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
@@ -10,6 +10,8 @@ import { createOrder } from '../services/orders'
 import ShopNavigation from '../components/ShopNavigation'
 import Loading from '../components/Loading'
 import ErrorMessage from '../components/ErrorMessage'
+import { formatCurrency } from '../utils/format'
+import { logError } from '../utils/logger'
 
 /**
  * Checkout Page - Elegant design inspired by Arhaus
@@ -20,21 +22,25 @@ function CheckoutPage() {
   const { user } = useAuthStore()
   const [orderError, setOrderError] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const totalPrice = getTotalPrice()
+  
+  const totalPrice = useMemo(() => getTotalPrice(), [getTotalPrice])
   const shippingFee = 15000
-  const finalTotal = totalPrice + shippingFee
+  const finalTotal = useMemo(() => totalPrice + shippingFee, [totalPrice])
 
   // Pre-fill form with user data if available
-  const initialValues = {
-    name: user?.name || '',
-    phone: user?.phone || '',
-    address: '',
-    city: '',
-    postalCode: '',
-    paymentMethod: 'cod',
-  }
+  const initialValues = useMemo(
+    () => ({
+      name: user?.name || '',
+      phone: user?.phone || '',
+      address: '',
+      city: '',
+      postalCode: '',
+      paymentMethod: 'cod',
+    }),
+    [user]
+  )
 
-  const onSubmit = async values => {
+  const onSubmit = useCallback(async values => {
     setIsProcessing(true)
     setOrderError(null)
 
@@ -66,12 +72,12 @@ function CheckoutPage() {
         setOrderError(orderResult.error || 'Gagal membuat pesanan')
       }
     } catch (error) {
-      console.error('Checkout error:', error)
+      logError('Checkout error', error)
       setOrderError(error.message || 'Terjadi kesalahan saat checkout')
     } finally {
       setIsProcessing(false)
     }
-  }
+  }, [items, clearCart, navigate])
 
   const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit } =
     useForm(initialValues, validateCheckoutForm, onSubmit)
@@ -294,7 +300,7 @@ function CheckoutPage() {
                       {item.name} x{item.quantity}
                     </span>
                     <span className="font-medium text-gray-900">
-                      Rp {(item.price * item.quantity).toLocaleString('id-ID')}
+                      {formatCurrency(Number(item.price) * item.quantity)}
                     </span>
                   </div>
                 ))}
@@ -303,13 +309,13 @@ function CheckoutPage() {
                   <div className="flex justify-between text-sm font-body text-gray-600">
                     <span>Subtotal</span>
                     <span className="font-medium text-gray-900">
-                      Rp {totalPrice.toLocaleString('id-ID')}
+                      {formatCurrency(totalPrice)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm font-body text-gray-600">
                     <span>Shipping</span>
                     <span className="font-medium text-gray-900">
-                      Rp {shippingFee.toLocaleString('id-ID')}
+                      {formatCurrency(shippingFee)}
                     </span>
                   </div>
                 </div>
@@ -318,7 +324,7 @@ function CheckoutPage() {
               <div className="flex justify-between">
                 <span className="text-base font-heading font-medium text-gray-900">Total</span>
                 <span className="text-lg font-heading font-medium text-gray-900">
-                  Rp {finalTotal.toLocaleString('id-ID')}
+                  {formatCurrency(finalTotal)}
                 </span>
               </div>
             </div>

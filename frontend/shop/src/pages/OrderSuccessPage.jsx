@@ -6,6 +6,7 @@ import { getOrderById } from '../services/orders'
 import ShopNavigation from '../components/ShopNavigation'
 import Loading from '../components/Loading'
 import ErrorMessage from '../components/ErrorMessage'
+import { formatCurrency } from '../utils/format'
 
 /**
  * Order Success Page - Elegant design
@@ -103,7 +104,7 @@ function OrderSuccessPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Total:</span>
                   <span className="font-heading font-medium text-gray-900">
-                    Rp {Number(order.totalAmount).toLocaleString('id-ID')}
+                    {formatCurrency(Number(order.totalAmount))}
                   </span>
                 </div>
               </div>
@@ -121,7 +122,7 @@ function OrderSuccessPage() {
                           {item.product?.name || 'Product'} x{item.quantity}
                         </span>
                         <span className="font-medium text-gray-900">
-                          Rp {(Number(item.price) * item.quantity).toLocaleString('id-ID')}
+                          {formatCurrency(Number(item.price) * item.quantity)}
                         </span>
                       </div>
                     ))}

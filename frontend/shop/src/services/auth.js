@@ -1,4 +1,5 @@
 import { apiClient } from '../config/api.js'
+import { logError } from '../utils/logger.js'
 
 /**
  * Auth API Service
@@ -27,7 +28,7 @@ export const register = async userData => {
       user: response.user,
     }
   } catch (error) {
-    console.error('Error registering user:', error)
+    logError('Error registering user', error)
     return {
       success: false,
       error: error.message,
@@ -56,7 +57,7 @@ export const login = async credentials => {
       user: response.user,
     }
   } catch (error) {
-    console.error('Error logging in:', error)
+    logError('Error logging in', error)
     return {
       success: false,
       error: error.message,
@@ -75,7 +76,7 @@ export const getCurrentUser = async () => {
       user,
     }
   } catch (error) {
-    console.error('Error fetching current user:', error)
+    logError('Error fetching current user', error)
     return {
       success: false,
       error: error.message,

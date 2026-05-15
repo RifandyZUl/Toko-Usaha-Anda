@@ -1,4 +1,5 @@
 import prisma from '../config/database.js'
+import { transformProduct } from '../utils/productUtils.js'
 
 /**
  * Get user cart
@@ -23,12 +24,20 @@ export const getCart = async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
     })
 
-    const total = cartItems.reduce((sum, item) => {
+    // Transform products to ensure image URLs are complete
+    const transformedCartItems = await Promise.all(
+      cartItems.map(async item => ({
+        ...item,
+        product: await transformProduct(item.product),
+      }))
+    )
+
+    const total = transformedCartItems.reduce((sum, item) => {
       return sum + Number(item.product.price) * item.quantity
     }, 0)
 
     res.json({
-      cartItems,
+      cartItems: transformedCartItems,
       total,
     })
   } catch (error) {
@@ -95,9 +104,15 @@ export const addToCart = async (req, res, next) => {
         },
       })
 
+      // Transform product to ensure image URLs are complete
+      const transformedItem = {
+        ...updatedItem,
+        product: await transformProduct(updatedItem.product),
+      }
+
       return res.json({
         message: 'Cart updated',
-        cartItem: updatedItem,
+        cartItem: transformedItem,
       })
     }
 
@@ -123,9 +138,15 @@ export const addToCart = async (req, res, next) => {
       },
     })
 
+    // Transform product to ensure image URLs are complete
+    const transformedItem = {
+      ...cartItem,
+      product: await transformProduct(cartItem.product),
+    }
+
     res.status(201).json({
       message: 'Item added to cart',
-      cartItem,
+      cartItem: transformedItem,
     })
   } catch (error) {
     next(error)
@@ -180,9 +201,15 @@ export const updateCartItem = async (req, res, next) => {
       },
     })
 
+    // Transform product to ensure image URLs are complete
+    const transformedItem = {
+      ...updatedItem,
+      product: transformProduct(updatedItem.product),
+    }
+
     res.json({
       message: 'Cart item updated',
-      cartItem: updatedItem,
+      cartItem: transformedItem,
     })
   } catch (error) {
     next(error)

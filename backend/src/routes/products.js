@@ -1,3 +1,8 @@
+/**
+ * Product Routes
+ * Public reads / Admin-only writes — with input validation
+ */
+
 import express from 'express'
 import {
   getProducts,
@@ -8,18 +13,22 @@ import {
   deleteProduct,
 } from '../controllers/productController.js'
 import { authenticate, adminOnly } from '../middleware/auth.js'
+import {
+  validateProductInput,
+  validatePagination,
+  validateUuidParam,
+} from '../middleware/validate.js'
 
 const router = express.Router()
 
-// Public routes
-router.get('/', getProducts)
+// ── Public routes ─────────────────────────────────────────────────────────────
+router.get('/', validatePagination, getProducts)
 router.get('/categories', getCategories)
-router.get('/:id', getProductById)
+router.get('/:id', validateUuidParam('id'), getProductById)
 
-// Admin routes
-router.post('/', authenticate, adminOnly, createProduct)
-router.put('/:id', authenticate, adminOnly, updateProduct)
-router.delete('/:id', authenticate, adminOnly, deleteProduct)
+// ── Admin-only routes ─────────────────────────────────────────────────────────
+router.post('/', authenticate, adminOnly, validateProductInput, createProduct)
+router.put('/:id', authenticate, adminOnly, validateUuidParam('id'), validateProductInput, updateProduct)
+router.delete('/:id', authenticate, adminOnly, validateUuidParam('id'), deleteProduct)
 
 export default router
-

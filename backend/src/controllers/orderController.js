@@ -1,5 +1,6 @@
 import prisma from '../config/database.js'
 import { validateOrder } from '../utils/validators.js'
+import { transformProduct } from '../utils/productUtils.js'
 
 /**
  * Create order
@@ -100,9 +101,20 @@ export const createOrder = async (req, res, next) => {
       return newOrder
     })
 
+    // Transform products in order items to ensure image URLs are complete
+    const transformedOrder = {
+      ...order,
+      items: await Promise.all(
+        order.items.map(async item => ({
+          ...item,
+          product: await transformProduct(item.product),
+        }))
+      ),
+    }
+
     res.status(201).json({
       message: 'Order created successfully',
-      order,
+      order: transformedOrder,
     })
   } catch (error) {
     next(error)
@@ -110,13 +122,23 @@ export const createOrder = async (req, res, next) => {
 }
 
 /**
- * Get user orders
+ * Get user orders (or all orders if admin)
  */
 export const getOrders = async (req, res, next) => {
   try {
+    // If admin, get all orders. Otherwise, get only user's orders
+    const where = req.userRole === 'ADMIN' ? {} : { userId: req.userId }
+
     const orders = await prisma.order.findMany({
-      where: { userId: req.userId },
+      where,
       include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
         items: {
           include: {
             product: {
@@ -136,7 +158,20 @@ export const getOrders = async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
     })
 
-    res.json({ orders })
+    // Transform products in order items to ensure image URLs are complete
+    const transformedOrders = await Promise.all(
+      orders.map(async order => ({
+        ...order,
+        items: await Promise.all(
+          order.items.map(async item => ({
+            ...item,
+            product: await transformProduct(item.product),
+          }))
+        ),
+      }))
+    )
+
+    res.json({ orders: transformedOrders })
   } catch (error) {
     next(error)
   }
@@ -179,7 +214,18 @@ export const getOrderById = async (req, res, next) => {
       return res.status(403).json({ error: 'Unauthorized' })
     }
 
-    res.json({ order })
+    // Transform products in order items to ensure image URLs are complete
+    const transformedOrder = {
+      ...order,
+      items: await Promise.all(
+        order.items.map(async item => ({
+          ...item,
+          product: await transformProduct(item.product),
+        }))
+      ),
+    }
+
+    res.json({ order: transformedOrder })
   } catch (error) {
     next(error)
   }

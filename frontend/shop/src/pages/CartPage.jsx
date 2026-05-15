@@ -1,13 +1,19 @@
-import { Link } from 'react-router-dom'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
 import { useCartStore } from '../stores/cartStore'
+import { useAuthStore } from '../stores/authStore'
 import ShopNavigation from '../components/ShopNavigation'
+import { formatCurrency } from '../utils/format'
+import { logError, logInfo } from '../utils/logger'
+import { getProductById } from '../services/products'
 
 /**
  * Cart Page - Toko Usaha Anda E-Commerce
  */
 function CartPage() {
+  const navigate = useNavigate()
   const {
     items,
     updateQuantity,
@@ -15,10 +21,79 @@ function CartPage() {
     clearCart,
     getTotalPrice,
   } = useCartStore()
+  const { isAuthenticated } = useAuthStore()
+  
+  const [productStocks, setProductStocks] = useState({})
+  const [loadingStocks, setLoadingStocks] = useState(false)
+  
+  const handleCheckout = useCallback(() => {
+    if (!isAuthenticated()) {
+      navigate('/shop/login', { state: { from: { pathname: '/shop/checkout' } } })
+      return
+    }
+    navigate('/shop/checkout')
+  }, [isAuthenticated, navigate])
 
-  const totalPrice = getTotalPrice()
+  // Fetch current stock for all cart items
+  useEffect(() => {
+    const fetchStocks = async () => {
+      if (items.length === 0) {
+        setProductStocks({})
+        return
+      }
+
+      setLoadingStocks(true)
+      const stockMap = {}
+
+      try {
+        const validItems = []
+        
+        await Promise.all(
+          items.map(async item => {
+            try {
+              const result = await getProductById(item.id)
+              if (result.success && result.product) {
+                stockMap[item.id] = result.product.stock || 0
+                validItems.push(item) // Product exists, keep it
+              } else {
+                // Product not found, remove from cart
+                logInfo(`Product ${item.id} not found, removing from cart`)
+                removeItem(item.id)
+              }
+            } catch (error) {
+              logError(`Error fetching stock for product ${item.id}`, error)
+              // If product fetch fails (404 or other error), remove from cart
+              removeItem(item.id)
+            }
+          })
+        )
+        setProductStocks(stockMap)
+        
+        // Auto-adjust quantities that exceed stock
+        validItems.forEach(item => {
+          const currentStock = stockMap[item.id] !== undefined 
+            ? stockMap[item.id] 
+            : (item.stock || 0)
+          if (item.quantity > currentStock && currentStock > 0) {
+            updateQuantity(item.id, currentStock)
+          } else if (currentStock === 0 && item.quantity > 0) {
+            // Don't auto-remove, just let user see the out of stock message
+          }
+        })
+      } catch (error) {
+        logError('Error fetching product stocks', error)
+      } finally {
+        setLoadingStocks(false)
+      }
+    }
+
+    fetchStocks()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items])
+
+  const totalPrice = useMemo(() => getTotalPrice(), [getTotalPrice])
   const shippingFee = 15000
-  const finalTotal = totalPrice + shippingFee
+  const finalTotal = useMemo(() => totalPrice + shippingFee, [totalPrice])
 
   if (items.length === 0) {
     return (
@@ -60,105 +135,143 @@ function CartPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           {/* Cart Items */}
-          <div className="lg:col-span-2 space-y-6">
-            {items.map(item => (
-              <div
-                key={item.id}
-                className="bg-white border-b border-gray-200 pb-6 flex gap-6"
-              >
-                {/* Product Image */}
-                <Link
-                  to={`/shop/product/${item.id}`}
-                  className="flex-shrink-0 w-24 h-24 md:w-32 md:h-32 overflow-hidden bg-gray-50"
-                >
-                  <img
-                    src={item.image || '/placeholder.jpg'}
-                    alt={item.name}
-                    className="w-full h-full object-cover"
-                    onError={e => {
-                      e.target.src = '/placeholder.jpg'
-                    }}
-                  />
-                </Link>
+          <div className="lg:col-span-2 space-y-4">
+            {items.map(item => {
+              const currentStock = productStocks[item.id] !== undefined 
+                ? productStocks[item.id] 
+                : (item.stock || 0)
+              const isOutOfStock = currentStock === 0
+              const isQuantityExceeded = item.quantity > currentStock
+              const maxQuantity = Math.max(0, currentStock)
 
-                {/* Product Info */}
-                <div className="flex-1 flex flex-col">
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white border-b border-gray-200 pb-4 flex gap-4"
+                >
+                  {/* Product Image */}
                   <Link
                     to={`/shop/product/${item.id}`}
-                    className="mb-2 hover:text-gray-600 transition-colors"
+                    className="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 overflow-hidden bg-gray-50"
                   >
-                    <h3 className="text-base font-heading font-medium text-gray-900">
-                      {item.name}
-                    </h3>
+                    <img
+                      src={item.image || '/placeholder.jpg'}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      onError={e => {
+                        e.target.src = '/placeholder.jpg'
+                      }}
+                    />
                   </Link>
-                  
-                  <p className="text-base font-heading font-medium text-gray-900 mb-4">
-                    Rp {item.price.toLocaleString('id-ID')}
-                  </p>
 
-                  <div className="mt-auto flex items-center justify-between">
-                    {/* Quantity Controls */}
-                    <div className="flex items-center gap-3">
+                  {/* Product Info */}
+                  <div className="flex-1 flex flex-col">
+                    <Link
+                      to={`/shop/product/${item.id}`}
+                      className="mb-1.5 hover:text-gray-600 transition-colors"
+                    >
+                      <h3 className="text-sm font-heading font-medium text-gray-900">
+                        {item.name}
+                      </h3>
+                    </Link>
+                    
+                    <p className="text-sm font-heading font-medium text-gray-900 mb-2">
+                      {formatCurrency(Number(item.price))}
+                    </p>
+
+                    {/* Stock Status */}
+                    {loadingStocks ? (
+                      <p className="text-xs text-gray-400 mb-2">Memeriksa stok...</p>
+                    ) : isOutOfStock ? (
+                      <p className="text-xs text-red-600 font-medium mb-2">
+                        ⚠️ Stok habis
+                      </p>
+                    ) : isQuantityExceeded ? (
+                      <p className="text-xs text-orange-600 font-medium mb-2">
+                        ⚠️ Stok tersedia: {currentStock} unit
+                      </p>
+                    ) : currentStock < 5 && currentStock > 0 ? (
+                      <p className="text-xs text-gray-600 mb-2">
+                        Stok tersedia: {currentStock} unit
+                      </p>
+                    ) : null}
+
+                    <div className="mt-auto flex items-center justify-between">
+                      {/* Quantity Controls */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          disabled={isOutOfStock || item.quantity <= 1}
+                          className="w-7 h-7 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Icon name="ChevronDown" size={14} className="rotate-90" />
+                        </button>
+                        <span className={`w-10 text-center text-xs font-body font-medium ${
+                          isQuantityExceeded ? 'text-red-600' : ''
+                        }`}>
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => {
+                            if (item.quantity < maxQuantity) {
+                              updateQuantity(item.id, item.quantity + 1)
+                            }
+                          }}
+                          disabled={isOutOfStock || item.quantity >= maxQuantity}
+                          className="w-7 h-7 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Icon name="ChevronDown" size={14} className="-rotate-90" />
+                        </button>
+                      </div>
+
+                      {/* Remove Button */}
                       <button
-                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        className="w-8 h-8 border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                        onClick={() => removeItem(item.id)}
+                        className="text-xs font-body text-gray-500 hover:text-gray-900 uppercase tracking-wider transition-colors"
                       >
-                        <Icon name="ChevronDown" size={16} className="rotate-90" />
-                      </button>
-                      <span className="w-12 text-center text-sm font-body font-medium">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        className="w-8 h-8 border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition-colors"
-                      >
-                        <Icon name="ChevronDown" size={16} className="-rotate-90" />
+                        Remove
                       </button>
                     </div>
-
-                    {/* Remove Button */}
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="text-xs font-body text-gray-500 hover:text-gray-900 uppercase tracking-wider transition-colors"
-                    >
-                      Remove
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white p-8 sticky top-20">
-              <h2 className="text-xl font-heading font-medium text-gray-900 mb-6">
+            <div className="bg-white p-6 sticky top-20">
+              <h2 className="text-lg font-heading font-medium text-gray-900 mb-4">
                 Order Summary
               </h2>
               
-              <div className="space-y-4 mb-8 pb-8 border-b border-gray-200">
-                <div className="flex justify-between text-sm font-body text-gray-600">
+              <div className="space-y-3 mb-6 pb-6 border-b border-gray-200">
+                <div className="flex justify-between text-xs font-body text-gray-600">
                   <span>Subtotal</span>
                   <span className="font-medium text-gray-900">
-                    Rp {totalPrice.toLocaleString('id-ID')}
+                    {formatCurrency(totalPrice)}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm font-body text-gray-600">
+                <div className="flex justify-between text-xs font-body text-gray-600">
                   <span>Shipping</span>
                   <span className="font-medium text-gray-900">
-                    Rp {shippingFee.toLocaleString('id-ID')}
+                    {formatCurrency(shippingFee)}
                   </span>
                 </div>
               </div>
 
-              <div className="flex justify-between mb-8">
-                <span className="text-base font-heading font-medium text-gray-900">Total</span>
-                <span className="text-lg font-heading font-medium text-gray-900">
-                  Rp {finalTotal.toLocaleString('id-ID')}
+              <div className="flex justify-between mb-6">
+                <span className="text-sm font-heading font-medium text-gray-900">Total</span>
+                <span className="text-base font-heading font-medium text-gray-900">
+                  {formatCurrency(finalTotal)}
                 </span>
               </div>
 
-              <Link to="/shop/checkout" className="block mb-4">
+              <button
+                onClick={handleCheckout}
+                className="w-full mb-4"
+              >
                 <Button
                   variant="primary"
                   fullWidth
@@ -167,7 +280,7 @@ function CartPage() {
                 >
                   Proceed to Checkout
                 </Button>
-              </Link>
+              </button>
 
               <Link
                 to="/shop"

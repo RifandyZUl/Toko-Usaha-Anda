@@ -1,4 +1,5 @@
 import { apiClient } from '../config/api.js'
+import { logError, logDebug } from '../utils/logger.js'
 
 /**
  * Products API Service
@@ -21,7 +22,7 @@ export const getProducts = async (params = {}) => {
       pagination: response.pagination || {},
     }
   } catch (error) {
-    console.error('Error fetching products:', error)
+    logError('Error fetching products', error)
     return {
       success: false,
       error: error.message,
@@ -37,13 +38,20 @@ export const getProducts = async (params = {}) => {
  */
 export const getProductById = async productId => {
   try {
-    const product = await apiClient.get(`/products/${productId}`)
+    const response = await apiClient.get(`/products/${productId}`)
+    const product = response.product || response
+    logDebug('Product detail received', product)
+    logDebug('Product image URLs', {
+      image: product.image,
+      imageUrl: product.imageUrl,
+      images: product.images,
+    })
     return {
       success: true,
       product,
     }
   } catch (error) {
-    console.error('Error fetching product:', error)
+    logError('Error fetching product', error)
     return {
       success: false,
       error: error.message,
@@ -63,7 +71,7 @@ export const getCategories = async () => {
       categories: response.categories || [],
     }
   } catch (error) {
-    console.error('Error fetching categories:', error)
+    logError('Error fetching categories', error)
     return {
       success: false,
       error: error.message,
