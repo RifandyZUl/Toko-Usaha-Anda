@@ -123,21 +123,107 @@ export const validateOrderStatus = [
 ]
 
 export const validateCreateOrder = [
-  body('shippingAddress')
+  body('receiverName')
     .trim()
-    .notEmpty().withMessage('Shipping address is required')
-    .isLength({ min: 10, max: 500 }).withMessage('Address must be between 10 and 500 characters')
+    .notEmpty().withMessage('Nama penerima wajib diisi')
+    .isLength({ min: 2, max: 100 }).withMessage('Nama penerima harus antara 2 sampai 100 karakter')
     .escape(),
 
   body('shippingPhone')
     .trim()
-    .notEmpty().withMessage('Phone number is required')
-    .matches(/^[0-9+\-\s()]+$/).withMessage('Invalid phone number format')
-    .isLength({ min: 9, max: 20 }).withMessage('Phone must be between 9 and 20 characters'),
+    .notEmpty().withMessage('Nomor telepon wajib diisi')
+    .matches(/^[0-9+\-\s()]+$/).withMessage('Format nomor telepon tidak valid')
+    .isLength({ min: 9, max: 20 }).withMessage('Nomor telepon harus antara 9 sampai 20 karakter'),
+
+  body('addressDetail')
+    .trim()
+    .notEmpty().withMessage('Detail alamat/jalan wajib diisi')
+    .isLength({ min: 10, max: 500 }).withMessage('Detail alamat harus antara 10 sampai 500 karakter')
+    .escape(),
+
+  body('province')
+    .trim()
+    .notEmpty().withMessage('Provinsi wajib diisi')
+    .escape(),
+
+  body('city')
+    .trim()
+    .notEmpty().withMessage('Kota/Kabupaten wajib diisi')
+    .escape(),
+
+  body('subdistrict')
+    .trim()
+    .notEmpty().withMessage('Kecamatan wajib diisi')
+    .escape(),
+
+  body('kelurahan')
+    .trim()
+    .notEmpty().withMessage('Kelurahan wajib diisi')
+    .escape(),
+
+  body('postalCode')
+    .trim()
+    .notEmpty().withMessage('Kode pos wajib diisi')
+    .isLength({ min: 5, max: 5 }).withMessage('Kode pos harus terdiri dari 5 digit angka')
+    .isNumeric().withMessage('Kode pos harus berupa angka'),
+
+  body('latitude')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .escape(),
+
+  body('longitude')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .escape(),
+
+  body('shippingCourier')
+    .trim()
+    .notEmpty().withMessage('Kurir pengiriman wajib dipilih')
+    .isIn(['JNE', 'J&T', 'POS', 'GOSEND']).withMessage('Kurir pengiriman tidak valid'),
+
+  body('shippingFee')
+    .notEmpty().withMessage('Biaya pengiriman wajib diisi')
+    .isFloat({ min: 0, max: 1000000 }).withMessage('Biaya pengiriman harus berupa angka antara 0 sampai Rp1.000.000')
+    .toFloat(),
 
   body('paymentMethod')
-    .notEmpty().withMessage('Payment method is required')
-    .isIn(['CASH', 'TRANSFER', 'COD']).withMessage('Invalid payment method'),
+    .notEmpty().withMessage('Metode pembayaran wajib dipilih')
+    .isIn([
+      'CASH',
+      'TRANSFER',
+      'COD',
+      'MIDTRANS',
+      'QRIS',
+      'TRANSFER_BCA',
+      'TRANSFER_MANDIRI',
+      'TRANSFER_BRI',
+      'TRANSFER_BNI',
+      'TRANSFER_PERMATA',
+    ]).withMessage('Metode pembayaran tidak valid'),
+
+  handleValidationErrors,
+]
+
+// ─── Profile Validator ────────────────────────────────────────────────────────
+
+export const validateUpdateProfile = [
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters')
+    .escape(),
+
+  body('phone')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .matches(/^[0-9+\-\s()]+$/).withMessage('Format nomor telepon tidak valid')
+    .isLength({ min: 9, max: 20 }).withMessage('Nomor telepon harus antara 9 sampai 20 karakter'),
+
+  body('address')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 2000 }).withMessage('Alamat maksimal 2000 karakter'),
 
   handleValidationErrors,
 ]

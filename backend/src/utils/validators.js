@@ -72,9 +72,9 @@ export const validateRegister = (data) => {
 
   // Password validation
   if (!data.password || typeof data.password !== 'string') {
-    errors.password = ERROR_MESSAGES.INVALID_PASSWORD
+    errors.password = ERROR_MESSAGES.INVALID_PASS
   } else if (data.password.length < VALIDATION.PASSWORD_MIN_LENGTH) {
-    errors.password = ERROR_MESSAGES.INVALID_PASSWORD
+    errors.password = ERROR_MESSAGES.INVALID_PASS
   } else if (data.password.length > VALIDATION.PASSWORD_MAX_LENGTH) {
     errors.password = `Password must not exceed ${VALIDATION.PASSWORD_MAX_LENGTH} characters`
   }

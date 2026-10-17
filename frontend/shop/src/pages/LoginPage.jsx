@@ -4,7 +4,6 @@ import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
 import { useAuthStore } from '../stores/authStore'
 import Loading from '../components/Loading'
-import ErrorMessage from '../components/ErrorMessage'
 
 /**
  * Login Page - Elegant design
@@ -12,7 +11,8 @@ import ErrorMessage from '../components/ErrorMessage'
 function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { login, isLoading, error, isAuthenticated } = useAuthStore()
+  const { login, isLoading, error, user } = useAuthStore()
+  const isAuthenticated = !!user
   
   const [formData, setFormData] = useState({
     email: '',
@@ -21,7 +21,7 @@ function LoginPage() {
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
-    if (isAuthenticated()) {
+    if (isAuthenticated) {
       const from = location.state?.from?.pathname || '/shop'
       navigate(from, { replace: true })
     }
@@ -67,11 +67,15 @@ function LoginPage() {
       const from = location.state?.from?.pathname || '/shop'
       navigate(from, { replace: true })
     } else {
-      setFormError(result.error || 'Login gagal')
+      if (result.errors && result.errors.length > 0) {
+        setFormError(result.errors[0].message)
+      } else {
+        setFormError(result.error || 'Login gagal')
+      }
     }
   }
 
-  if (isAuthenticated()) {
+  if (isAuthenticated) {
     return <Loading message="Redirecting..." />
   }
 
@@ -165,7 +169,7 @@ function LoginPage() {
           {/* Register Link */}
           <div className="mt-8 text-center">
             <p className="text-sm font-body text-gray-600">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link
                 to="/shop/register"
                 className="text-gray-900 hover:text-gray-600 font-medium underline underline-offset-2"

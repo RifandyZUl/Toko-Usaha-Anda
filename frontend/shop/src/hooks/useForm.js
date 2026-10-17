@@ -71,7 +71,6 @@ export function useForm(initialValues = {}, validate, onSubmit) {
 
       try {
         await onSubmit(values)
-        setValues(initialValues)
         setTouched({})
       } catch (error) {
         setErrors({

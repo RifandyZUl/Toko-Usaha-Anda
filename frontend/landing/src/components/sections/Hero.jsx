@@ -1,76 +1,74 @@
-import { useIntersectionObserver } from '../../hooks/useIntersectionObserver'
-import Button from '../common/Button'
-import { scrollToElement } from '../../utils/scroll'
-import heroBg from '../../assets/bgbaru.png'
+import { useEffect, useState } from 'react'
+import { SHOP_URL, CONTACT_WHATSAPP } from '../../utils/constants'
+import heroBg from '../../assets/bg.png'
 
-/**
- * Hero section - Nike style: Gambar jelas seperti hero section pada umumnya
- */
 function Hero() {
-  const [ref, isIntersecting] = useIntersectionObserver()
+  const [isLoaded, setIsLoaded] = useState(false)
 
-  const handleButtonClick = elementId => {
-    scrollToElement(elementId)
-  }
+  useEffect(() => {
+    setIsLoaded(true)
+  }, [])
 
   return (
     <section
       id="home"
-      ref={ref}
-      className="relative min-h-screen flex items-center justify-center pt-20 sm:pt-24 overflow-hidden"
+      className="relative h-screen min-h-[600px] flex items-center overflow-hidden bg-griya-bg pt-20"
     >
-      {/* Background Image - Jelas seperti hero section pada umumnya */}
-      <div className="absolute inset-0 overflow-hidden">
+      {/* Background Image & Overlay */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute inset-0 bg-black/30 z-10" />
         <img
           src={heroBg}
           alt="Toko Usaha Anda"
-          className="absolute inset-0 w-full h-full object-cover"
+          className={`w-full h-full object-cover transition-transform duration-[15000ms] ease-out ${
+            isLoaded ? 'scale-100' : 'scale-105'
+          }`}
           loading="eager"
         />
-        {/* Overlay hitam subtle untuk readability */}
-        <div className="absolute inset-0 bg-black/30" />
       </div>
 
-      {/* Content - Nike Style: Minimalis dengan Typography yang lebih kecil */}
-      <div className="container-custom relative z-10 py-16 sm:py-24 md:py-32 lg:py-40 xl:py-48">
-        <div className="max-w-5xl mx-auto text-center">
-          {/* Main Heading - Ukuran lebih kecil */}
+      {/* Hero Content */}
+      <div className="relative z-20 w-full max-w-[1400px] mx-auto px-5 md:px-10 lg:px-16">
+        <div className="max-w-3xl text-white">
           <h1
-            className={`text-[36px] sm:text-[48px] md:text-[56px] lg:text-[64px] xl:text-[72px] 2xl:text-[80px] font-heading font-black text-white mb-6 sm:mb-8 md:mb-12 leading-[0.9] tracking-tighter transition-all duration-1000 ${
-              isIntersecting ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+            className={`font-serif text-[32px] sm:text-[40px] md:text-[52px] lg:text-[60px] font-medium mb-4 md:mb-6 leading-[1.2] tracking-normal transition-all duration-1000 transform ${
+              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
             }`}
-            style={{ transitionDelay: '200ms', textShadow: '0 2px 20px rgba(0,0,0,0.3)' }}
+            style={{ transitionDelay: '200ms' }}
           >
-            Kualitas
-            <br />
-            Terpercaya
+            Solusi Lengkap untuk Rumah & Kebutuhan Anda
           </h1>
-
-          {/* Subtitle - Simple dan Clean */}
           <p
-            className={`text-[14px] sm:text-[16px] md:text-[18px] lg:text-[20px] xl:text-[22px] 2xl:text-[24px] text-white/90 max-w-3xl mx-auto mb-6 sm:mb-8 md:mb-12 lg:mb-16 font-body font-light leading-relaxed transition-all duration-1000 ${
-              isIntersecting ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+            className={`font-sans text-[14px] md:text-[16px] mb-6 md:mb-8 text-white/90 max-w-2xl leading-relaxed font-light transition-all duration-1000 transform ${
+              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
             }`}
-            style={{ transitionDelay: '400ms', textShadow: '0 1px 10px rgba(0,0,0,0.2)' }}
+            style={{ transitionDelay: '500ms' }}
           >
-            Alat rumah tangga, perkakas tukang, dan alat motor dengan kualitas terbaik
+            Kami menyediakan berbagai pilihan Kebutuhan rumah tangga, Peralatan tukang & aksesoris
+            motor dengan kualitas yang terjamin dan harga terjangkau.
           </p>
-
-          {/* CTA Button - Simple dan Clean seperti Nike */}
           <div
-            className={`transition-all duration-1000 ${
-              isIntersecting ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+            className={`flex flex-wrap gap-4 transition-all duration-1000 transform ${
+              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
             }`}
-            style={{ transitionDelay: '600ms' }}
+            style={{ transitionDelay: '800ms' }}
           >
-            <Button
-              onClick={() => handleButtonClick('products')}
-              variant="primary"
-              size="lg"
-              className="bg-black hover:bg-gray-900 text-white font-semibold px-8 sm:px-12 py-4 sm:py-5 text-base sm:text-lg md:text-xl transition-all duration-300 rounded-full"
+            <a
+              href={SHOP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-griya-secondary text-white px-6 md:px-8 py-3 md:py-3.5 font-sans font-medium text-[13px] tracking-wider uppercase hover:bg-[#b09268] transition-colors duration-300"
             >
-              Mulai Berbelanja
-            </Button>
+              Lihat Produk
+            </a>
+            <a
+              href={`https://wa.me/${CONTACT_WHATSAPP}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-transparent border border-white text-white px-6 md:px-8 py-3 md:py-3.5 font-sans font-medium text-[13px] tracking-wider uppercase hover:bg-white hover:text-griya-primary transition-colors duration-300"
+            >
+              Hubungi via WhatsApp
+            </a>
           </div>
         </div>
       </div>

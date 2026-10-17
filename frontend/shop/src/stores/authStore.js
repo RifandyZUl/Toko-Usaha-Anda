@@ -11,22 +11,20 @@ export const useAuthStore = create(
     (set, get) => ({
       // State
       user: null,
-      token: null,
       isLoading: false,
       error: null,
 
       // Actions
-      setAuth: (user, token) => {
-        set({ user, token, error: null })
-        // Update API client token
-        import('../config/api.js').then(({ apiClient }) => {
-          apiClient.setToken(token)
-        })
+      setAuth: (user) => {
+        set({ user, error: null })
       },
 
+      /**
+       * Clear auth state locally only (no API call).
+       * Used when auth check fails or token is invalid.
+       */
       clearAuth: () => {
-        set({ user: null, token: null, error: null })
-        logoutAPI()
+        set({ user: null, error: null })
       },
 
       login: async (email, password) => {
@@ -34,16 +32,16 @@ export const useAuthStore = create(
         try {
           const result = await login({ email, password })
           if (result.success) {
-            get().setAuth(result.user, result.token)
+            get().setAuth(result.user)
             return { success: true }
           } else {
             set({ error: result.error || 'Login failed' })
-            return { success: false, error: result.error }
+            return { success: false, error: result.error, errors: result.errors }
           }
         } catch (error) {
           const errorMessage = error.message || 'Login failed'
           set({ error: errorMessage })
-          return { success: false, error: errorMessage }
+          return { success: false, error: errorMessage, errors: error.errors }
         } finally {
           set({ isLoading: false })
         }
@@ -54,41 +52,46 @@ export const useAuthStore = create(
         try {
           const result = await register(userData)
           if (result.success) {
-            get().setAuth(result.user, result.token)
+            get().setAuth(result.user)
             return { success: true }
           } else {
             set({ error: result.error || 'Registration failed' })
-            return { success: false, error: result.error }
+            return { success: false, error: result.error, errors: result.errors }
           }
         } catch (error) {
           const errorMessage = error.message || 'Registration failed'
           set({ error: errorMessage })
-          return { success: false, error: errorMessage }
+          return { success: false, error: errorMessage, errors: error.errors }
         } finally {
           set({ isLoading: false })
         }
       },
 
-      logout: () => {
-        get().clearAuth()
+      /**
+       * User-initiated logout — clears state AND calls backend to clear HttpOnly cookie.
+       */
+      logout: async () => {
+        set({ user: null, error: null })
+        try {
+          await logoutAPI()
+        } catch {
+          // Even if API call fails, local state is already cleared
+        }
       },
 
       checkAuth: async () => {
-        const { token } = get()
-        if (!token) {
-          return false
-        }
-
         try {
           const result = await getCurrentUser()
           if (result.success && result.user) {
             set({ user: result.user })
             return true
           } else {
+            // Only clear local state — don't call logout API
             get().clearAuth()
             return false
           }
         } catch (error) {
+          // 401 is expected when not logged in — just clear local state
           get().clearAuth()
           return false
         }
@@ -96,7 +99,7 @@ export const useAuthStore = create(
 
       // Getters
       isAuthenticated: () => {
-        return !!get().token && !!get().user
+        return !!get().user
       },
 
       isAdmin: () => {
@@ -107,15 +110,7 @@ export const useAuthStore = create(
       name: 'toko-auth-storage', // localStorage key
       partialize: (state) => ({
         user: state.user,
-        token: state.token,
       }),
-      onRehydrateStorage: () => async (state) => {
-        // Set token to API client after rehydration
-        if (state?.token && typeof window !== 'undefined') {
-          const { apiClient } = await import('../config/api.js')
-          apiClient.setToken(state.token)
-        }
-      },
     }
   )
 )

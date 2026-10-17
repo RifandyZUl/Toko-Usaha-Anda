@@ -29,11 +29,11 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-primary-600 rounded-full;
+    @apply bg-griya-secondary rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-primary-700;
+    @apply bg-[#b09268]; /* darker secondary */
   }
 }
 
@@ -50,7 +50,7 @@
 
   /* Gradient text dengan animasi */
   .gradient-text {
-    @apply bg-gradient-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-griya-primary to-griya-secondary bg-clip-text text-transparent;
     background-size: 200% 200%;
     animation: gradientText 3s ease infinite;
   }
@@ -66,12 +66,12 @@
 
   /* Gradient background */
   .gradient-bg {
-    @apply bg-gradient-to-br from-gray-50 via-blue-50/30 to-white;
+    @apply bg-gradient-to-br from-griya-bg via-griya-surface-low to-white;
   }
 
   /* Professional gradient */
   .professional-gradient {
-    background: linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #0f172a 100%);
+    background: linear-gradient(135deg, #2C2724 0%, #4A423C 50%, #1A1A1A 100%);
     background-size: 200% 200%;
     animation: gradient 15s ease infinite;
   }

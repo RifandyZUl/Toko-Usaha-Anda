@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import Navigation from './components/layout/Navigation'
 import Hero from './components/sections/Hero'
+import Features from './components/sections/Features'
 import Products from './components/sections/Products'
-import FeaturedProducts from './components/sections/FeaturedProducts'
 import About from './components/sections/About'
-import CTA from './components/sections/CTA'
+import FeaturedProducts from './components/sections/FeaturedProducts'
+import Testimonials from './components/sections/Testimonials'
 import Contact from './components/sections/Contact'
 import Footer from './components/layout/Footer'
 import { ScrollToTop } from './components/common/ScrollToTop'
@@ -19,14 +20,15 @@ function App() {
   }, [scrollToTop])
 
   return (
-    <div className="min-h-screen bg-white antialiased">
+    <div className="min-h-screen bg-griya-bg antialiased">
       <Navigation />
       <main className="relative">
         <Hero />
+        <Features />
         <Products />
-        <FeaturedProducts />
         <About />
-        <CTA />
+        <FeaturedProducts />
+        <Testimonials />
         <Contact />
       </main>
       <Footer />

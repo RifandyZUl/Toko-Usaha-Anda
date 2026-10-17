@@ -10,6 +10,8 @@ export function useIntersectionObserver(options = {}) {
   const [hasIntersected, setHasIntersected] = useState(false)
   const ref = useRef(null)
 
+  const { threshold = 0.1, rootMargin = '0px 0px -50px 0px', root = null } = options
+
   useEffect(() => {
     const element = ref.current
     if (!element) return
@@ -22,9 +24,9 @@ export function useIntersectionObserver(options = {}) {
         }
       },
       {
-        threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px',
-        ...options,
+        threshold,
+        rootMargin,
+        root,
       }
     )
 
@@ -35,7 +37,7 @@ export function useIntersectionObserver(options = {}) {
         observer.unobserve(element)
       }
     }
-  }, [options, hasIntersected])
+  }, [threshold, rootMargin, root, hasIntersected])
 
   return [ref, isIntersecting, hasIntersected]
 }

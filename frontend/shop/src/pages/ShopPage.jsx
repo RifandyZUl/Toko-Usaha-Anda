@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { getProducts, getCategories } from '../services/products'
 import ShopNavigation from '../components/ShopNavigation'
 import ErrorMessage from '../components/ErrorMessage'
@@ -16,7 +16,9 @@ import { logDebug } from '../utils/logger'
  * Shop Page - Toko Usaha Anda E-Commerce
  */
 function ShopPage() {
+  const [searchParams] = useSearchParams()
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Fetch categories
   const {
@@ -63,6 +65,10 @@ function ShopPage() {
           limit: 100,
         }
 
+        if (searchQuery.trim()) {
+          params.search = searchQuery.trim()
+        }
+
         // Only filter by category if we have categories and selectedCategory is not 'all'
         if (selectedCategory !== 'all' && categories.length > 0) {
           const category = categories.find(
@@ -106,7 +112,7 @@ function ShopPage() {
 
     fetchProducts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory, categories.length, categoriesLoading])
+  }, [selectedCategory, categories.length, categoriesLoading, searchQuery])
 
   // Combine loading and error states
   const loading = categoriesLoading || productsLoading
@@ -161,6 +167,10 @@ function ShopPage() {
   useEffect(() => {
     const handleFilterCategory = event => {
       const { keywords } = event.detail
+      if (keywords && keywords.includes('all')) {
+        handleCategorySelect('all')
+        return
+      }
       const categoryId = findCategoryByKeywords(keywords)
       if (categoryId) {
         handleCategorySelect(categoryId)
@@ -172,6 +182,67 @@ function ShopPage() {
       window.removeEventListener('filterCategory', handleFilterCategory)
     }
   }, [findCategoryByKeywords, handleCategorySelect])
+
+  // Apply category filter from URL search params or localStorage on mount/categories load
+  useEffect(() => {
+    if (categoriesData && categories.length > 0) {
+      // 1. Check URL query param ?category=
+      const categoryParam = searchParams.get('category')
+      if (categoryParam) {
+        const found = categories.find(
+          cat =>
+            cat.slug === categoryParam ||
+            cat.id === categoryParam ||
+            (cat.name && cat.name.toLowerCase().includes(categoryParam.toLowerCase()))
+        )
+        if (found) {
+          handleCategorySelect(found.id || found.slug)
+          return
+        }
+      }
+
+      // 2. Check pending filter from localStorage
+      const pendingFilter = localStorage.getItem('pendingCategoryFilter')
+      if (pendingFilter) {
+        try {
+          const keywords = JSON.parse(pendingFilter)
+          const categoryId = findCategoryByKeywords(keywords)
+          if (categoryId) {
+            handleCategorySelect(categoryId)
+          }
+        } catch (err) {
+          console.error('Error parsing pending category filter:', err)
+        } finally {
+          localStorage.removeItem('pendingCategoryFilter')
+        }
+      }
+    }
+  }, [categoriesData, categories, searchParams, findCategoryByKeywords, handleCategorySelect])
+
+  // Listen for search events from navbar
+  useEffect(() => {
+    const handleSearchProducts = event => {
+      const { query } = event.detail
+      setSearchQuery(query)
+      setSelectedCategory('all')
+      scrollToProducts()
+    }
+
+    window.addEventListener('searchProducts', handleSearchProducts)
+    return () => {
+      window.removeEventListener('searchProducts', handleSearchProducts)
+    }
+  }, [])
+
+  // Apply pending search filter from localStorage on mount
+  useEffect(() => {
+    const pendingSearch = localStorage.getItem('pendingSearchFilter')
+    if (pendingSearch) {
+      setSearchQuery(pendingSearch)
+      setSelectedCategory('all')
+      localStorage.removeItem('pendingSearchFilter')
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -379,6 +450,8 @@ function ShopPage() {
             </div>
           </div>
         )}
+
+
 
         {/* Loading State */}
         {loading && <ProductGridSkeleton count={10} />}

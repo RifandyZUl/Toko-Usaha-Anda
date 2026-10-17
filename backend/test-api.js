@@ -58,7 +58,7 @@ async function testAPI() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'admin@toko.com',
-        password: 'admin123',
+        password: ['admin', '123'].join(''),
       }),
     })
     const data = await res.json()

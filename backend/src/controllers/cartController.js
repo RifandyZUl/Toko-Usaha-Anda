@@ -204,7 +204,7 @@ export const updateCartItem = async (req, res, next) => {
     // Transform product to ensure image URLs are complete
     const transformedItem = {
       ...updatedItem,
-      product: transformProduct(updatedItem.product),
+      product: await transformProduct(updatedItem.product),
     }
 
     res.json({

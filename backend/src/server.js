@@ -30,6 +30,7 @@ import productRoutes from './routes/products.js'
 import cartRoutes from './routes/cart.js'
 import orderRoutes from './routes/orders.js'
 import uploadRoutes from './routes/upload.js'
+import paymentRoutes from './routes/payment.js'
 
 import { errorHandler } from './middleware/errorHandler.js'
 import {
@@ -106,8 +107,13 @@ app.use(cookieParser())
 app.use(hppMiddleware)
 app.use(sanitizeInput)
 
-// 6. General API rate limiter (applied to all /api routes)
-app.use('/api', generalLimiter)
+// 6. General API rate limiter (applied to all /api routes except payment webhook)
+app.use('/api', (req, res, next) => {
+  if (req.path === '/payment/notification') {
+    return next()
+  }
+  return generalLimiter(req, res, next)
+})
 
 // 7. Static files (served outside /api rate limit)
 app.use(
@@ -135,6 +141,7 @@ app.use('/api/products', productRoutes)
 app.use('/api/cart', cartRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/upload', uploadLimiter, uploadRoutes)
+app.use('/api/payment', paymentRoutes)
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 

@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
  */
 export function useActiveSection(sectionIds = [], offset = 100) {
   const [activeSection, setActiveSection] = useState('')
+  const serializedSectionIds = sectionIds.join(',')
 
   useEffect(() => {
     if (sectionIds.length === 0) return
@@ -60,7 +61,8 @@ export function useActiveSection(sectionIds = [], offset = 100) {
     return () => {
       window.removeEventListener('scroll', onScroll)
     }
-  }, [sectionIds, offset])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serializedSectionIds, offset])
 
   return activeSection
 }

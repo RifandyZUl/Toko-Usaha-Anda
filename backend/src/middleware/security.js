@@ -1,151 +1,121 @@
 /**
  * Security Middleware Configuration
- * Centralizes all security-related middleware setup
+ * Centralized security policies for the Express application.
  *
- * Protections implemented:
- * - Helmet: HTTP security headers (XSS, Clickjacking, MIME sniffing, etc.)
- * - Rate Limiting: Brute force & DDoS protection
- * - HPP: HTTP Parameter Pollution protection
- * - Request Size Limiting: Prevents large payload attacks
+ * Implements:
+ * 1.  Strict Security Headers (Helmet) with CSP
+ * 2.  Rate Limiting (General, Auth, Upload)
+ * 3.  Data Sanitization (XSS, NoSQL/SQL operator stripping)
+ * 4.  HTTP Parameter Pollution protection
  */
 
 import helmet from 'helmet'
-import rateLimit from 'express-rate-limit'
+import { rateLimit } from 'express-rate-limit'
 import hpp from 'hpp'
-import { logWarn } from '../utils/logger.js'
+import mongoSanitize from 'express-mongo-sanitize'
 
-// ─── 1. HELMET: Security Headers ────────────────────────────────────────────
+// ─── Security Headers (Helmet) ────────────────────────────────────────────────
 
 /**
- * Configures HTTP security headers via Helmet
- * Protects against: XSS, Clickjacking, MIME sniffing, etc.
+ * Configure Helmet with strict Content Security Policy (CSP)
+ * CSP prevents XSS by controlling which resources can be loaded/executed.
  */
 export const helmetMiddleware = helmet({
-  // Content Security Policy — controls what resources the browser can load
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", 'https:'],
-      imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'", 'https:'],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"], // Add trusted CDNs if needed
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*.supabase.co"], // Allow Supabase images
+      connectSrc: ["'self'", "https://*.supabase.co"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: [],
     },
   },
-  // Prevent browsers from MIME-type sniffing
-  noSniff: true,
-  // Force HTTPS (only enable in production)
-  strictTransportSecurity: process.env.NODE_ENV === 'production'
-    ? { maxAge: 31536000, includeSubDomains: true }
-    : false,
-  // Prevent clickjacking attacks
-  frameguard: { action: 'deny' },
-  // Remove X-Powered-By header to hide technology stack
-  hidePoweredBy: true,
-  // XSS filter for older browsers
-  xssFilter: true,
-  // Prevent cross-site scripting via referrer
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 })
 
-// ─── 2. RATE LIMITING ────────────────────────────────────────────────────────
-
-/**
- * Creates a rate limiter with custom config and a logging handler
- * @param {Object} config - Rate limit configuration
- */
-const createRateLimiter = (config) =>
-  rateLimit({
-    standardHeaders: true,  // Return rate limit info in RateLimit-* headers
-    legacyHeaders: false,    // Disable the X-RateLimit-* headers
-    handler: (req, res, next, options) => {
-      logWarn('Rate limit exceeded', {
-        ip: req.ip,
-        path: req.path,
-        method: req.method,
-        limit: options.max,
-        windowMs: options.windowMs,
-      })
-      res.status(options.statusCode).json({
-        error: 'Too many requests. Please try again later.',
-        retryAfter: Math.ceil(options.windowMs / 1000 / 60) + ' minutes',
-      })
-    },
-    ...config,
-  })
+// ─── Rate Limiting ──────────────────────────────────────────────────────────
 
 /**
  * General API rate limiter
- * Limit: 100 requests per 15 minutes per IP
  */
-export const generalLimiter = createRateLimiter({
+export const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'development' ? 10000 : 100, // limit each IP to 10000 in development, 100 in production
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many requests from this IP, please try again after 15 minutes',
+  },
+})
+
+/**
+ * Strict limiter for sensitive auth routes (Login/Register)
+ */
+export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many requests from this IP.',
+  max: process.env.NODE_ENV === 'development' ? 1000 : 10, // 1000 attempts in development, 10 in production
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many login attempts, please try again after 15 minutes',
+  },
 })
 
 /**
- * Strict limiter for sensitive auth endpoints
- * Limit: 10 attempts per 15 minutes per IP
- * Prevents brute-force attacks on login
+ * Limiter for file uploads to prevent storage exhaustion
  */
-export const authLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  skipSuccessfulRequests: true, // Only count failed attempts
+export const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // 20 uploads per hour
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Upload limit reached, please try зgain after an hour',
+  },
 })
 
-/**
- * Upload rate limiter
- * Limit: 20 uploads per hour per IP
- */
-export const uploadLimiter = createRateLimiter({
-  windowMs: 60 * 60 * 1000,
-  max: 20,
-})
-
-// ─── 3. HPP: Parameter Pollution Protection ──────────────────────────────────
+// ─── Data Sanitization ───────────────────────────────────────────────────────
 
 /**
- * Prevents HTTP Parameter Pollution attacks
- * e.g., ?status=active&status=inactive => uses last value
- * Whitelisted params allow arrays (e.g., ?category=a&category=b is valid)
- */
-export const hppMiddleware = hpp({
-  whitelist: ['category', 'status', 'sort', 'fields'],
-})
-
-// ─── 4. REQUEST SANITIZATION ─────────────────────────────────────────────────
-
-/**
- * Sanitizes request body, query, and params to strip dangerous characters.
- * Prevents NoSQL injection-style attacks even with a SQL database.
- * @param {Object} req - Express request
- * @param {Object} res - Express response
- * @param {Function} next - Next middleware
+ * Deep Sanitization Middleware
+ * 1. Strips MongoDB-style operators ($, .) which can also affect other DBs/logics
+ * 2. Custom XSS filtering for body/query/params
  */
 export const sanitizeInput = (req, res, next) => {
-  const sanitize = (obj) => {
-    if (!obj || typeof obj !== 'object') return obj
-    return Object.fromEntries(
-      Object.entries(obj).map(([key, value]) => {
-        if (typeof value === 'string') {
-          // Strip null bytes and control characters
-          return [key, value.replace(/\0/g, '').trim()]
-        }
-        if (typeof value === 'object') {
-          return [key, sanitize(value)]
-        }
-        return [key, value]
-      })
-    )
-  }
+  // Use mongoSanitize to strip $ and . from req.body, req.query, etc.
+  mongoSanitize()(req, res, () => {
+    // Custom XSS Sanitization:
+    // Recursively strip HTML tags from strings in the request object
+    const clean = (val) => {
+      if (typeof val === 'string') {
+        // Remove <script> tags and other basic HTML tags
+        // Note: express-validator handles fine-grained escaping at route level
+        return val.replace(/<[^>]*>?/gm, '')
+      }
+      if (typeof val === 'object' && val !== null) {
+        Object.keys(val).forEach((key) => {
+          val[key] = clean(val[key])
+        })
+      }
+      return val
+    }
 
-  req.body = sanitize(req.body)
-  req.query = sanitize(req.query)
-  req.params = sanitize(req.params)
+    if (req.body) req.body = clean(req.body)
+    if (req.query) req.query = clean(req.query)
+    if (req.params) req.params = clean(req.params)
 
-  next()
+    next()
+  })
 }
+
+// ─── Parameter Pollution ─────────────────────────────────────────────────────
+
+/**
+ * Prevent HTTP Parameter Pollution
+ * e.g., /api/products?color=red&color=blue -> will only take one or handle as array safely
+ */
+export const hppMiddleware = hpp()

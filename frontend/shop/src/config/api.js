@@ -13,24 +13,16 @@ class ApiClient {
   }
 
   /**
-   * Set authentication token
+   * Set authentication token (kept as a no-op for backward compatibility)
    */
   setToken(token) {
     this.token = token
-    if (token) {
-      localStorage.setItem('auth_token', token)
-    } else {
-      localStorage.removeItem('auth_token')
-    }
   }
 
   /**
-   * Get authentication token
+   * Get authentication token (kept for backward compatibility)
    */
   getToken() {
-    if (!this.token) {
-      this.token = localStorage.getItem('auth_token')
-    }
     return this.token
   }
 
@@ -38,16 +30,9 @@ class ApiClient {
    * Build headers
    */
   getHeaders() {
-    const headers = {
+    return {
       'Content-Type': 'application/json',
     }
-
-    const token = this.getToken()
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
-    }
-
-    return headers
   }
 
   /**
@@ -58,7 +43,11 @@ class ApiClient {
       const error = await response.json().catch(() => ({
         error: 'An error occurred',
       }))
-      throw new Error(error.error || error.message || 'Request failed')
+      const apiError = new Error(error.error || error.message || 'Request failed')
+      if (error.errors) {
+        apiError.errors = error.errors
+      }
+      throw apiError
     }
 
     // Handle empty responses
@@ -93,10 +82,13 @@ class ApiClient {
   /**
    * POST request
    */
-  async post(endpoint, data = {}) {
+  async post(endpoint, data = {}, customHeaders = {}) {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'POST',
-      headers: this.getHeaders(),
+      headers: {
+        ...this.getHeaders(),
+        ...customHeaders,
+      },
       credentials: 'include',
       body: JSON.stringify(data),
     })

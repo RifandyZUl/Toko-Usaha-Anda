@@ -1,0 +1,76 @@
+services:
+  # ── 1. PostgreSQL Database Service ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: toko-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_secure_password
+      POSTGRES_DB: toko_usaha_anda
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d toko_usaha_anda"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── 2. Backend Express API Service ──────────────────────────────────────────
+  backend:
+    container_name: toko-backend
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres_secure_password@postgres:5432/toko_usaha_anda?schema=public
+      JWT_SECRET: toko_usaha_anda_secret_key_for_jwt_production_change_me
+      JWT_EXPIRES_IN: 7d
+      PORT: 5000
+      NODE_ENV: production
+      FRONTEND_URL: http://localhost:3000,http://localhost:3001
+      # Midtrans Sandbox Credentials (Optional)
+      MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY}
+      MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY}
+      MIDTRANS_IS_PRODUCTION: ${MIDTRANS_IS_PRODUCTION:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── 3. Frontend Landing Page (Nginx) ────────────────────────────────────────
+  landing:
+    container_name: toko-landing
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        APP_NAME: frontend/landing
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  # ── 4. Frontend Shop E-Commerce (Nginx) ──────────────────────────────────────
+  shop:
+    container_name: toko-shop
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        APP_NAME: frontend/shop
+    restart: always
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+
+# ── Persistent Volumes ────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local

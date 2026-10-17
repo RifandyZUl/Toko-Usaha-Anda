@@ -83,6 +83,15 @@ export default {
           800: '#1e293b',
           900: '#0f172a',
         },
+        griya: {
+          primary: '#2C2724', // Dark text/headings
+          secondary: '#C5A880', // Golden/Ochre accent
+          bg: '#FAF9F7', // Main background
+          surface: '#FFFFFF', // Card background
+          'surface-low': '#F4F2EE', // Section background
+          muted: '#7A7571', // Secondary text
+          outline: '#E5E0D8', // Borders
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

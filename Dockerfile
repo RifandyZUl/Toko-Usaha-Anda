@@ -1,0 +1,42 @@
+# Production Dockerfile for Backend API (Default)
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy root and workspace package manifests
+COPY package*.json ./
+COPY backend/package*.json ./backend/
+COPY shared/package*.json ./shared/
+COPY frontend/landing/package*.json ./frontend/landing/
+COPY frontend/shop/package*.json ./frontend/shop/
+COPY frontend/admin/package*.json ./frontend/admin/
+
+# Install all dependencies
+RUN npm ci --include=dev
+
+# Copy source code
+COPY . .
+
+# Generate Prisma Client
+RUN npx prisma generate --schema=./backend/prisma/schema.prisma
+
+# Final lightweight production image
+FROM node:18-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy built application and node_modules from builder
+COPY --from=builder --chown=node:node /app/package*.json ./
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/backend ./backend
+COPY --from=builder --chown=node:node /app/shared ./shared
+
+# Non-root user for security
+USER node
+
+EXPOSE 5000
+
+# Entrypoint script command to deploy DB schema and start server
+CMD ["sh", "-c", "npx prisma db push --schema=./backend/prisma/schema.prisma && node backend/src/server.js"]

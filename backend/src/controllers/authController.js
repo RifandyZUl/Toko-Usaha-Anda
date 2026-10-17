@@ -57,9 +57,6 @@ const sendTokenResponse = (res, user, statusCode, message) => {
       phone: user.phone,
       role: user.role,
     },
-    // We still return the token in JSON for legacy support or specific frontend needs, 
-    // but the HttpOnly cookie is the primary security layer.
-    token 
   })
 }
 
@@ -143,4 +140,35 @@ export const getMe = asyncHandler(async (req, res) => {
   }
 
   res.status(HTTP_STATUS.OK).json({ user })
+})
+
+/**
+ * PUT /api/auth/profile
+ */
+export const updateProfile = asyncHandler(async (req, res) => {
+  const { name, phone, address } = req.body
+
+  const updatedUser = await prisma.user.update({
+    where: { id: req.userId },
+    data: {
+      name,
+      phone,
+      address,
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      phone: true,
+      address: true,
+      role: true,
+      createdAt: true,
+    },
+  })
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: 'Profile updated successfully.',
+    user: updatedUser,
+  })
 })

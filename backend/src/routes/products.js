@@ -6,6 +6,7 @@
 import express from 'express'
 import {
   getProducts,
+  getFeaturedProducts,
   getProductById,
   getCategories,
   createProduct,
@@ -23,6 +24,7 @@ const router = express.Router()
 
 // ── Public routes ─────────────────────────────────────────────────────────────
 router.get('/', validatePagination, getProducts)
+router.get('/featured', getFeaturedProducts)
 router.get('/categories', getCategories)
 router.get('/:id', validateUuidParam('id'), getProductById)
 

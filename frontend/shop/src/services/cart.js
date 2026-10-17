@@ -137,7 +137,15 @@ export const syncCartToBackend = async localItems => {
       })
     )
 
-    await Promise.all(addPromises)
+    const results = await Promise.all(addPromises)
+    const failedItems = results.filter(r => !r.success)
+
+    if (failedItems.length > 0) {
+      return {
+        success: false,
+        error: `Gagal menyinkronkan ${failedItems.length} produk ke keranjang. Silakan coba lagi.`,
+      }
+    }
 
     return { success: true }
   } catch (error) {

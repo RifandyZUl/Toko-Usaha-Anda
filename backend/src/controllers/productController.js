@@ -5,9 +5,7 @@
 
 import productService from '../services/productService.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { validateProduct } from '../utils/validators.js'
 import { HTTP_STATUS, SUCCESS_MESSAGES } from '../constants/index.js'
-import { ValidationError } from '../utils/errors.js'
 
 /**
  * Get all products
@@ -29,6 +27,15 @@ export const getProductById = asyncHandler(async (req, res) => {
 })
 
 /**
+ * Get featured products (most purchased / best sellers)
+ */
+export const getFeaturedProducts = asyncHandler(async (req, res) => {
+  const limit = req.query.limit ? parseInt(req.query.limit) : 4
+  const products = await productService.getFeaturedProducts(limit)
+  res.status(HTTP_STATUS.OK).json({ products })
+})
+
+/**
  * Get all categories
  */
 export const getCategories = asyncHandler(async (req, res) => {
@@ -40,11 +47,6 @@ export const getCategories = asyncHandler(async (req, res) => {
  * Create product (Admin only)
  */
 export const createProduct = asyncHandler(async (req, res) => {
-  const validation = validateProduct(req.body)
-  if (!validation.isValid) {
-    throw new ValidationError('Product validation failed', validation.errors)
-  }
-
   const product = await productService.createProduct(req.body)
   res.status(HTTP_STATUS.CREATED).json({
     message: SUCCESS_MESSAGES.PRODUCT_CREATED,
@@ -56,11 +58,6 @@ export const createProduct = asyncHandler(async (req, res) => {
  * Update product (Admin only)
  */
 export const updateProduct = asyncHandler(async (req, res) => {
-  const validation = validateProduct(req.body)
-  if (!validation.isValid) {
-    throw new ValidationError('Product validation failed', validation.errors)
-  }
-
   const product = await productService.updateProduct(req.params.id, req.body)
   res.status(HTTP_STATUS.OK).json({
     message: SUCCESS_MESSAGES.PRODUCT_UPDATED,

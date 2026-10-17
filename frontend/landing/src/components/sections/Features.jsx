@@ -1,53 +1,93 @@
 import { useIntersectionObserver } from '../../hooks/useIntersectionObserver'
-import { FEATURES } from '../../utils/constants'
-import Section from '../common/Section'
-import Icon from '../common/Icon'
+import {
+  Wallet,
+  CheckCircle,
+  Truck,
+  MessageCircle,
+  ShieldCheck,
+  Star
+} from 'lucide-react'
 
-/**
- * Features section component dengan cards elegan seperti Compatto
- */
 function Features() {
   const [ref, hasIntersected] = useIntersectionObserver()
 
+  const benefits = [
+    {
+      title: 'KUALITAS TERBAIK',
+      description: 'Menyediakan produk dengan standar mutu tinggi dan tahan lama untuk segala kebutuhan.',
+      icon: CheckCircle,
+    },
+    {
+      title: 'HARGA TERJANGKAU',
+      description: 'Dapatkan produk premium dengan penawaran harga yang bersahabat di kantong.',
+      icon: Wallet,
+    },
+    {
+      title: 'PENGIRIMAN AMAN',
+      description: 'Layanan pengiriman yang cepat dan aman hingga sampai di lokasi Anda.',
+      icon: Truck,
+    },
+    {
+      title: 'PELAYANAN PERSONAL',
+      description: 'Tim support kami siap memberikan rekomendasi produk yang tepat untuk Anda.',
+      icon: MessageCircle,
+    },
+    {
+      title: 'GARANSI RESMI',
+      description: 'Setiap produk bergaransi memberikan ketenangan pikiran dalam penggunaannya.',
+      icon: ShieldCheck,
+    },
+    {
+      title: 'TERPERCAYA',
+      description: 'Telah dipercaya oleh ribuan pelanggan yang puas dengan layanan kami.',
+      icon: Star,
+    },
+  ]
+
   return (
-    <Section id="features" ref={ref} className="bg-white">
-      <div className="mb-10 sm:mb-12 md:mb-16">
-        <h2 className="text-[32px] sm:text-[38px] md:text-[44px] lg:text-[52px] font-heading font-bold text-brown-900 mb-4 sm:mb-6">
-          Mengapa Pilih Kami?
-        </h2>
-        <p className="text-[16px] sm:text-[18px] md:text-[20px] text-brown-700 max-w-3xl font-body font-normal leading-relaxed">
-          Keunggulan yang membuat kami berbeda dan terpercaya
-        </p>
-      </div>
+    <section
+      id="features"
+      ref={ref}
+      className="py-24 md:py-32 bg-griya-surface-low"
+    >
+      <div className="max-w-[1400px] mx-auto px-5 md:px-10 lg:px-16">
+        {/* Section Header */}
+        <div className="text-center mb-16">
+          <h2 className="font-serif text-3xl md:text-4xl text-griya-primary">
+            Kenapa Memilih Toko Usaha Anda?
+          </h2>
+          <p className="font-sans text-sm md:text-base text-griya-muted mt-4 max-w-2xl mx-auto">
+            Kami memberikan layanan dan produk unggulan sehingga Anda tidak perlu khawatir tentang kualitasnya.
+          </p>
+        </div>
 
-      {/* Grid Features seperti Compatto - 2x3 layout */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-        {FEATURES.map((feature, index) => (
-          <div
-            key={index}
-            className={`group relative p-8 sm:p-10 rounded-2xl bg-beige-50 border border-beige-200 hover:border-brown-300 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 ${
-              hasIntersected
-                ? 'opacity-100 translate-y-0'
-                : 'opacity-0 translate-y-10'
-            }`}
-            style={{ transitionDelay: `${index * 100}ms` }}
-          >
-            {/* Icon Container - Elegan seperti Compatto */}
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-brown-600 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-brown-700 group-hover:scale-110 transition-all duration-300 shadow-lg">
-              <Icon name={feature.icon} size={32} className="text-beige-100" />
-            </div>
-
-            <h3 className="text-xl sm:text-2xl font-heading font-bold text-brown-900 mb-4 group-hover:text-brown-700 transition-colors">
-              {feature.title}
-            </h3>
-            
-            <p className="text-base sm:text-lg text-brown-600 font-body leading-relaxed">
-              {feature.description}
-            </p>
-          </div>
-        ))}
+        {/* Benefits Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {benefits.map((benefit, index) => {
+            const IconComponent = benefit.icon
+            return (
+              <div
+                key={index}
+                className={`flex flex-col items-center text-center p-8 md:p-10 bg-white border border-griya-outline/20 hover:border-griya-outline/50 transition-all duration-700 transform ${
+                  hasIntersected ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+                }`}
+                style={{ transitionDelay: `${index * 100}ms` }}
+              >
+                <div className="shrink-0 w-14 h-14 bg-griya-surface-low text-griya-secondary flex items-center justify-center rounded-full mb-6">
+                  <IconComponent size={24} strokeWidth={1.5} />
+                </div>
+                <h3 className="font-sans font-semibold text-[11px] tracking-[0.2em] text-griya-primary mb-3 uppercase">
+                  {benefit.title}
+                </h3>
+                <p className="font-sans text-[13px] text-griya-muted leading-relaxed">
+                  {benefit.description}
+                </p>
+              </div>
+            )
+          })}
+        </div>
       </div>
-    </Section>
+    </section>
   )
 }
 

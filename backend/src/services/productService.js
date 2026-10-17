@@ -57,6 +57,41 @@ class ProductService {
   }
 
   /**
+   * Get featured products (prioritizing most ordered / best selling, then newest)
+   */
+  async getFeaturedProducts(limit = 4) {
+    const limitNum = Math.min(20, Math.max(1, parseInt(limit) || 4))
+
+    const products = await prisma.product.findMany({
+      where: { isActive: true },
+      include: {
+        category: {
+          select: { id: true, name: true, slug: true },
+        },
+        _count: {
+          select: { orderItems: true },
+        },
+      },
+      orderBy: [
+        {
+          orderItems: {
+            _count: 'desc',
+          },
+        },
+        { createdAt: 'desc' },
+      ],
+      take: limitNum,
+    })
+
+    const transformedProducts = await transformProducts(products)
+
+    return transformedProducts.map((p, idx) => ({
+      ...p,
+      badge: (p._count?.orderItems > 0 || idx === 0) ? 'Terlaris' : (idx === 1 ? 'Populer' : null),
+    }))
+  }
+
+  /**
    * Get single product by ID
    */
   async getProductById(id) {

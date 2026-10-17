@@ -7,7 +7,11 @@ import express from 'express'
 import { uploadSingle } from '../middleware/upload.js'
 import { authenticate, adminOnly } from '../middleware/auth.js'
 import { supabase, STORAGE_BUCKET, isSupabaseConfigured, getSupabaseUrl } from '../config/supabase.js'
-import { generateUniqueFilename, validateImageFile } from '../utils/fileUtils.js'
+import { 
+  generateUniqueFilename, 
+  validateImageFile, 
+  validateImageBuffer 
+} from '../utils/fileUtils.js'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
@@ -100,13 +104,24 @@ router.post('/image', authenticate, adminOnly, async (req, res) => {
       })
     }
 
+
     try {
-      // Validate file
-      const validation = validateImageFile(req.file)
-      if (!validation.isValid) {
+      // 1. Basic validation (extension, size, declared type)
+      const basicValidation = validateImageFile(req.file)
+      if (!basicValidation.isValid) {
         return res.status(400).json({
           success: false,
-          error: validation.error,
+          error: basicValidation.error,
+        })
+      }
+
+      // 2. Deep validation (Magic Byte check) - prevent disguised files
+      const deepValidation = await validateImageBuffer(req.file.buffer, req.file.mimetype)
+      if (!deepValidation.isValid) {
+        return res.status(403).json({
+          success: false,
+          error: deepValidation.error,
+          securityAlert: true
         })
       }
 

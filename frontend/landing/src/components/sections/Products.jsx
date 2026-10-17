@@ -1,91 +1,79 @@
 import { useIntersectionObserver } from '../../hooks/useIntersectionObserver'
-import { PRODUCT_CATEGORIES } from '../../utils/constants'
-import Button from '../common/Button'
-import { scrollToElement } from '../../utils/scroll'
+import { Hammer, Home, Settings } from 'lucide-react'
+import { SHOP_URL } from '../../utils/constants'
 
-/**
- * Products section - Nike style: Full-width cards, besar, fokus visual
- */
 function Products() {
-  const [ref] = useIntersectionObserver()
+  const [ref, hasIntersected] = useIntersectionObserver()
 
-  // Gambar untuk setiap kategori
-  const categoryImages = {
-    household:
-      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=1200&h=800&fit=crop&q=80',
-    tools: 'https://i.pinimg.com/1200x/15/6f/c0/156fc01d52452032f7da462707f5a5c6.jpg',
-    motorcycle: 'https://i.pinimg.com/736x/39/ea/d2/39ead210b0f155ac1bd523948d00d250.jpg',
-  }
-
-  const handleCategoryClick = () => {
-    scrollToElement('contact')
-  }
+  const categories = [
+    {
+      id: 1,
+      title: 'Perkakas Tukang',
+      description: 'Peralatan pertukangan, mesin & alat konstruksi berkualitas',
+      icon: Hammer,
+      slug: 'tools',
+    },
+    {
+      id: 2,
+      title: 'Kebutuhan Rumah Tangga',
+      description: 'Perlengkapan dapur, kebersihan & perabot rumah lengkap',
+      icon: Home,
+      slug: 'household',
+    },
+    {
+      id: 3,
+      title: 'Aksesoris Motor',
+      description: 'Suku cadang, perkakas servis & aksesoris kendaraan roda dua',
+      icon: Settings,
+      slug: 'motorcycle',
+    },
+  ]
 
   return (
-    <section id="products" ref={ref} className="bg-white py-0">
-      {/* Section Header - Minimalis */}
-      <div className="container-custom text-center py-12 sm:py-16 md:py-24 lg:py-32">
-        <h2 className="text-[32px] sm:text-[40px] md:text-[48px] lg:text-[56px] xl:text-[64px] 2xl:text-[72px] font-heading font-black text-black mb-4 tracking-tighter">
-          Kategori Produk
-        </h2>
-      </div>
+    <section
+      id="kategori"
+      ref={ref}
+      className="py-24 bg-griya-surface-low"
+    >
+      <div className="max-w-[1400px] mx-auto px-5 md:px-10 lg:px-16">
+        {/* Section Header */}
+        <div className="text-center mb-16">
+          <h2 className="font-serif text-3xl md:text-4xl text-griya-primary">
+            Jelajahi Berdasarkan Kategori
+          </h2>
+        </div>
 
-      {/* Full-width Cards seperti Nike */}
-      <div className="w-full">
-        {PRODUCT_CATEGORIES.map((category, index) => (
-          <div
-            key={category.id}
-            className={`relative min-h-[50vh] sm:min-h-[55vh] md:min-h-[60vh] lg:min-h-[70vh] flex items-center overflow-hidden py-8 sm:py-12 md:py-16 lg:py-0 ${
-              index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-            }`}
-          >
-            <div className="container-custom w-full">
-              <div
-                className={`grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 md:gap-12 lg:gap-16 items-center ${
-                  index % 2 === 1 ? 'lg:grid-flow-dense' : ''
+        {/* Categories Grid - 3 Categories */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto">
+          {categories.map((category, index) => {
+            const IconComponent = category.icon
+            return (
+              <a
+                href={`${SHOP_URL}/shop?category=${category.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                key={category.id}
+                className={`group bg-white flex flex-col items-center text-center p-8 md:p-10 transition-all duration-700 transform hover:shadow-[0_12px_32px_rgba(0,0,0,0.06)] hover:-translate-y-1 border border-griya-outline/20 hover:border-griya-secondary/40 ${
+                  hasIntersected ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
                 }`}
+                style={{ transitionDelay: `${index * 120}ms` }}
               >
-                {/* Image - Full width seperti Nike */}
-                <div
-                  className={`relative h-[250px] sm:h-[300px] md:h-[400px] lg:h-[500px] xl:h-[600px] overflow-hidden rounded-lg ${
-                    index % 2 === 1 ? 'lg:col-start-2' : ''
-                  }`}
-                >
-                  <img
-                    src={categoryImages[category.id]}
-                    alt={category.title}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
+                <div className="w-16 h-16 rounded-full bg-griya-surface-low flex items-center justify-center mb-6 group-hover:bg-griya-secondary group-hover:text-white text-griya-muted transition-colors duration-300">
+                  <IconComponent size={26} strokeWidth={1.5} />
                 </div>
-
-                {/* Content */}
-                <div
-                  className={`flex flex-col justify-center space-y-4 sm:space-y-6 ${
-                    index % 2 === 1 ? 'lg:col-start-1 lg:row-start-1' : ''
-                  }`}
-                >
-                  <h3 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-heading font-black text-black tracking-tighter break-words">
-                    {category.title}
-                  </h3>
-                  <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl text-gray-600 font-body font-light leading-relaxed">
-                    {category.description}
-                  </p>
-                  <div className="pt-2 sm:pt-4">
-                    <Button
-                      onClick={handleCategoryClick}
-                      variant="outline"
-                      size="lg"
-                      className="border-2 border-black text-black hover:bg-black hover:text-white font-semibold px-6 sm:px-8 py-3 sm:py-4 text-sm sm:text-base md:text-lg transition-all duration-300 rounded-full w-full sm:w-auto"
-                    >
-                      Lihat Produk
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
+                <h3 className="font-sans text-sm md:text-base text-griya-primary font-semibold tracking-wider uppercase mb-2">
+                  {category.title}
+                </h3>
+                <p className="font-sans text-xs text-griya-muted leading-relaxed">
+                  {category.description}
+                </p>
+                <span className="mt-6 text-[11px] font-sans font-semibold tracking-[0.15em] uppercase text-griya-secondary group-hover:underline">
+                  Lihat Produk &rarr;
+                </span>
+              </a>
+            )
+          })}
+        </div>
       </div>
     </section>
   )

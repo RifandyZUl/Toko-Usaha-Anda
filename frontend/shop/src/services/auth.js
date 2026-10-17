@@ -16,15 +16,8 @@ import { logError } from '../utils/logger.js'
 export const register = async userData => {
   try {
     const response = await apiClient.post('/auth/register', userData)
-    
-    // Store token if provided
-    if (response.token) {
-      apiClient.setToken(response.token)
-    }
-
     return {
       success: true,
-      token: response.token,
       user: response.user,
     }
   } catch (error) {
@@ -32,6 +25,7 @@ export const register = async userData => {
     return {
       success: false,
       error: error.message,
+      errors: error.errors,
     }
   }
 }
@@ -45,15 +39,8 @@ export const register = async userData => {
 export const login = async credentials => {
   try {
     const response = await apiClient.post('/auth/login', credentials)
-    
-    // Store token
-    if (response.token) {
-      apiClient.setToken(response.token)
-    }
-
     return {
       success: true,
-      token: response.token,
       user: response.user,
     }
   } catch (error) {
@@ -61,6 +48,7 @@ export const login = async credentials => {
     return {
       success: false,
       error: error.message,
+      errors: error.errors,
     }
   }
 }
@@ -76,7 +64,9 @@ export const getCurrentUser = async () => {
       user,
     }
   } catch (error) {
-    logError('Error fetching current user', error)
+    if (error.message !== 'No authentication token provided' && error.message !== 'Invalid or expired authentication token') {
+      logError('Error fetching current user', error)
+    }
     return {
       success: false,
       error: error.message,
@@ -88,10 +78,42 @@ export const getCurrentUser = async () => {
 /**
  * Logout user
  */
-export const logout = () => {
-  apiClient.setToken(null)
-  return {
-    success: true,
+export const logout = async () => {
+  try {
+    await apiClient.post('/auth/logout')
+    return {
+      success: true,
+    }
+  } catch (error) {
+    logError('Error logging out', error)
+    return {
+      success: false,
+      error: error.message,
+    }
+  }
+}
+
+/**
+ * Update user profile
+ * @param {Object} profileData - Profile data to update
+ * @param {string} profileData.name - User name
+ * @param {string} profileData.phone - User phone
+ * @param {string} profileData.address - User address
+ */
+export const updateProfile = async profileData => {
+  try {
+    const response = await apiClient.put('/auth/profile', profileData)
+    return {
+      success: true,
+      user: response.user,
+      message: response.message,
+    }
+  } catch (error) {
+    logError('Error updating profile', error)
+    return {
+      success: false,
+      error: error.message,
+    }
   }
 }
 

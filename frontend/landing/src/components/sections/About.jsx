@@ -1,71 +1,89 @@
 import { useIntersectionObserver } from '../../hooks/useIntersectionObserver'
-import Section from '../common/Section'
 
-/**
- * About section - Nike style: Simple, to the point, banyak whitespace
- */
 function About() {
   const [ref, hasIntersected] = useIntersectionObserver()
 
   return (
-    <Section id="about" alternate ref={ref} className="bg-gray-50 py-24 sm:py-32">
-      {/* Section Header - Minimalis */}
-      <div className="container-custom text-center mb-10 sm:mb-16 md:mb-20 lg:mb-28">
-        <h2 className="text-[32px] sm:text-[40px] md:text-[48px] lg:text-[56px] xl:text-[64px] 2xl:text-[72px] font-heading font-black text-black mb-6 sm:mb-8 tracking-tighter">
-          Tentang Kami
-        </h2>
-      </div>
-
-      {/* Content - Simple dan Clean */}
-      <div className="container-custom max-w-4xl mx-auto">
-        <div
-          className={`space-y-6 sm:space-y-8 transition-all duration-700 ${
-            hasIntersected ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-          }`}
-        >
-          {/* Main Text */}
-          <div className="text-center space-y-4 sm:space-y-6">
-            <p className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-body font-light text-gray-700 leading-relaxed">
-              <strong className="font-semibold text-black">Toko Usaha Anda</strong> adalah toko
-              terpercaya yang menyediakan berbagai kebutuhan alat rumah tangga, perkakas tukang, dan
-              alat motor dengan kualitas terbaik dan harga terjangkau.
+    <section
+      id="about"
+      ref={ref}
+      className="py-24 md:py-32 bg-white"
+    >
+      <div className="max-w-[1400px] mx-auto px-5 md:px-10 lg:px-16">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          {/* Text Column */}
+          <div
+            className={`transition-all duration-1000 transform ${
+              hasIntersected ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+            }`}
+          >
+            <span className="text-griya-secondary font-sans text-xs tracking-[0.2em] uppercase block mb-4">
+              Tentang Toko Usaha Anda
+            </span>
+            <h2 className="font-serif text-3xl md:text-5xl text-griya-primary mb-6 leading-tight max-w-lg">
+              Solusi Terpercaya untuk Kebutuhan Anda
+            </h2>
+            <p className="font-sans text-sm md:text-base text-griya-muted mb-6 leading-relaxed max-w-lg">
+              Toko Usaha Anda adalah mitra terpercaya yang menyediakan berbagai kebutuhan alat rumah tangga, perkakas tukang, dan alat motor dengan kualitas terbaik dan harga terjangkau.
             </p>
-            <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-body font-light text-gray-600 leading-relaxed">
-              Dengan pengalaman 15+ tahun melayani ribuan pelanggan, kami berkomitmen untuk
-              memberikan produk berkualitas dan layanan terbaik.
+            <p className="font-sans text-sm md:text-base text-griya-muted mb-12 leading-relaxed max-w-lg">
+              Dengan pengalaman lebih dari 15 tahun melayani ribuan pelanggan, kami berkomitmen untuk selalu memberikan produk unggulan, fungsional, dan tahan lama.
             </p>
+            
+            {/* Stats Grid */}
+            <div className="grid grid-cols-3 gap-6 pt-8 border-t border-griya-outline/40 max-w-lg">
+              <div>
+                <div className="text-griya-primary font-serif text-3xl md:text-4xl mb-2">
+                  15+
+                </div>
+                <div className="font-sans text-[10px] md:text-xs text-griya-muted uppercase tracking-[0.1em]">
+                  Tahun Pengalaman
+                </div>
+              </div>
+              <div>
+                <div className="text-griya-primary font-serif text-3xl md:text-4xl mb-2">
+                  5K+
+                </div>
+                <div className="font-sans text-[10px] md:text-xs text-griya-muted uppercase tracking-[0.1em]">
+                  Klien Puas
+                </div>
+              </div>
+              <div>
+                <div className="text-griya-primary font-serif text-3xl md:text-4xl mb-2">
+                  100%
+                </div>
+                <div className="font-sans text-[10px] md:text-xs text-griya-muted uppercase tracking-[0.1em]">
+                  Produk Berkualitas
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Stats - Simple Grid */}
-          <div className="grid grid-cols-3 gap-3 sm:gap-6 md:gap-8 lg:gap-12 mt-10 sm:mt-12 md:mt-16 lg:mt-24 pt-10 sm:pt-12 md:pt-16 lg:pt-24 border-t border-gray-200">
-            <div className="text-center">
-              <div className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-heading font-black text-black mb-1 sm:mb-2">
-                15+
-              </div>
-              <div className="text-xs sm:text-sm md:text-base text-gray-600 font-body uppercase tracking-wider">
-                Tahun
-              </div>
+          {/* Image Column */}
+          <div
+            className={`relative transition-all duration-1000 delay-300 transform ${
+              hasIntersected ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'
+            }`}
+          >
+            <div className="aspect-[4/5] overflow-hidden bg-griya-surface-low">
+              <img
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4Kxsz8k06ztZlUXU8zlPpYuoq3KK6S4fIyMBHoKCzQqaX_GwPVnBTtamTQa5uyx9f1uA3Awfbrrb4hhWyDtFPYQCpwf3qKnetCuoNQYevShQJBqB6-daiTSQ-btK_T-tAdGkDY-H-C3P8t9Crdc2QYW2KqhTeWNMz2uWFKLbdz-XG-ZVNgqrp3MTUNm99J4mUo0ZLtuj44WfT7RsG_3nHo1hk7Jjc10bE6J2NnXvH76PGqu8IvoW2XJ4wMskcgpGZwfXvwjVQ9Fw"
+                alt="Pengrajin Kayu di Toko Usaha Anda"
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-[10000ms] ease-out"
+                loading="lazy"
+              />
             </div>
-            <div className="text-center">
-              <div className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-heading font-black text-black mb-1 sm:mb-2">
-                5K+
-              </div>
-              <div className="text-xs sm:text-sm md:text-base text-gray-600 font-body uppercase tracking-wider">
-                Pelanggan
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-heading font-black text-black mb-1 sm:mb-2">
-                1K+
-              </div>
-              <div className="text-xs sm:text-sm md:text-base text-gray-600 font-body uppercase tracking-wider">
-                Produk
-              </div>
+            
+            {/* Overlay Quote Card */}
+            <div className="absolute -bottom-6 -left-6 bg-white p-6 md:p-8 border border-griya-outline/20 shadow-[0_10px_40px_rgba(0,0,0,0.05)] hidden sm:block max-w-[280px]">
+              <p className="font-serif text-lg md:text-xl text-griya-primary leading-relaxed">
+                &ldquo;Kualitas terbaik untuk mendukung hunian & usaha Anda.&rdquo;
+              </p>
             </div>
           </div>
         </div>
       </div>
-    </Section>
+    </section>
   )
 }
 

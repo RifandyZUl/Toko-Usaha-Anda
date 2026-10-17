@@ -11,7 +11,8 @@ import Loading from '../components/Loading'
 function RegisterPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { register, isLoading, error, isAuthenticated } = useAuthStore()
+  const { register, isLoading, error, user } = useAuthStore()
+  const isAuthenticated = !!user
   
   const [formData, setFormData] = useState({
     name: '',
@@ -23,7 +24,7 @@ function RegisterPage() {
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
-    if (isAuthenticated()) {
+    if (isAuthenticated) {
       const from = location.state?.from?.pathname || '/shop'
       navigate(from, { replace: true })
     }
@@ -48,12 +49,23 @@ function RegisterPage() {
       setFormError('Invalid email format')
       return false
     }
+    if (formData.phone.trim()) {
+      const cleanPhone = formData.phone.replace(/[-\s()]/g, '')
+      if (!/^[0-9]{10,13}$/.test(cleanPhone)) {
+        setFormError('Phone number must be between 10 and 13 digits')
+        return false
+      }
+    }
     if (!formData.password) {
       setFormError('Password is required')
       return false
     }
     if (formData.password.length < 6) {
       setFormError('Password must be at least 6 characters')
+      return false
+    }
+    if (!/\d/.test(formData.password)) {
+      setFormError('Password must contain at least one number')
       return false
     }
     if (formData.password !== formData.confirmPassword) {
@@ -82,11 +94,15 @@ function RegisterPage() {
       const from = location.state?.from?.pathname || '/shop'
       navigate(from, { replace: true })
     } else {
-      setFormError(result.error || 'Registration failed')
+      if (result.errors && result.errors.length > 0) {
+        setFormError(result.errors[0].message)
+      } else {
+        setFormError(result.error || 'Registration failed')
+      }
     }
   }
 
-  if (isAuthenticated()) {
+  if (isAuthenticated) {
     return <Loading message="Redirecting..." />
   }
 

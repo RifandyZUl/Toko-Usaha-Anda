@@ -8,16 +8,17 @@ import { logError } from '../utils/logger.js'
 /**
  * Create order
  * @param {Object} orderData - Order data
- * @param {string} orderData.shippingAddress - Shipping address
- * @param {string} orderData.shippingPhone - Shipping phone
- * @param {string} orderData.paymentMethod - Payment method
+ * @param {string} [idempotencyKey] - Optional unique idempotency key
  */
-export const createOrder = async orderData => {
+export const createOrder = async (orderData, idempotencyKey) => {
   try {
-    const response = await apiClient.post('/orders', orderData)
+    const customHeaders = idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {}
+    const response = await apiClient.post('/orders', orderData, customHeaders)
     return {
       success: true,
       order: response.order,
+      snapToken: response.snapToken,
+      redirectUrl: response.redirectUrl,
       message: response.message,
     }
   } catch (error) {
@@ -25,6 +26,7 @@ export const createOrder = async orderData => {
     return {
       success: false,
       error: error.message,
+      errors: error.errors,
     }
   }
 }
@@ -71,6 +73,47 @@ export const getOrderById = async orderId => {
       success: false,
       error: error.message,
       order: null,
+    }
+  }
+}
+
+/**
+ * Simulate order payment (development only)
+ * @param {string} orderId - Order ID
+ */
+export const simulateOrderPayment = async orderId => {
+  try {
+    const response = await apiClient.post('/payment/simulate', { orderId })
+    return {
+      success: true,
+      message: response.message,
+    }
+  } catch (error) {
+    logError('Error simulating order payment', error)
+    return {
+      success: false,
+      error: error.message,
+    }
+  }
+}
+
+/**
+ * Cancel order
+ * @param {string} orderId - Order ID
+ */
+export const cancelOrder = async orderId => {
+  try {
+    const response = await apiClient.post(`/orders/${orderId}/cancel`)
+    return {
+      success: true,
+      message: response.message,
+      order: response.order,
+    }
+  } catch (error) {
+    logError('Error cancelling order', error)
+    return {
+      success: false,
+      error: error.message,
     }
   }
 }

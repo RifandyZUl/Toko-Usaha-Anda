@@ -1,8 +1,8 @@
-# 🗄️ Backend API - Toko Usaha Anda
+# Backend API - Toko Usaha Anda
 
 Backend API untuk e-commerce menggunakan Node.js, Express, PostgreSQL, dan Prisma.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Node.js** + **Express** - Backend framework
 - **PostgreSQL** - Database
@@ -10,13 +10,13 @@ Backend API untuk e-commerce menggunakan Node.js, Express, PostgreSQL, dan Prism
 - **JWT** - Authentication
 - **bcrypt** - Password hashing
 
-## 📋 Prerequisites
+## Prerequisites
 
 1. **Node.js** (v18 atau lebih baru)
 2. **PostgreSQL** (v14 atau lebih baru)
 3. **npm** atau **yarn**
 
-## 🚀 Setup
+## Setup
 
 ### 1. Install Dependencies
 
@@ -82,7 +82,7 @@ npm run dev
 
 Server akan berjalan di `http://localhost:5000`
 
-## 📡 API Endpoints
+## API Endpoints
 
 ### Health Check
 
@@ -118,7 +118,7 @@ Server akan berjalan di `http://localhost:5000`
 - `GET /api/orders/:id` - Get order by ID (requires auth)
 - `PUT /api/orders/:id/status` - Update order status (Admin only)
 
-## 🔐 Authentication
+## Authentication
 
 Gunakan JWT token di header:
 
@@ -126,7 +126,7 @@ Gunakan JWT token di header:
 Authorization: Bearer <token>
 ```
 
-## 🗄️ Database Schema
+## Database Schema
 
 Lihat `prisma/schema.prisma` untuk detail schema.
 
@@ -139,7 +139,7 @@ Models:
 - **Order** - Orders
 - **OrderItem** - Order items
 
-## 🛠️ Useful Commands
+## Useful Commands
 
 ```bash
 # Development
@@ -154,7 +154,7 @@ npm run prisma:studio    # Open Prisma Studio (GUI)
 npm start                # Start production server
 ```
 
-## 📝 Notes
+## Notes
 
 - Default admin: `admin@toko.com` / `admin123` (setelah seed)
 - JWT token expires in 7 days (default)

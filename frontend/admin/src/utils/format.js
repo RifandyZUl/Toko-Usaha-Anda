@@ -23,6 +23,18 @@ export const formatCurrency = (amount) => {
 }
 
 /**
+ * Format numeric value for input field (e.g., 25000 -> "25.000")
+ * @param {number|string} value - Value to format
+ * @returns {string} Formatted number string
+ */
+export const formatCurrencyInput = (value) => {
+  if (value === undefined || value === null || value === '') return ''
+  const num = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.-]+/g, ''))
+  if (isNaN(num)) return ''
+  return new Intl.NumberFormat('id-ID').format(num)
+}
+
+/**
  * Parse currency string back to number
  * @param {string} value - Currency string
  * @returns {number} Parsed numeric value
@@ -86,6 +98,11 @@ export const formatDate = (date, includeTime = false) => {
     return '-'
   }
 }
+
+/**
+ * Format date and time
+ */
+export const formatDateTime = (date) => formatDate(date, true)
 
 /**
  * Truncate long text with ellipsis

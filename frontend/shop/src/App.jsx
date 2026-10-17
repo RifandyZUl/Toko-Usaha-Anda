@@ -1,19 +1,28 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ShopPage from './pages/ShopPage'
 import ProductDetailPage from './pages/ProductDetailPage'
 import CartPage from './pages/CartPage'
 import CheckoutPage from './pages/CheckoutPage'
 import OrderSuccessPage from './pages/OrderSuccessPage'
+import OrderDetailPage from './pages/OrderDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import ErrorBoundary from '@shared/components/ErrorBoundary.jsx'
+import { useAuthStore } from './stores/authStore'
 
 /**
  * Shop App - E-Commerce Application
  */
 function App() {
+  const checkAuth = useAuthStore(state => state.checkAuth)
+
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
+
   return (
     <ErrorBoundary>
       <BrowserRouter>
@@ -36,6 +45,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <OrderSuccessPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/shop/order/:id"
+            element={
+              <ProtectedRoute>
+                <OrderDetailPage />
               </ProtectedRoute>
             }
           />

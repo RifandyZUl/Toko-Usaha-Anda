@@ -121,7 +121,7 @@ export const ERROR_MESSAGES = {
   
   // Validation
   INVALID_EMAIL: 'Valid email is required',
-  INVALID_PASSWORD: 'Password must be at least 6 characters',
+  INVALID_PASS: 'Password must be at least 6 characters',
   INVALID_NAME: 'Name must be at least 2 characters',
   INVALID_PHONE: 'Valid phone number is required',
   
