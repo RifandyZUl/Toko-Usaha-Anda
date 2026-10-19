@@ -7,6 +7,7 @@ import Products from './components/sections/Products'
 import About from './components/sections/About'
 import FeaturedProducts from './components/sections/FeaturedProducts'
 import Testimonials from './components/sections/Testimonials'
+import FAQ from './components/sections/FAQ'
 import Contact from './components/sections/Contact'
 import Footer from './components/layout/Footer'
 import { ScrollToTop } from './components/common/ScrollToTop'
@@ -31,6 +32,7 @@ function App() {
           <About />
           <FeaturedProducts />
           <Testimonials />
+          <FAQ />
           <Contact />
         </main>
         <Footer />
