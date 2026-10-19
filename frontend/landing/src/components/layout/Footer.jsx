@@ -9,9 +9,9 @@ function Footer() {
           <span className="font-serif text-xl md:text-2xl uppercase tracking-[0.2em] mb-6 block text-griya-primary">
             Toko Usaha Anda
           </span>
-          <p className="font-sans text-[13px] md:text-sm text-griya-muted mb-8 leading-relaxed max-w-md">
-            Menciptakan kemudahan untuk hunian dan usaha Anda sejak 2008. Dedikasi kami adalah pada
-            kualitas barang perkakas, rumah tangga, otomotif, dan kepuasan pelanggan.
+          <p className="font-sans text-[13px] md:text-sm text-griya-muted mb-8 leading-relaxed max-w-md text-justify">
+            Menciptakan kemudahan untuk hunian dan usaha Anda sejak tahun 2000. Dedikasi kami adalah
+            pada kualitas barang perkakas, rumah tangga, otomotif, dan kepuasan pelanggan.
           </p>
         </div>
 

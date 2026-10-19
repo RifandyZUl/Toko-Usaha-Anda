@@ -1,6 +1,6 @@
 import { useIntersectionObserver } from '../../hooks/useIntersectionObserver'
 import { MapPin, Clock, Phone, Map } from 'lucide-react'
-import showroomImg from '../../assets/Toko.png'
+import showroomImg from '../../assets/Toko.webp'
 import { CONTACT_PHONE, CONTACT_ADDRESS, CONTACT_MAPS_URL, CONTACT_HOURS } from '../../utils/constants'
 
 function Contact() {

@@ -4,10 +4,10 @@ import { ArrowRight, ShoppingBag } from 'lucide-react'
 import { SHOP_URL, CONTACT_WHATSAPP, API_BASE_URL } from '../../utils/constants'
 
 // High-quality product images for fallback products
-import imgSapu from '../../assets/products/sapu.jpg'
-import imgWajan from '../../assets/products/wajan.jpg'
-import imgPalu from '../../assets/products/palu.jpg'
-import imgGergaji from '../../assets/products/gergaji.jpg'
+import imgSapu from '../../assets/products/sapu.webp'
+import imgWajan from '../../assets/products/wajan.webp'
+import imgPalu from '../../assets/products/palu.webp'
+import imgGergaji from '../../assets/products/gergaji.webp'
 
 // Fallback catalog products with matching high-resolution photography
 const FALLBACK_PRODUCTS = [

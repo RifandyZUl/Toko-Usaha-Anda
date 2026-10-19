@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SHOP_URL, CONTACT_WHATSAPP } from '../../utils/constants'
-import heroBg from '../../assets/bg.png'
+import heroBg from '../../assets/bg.webp'
 
 function Hero() {
   const [isLoaded, setIsLoaded] = useState(false)

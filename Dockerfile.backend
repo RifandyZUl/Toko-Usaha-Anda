@@ -1,6 +1,9 @@
 # Production Dockerfile for Backend API
 FROM node:18-alpine AS builder
 
+# Install OpenSSL and libc compatibility for Prisma engine
+RUN apk add --no-cache openssl libc6-compat
+
 WORKDIR /app
 
 # Copy root and workspace package manifests
@@ -22,6 +25,9 @@ RUN npx prisma generate --schema=./backend/prisma/schema.prisma
 
 # Final lightweight production image
 FROM node:18-alpine AS runner
+
+# Install OpenSSL and libc compatibility for Prisma engine in runtime
+RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 

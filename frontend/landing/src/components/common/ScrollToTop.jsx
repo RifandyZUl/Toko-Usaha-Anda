@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
+import { ChevronUp } from 'lucide-react'
 import { useScroll } from '../../hooks/useScroll'
-import Icon from './Icon'
 import { scrollToTop } from '../../utils/scroll'
 
 /**
@@ -22,7 +22,7 @@ export function ScrollToTop() {
       className="fixed bottom-8 right-8 z-50 bg-black hover:bg-gray-900 text-white p-4 rounded-full shadow-2xl hover:shadow-gray-500/50 transition-all duration-300 hover:-translate-y-2 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 group"
       aria-label="Scroll to top"
     >
-      <Icon name="ChevronUp" size={24} className="group-hover:-translate-y-1 transition-transform" />
+      <ChevronUp size={24} className="group-hover:-translate-y-1 transition-transform" />
     </button>
   )
 }

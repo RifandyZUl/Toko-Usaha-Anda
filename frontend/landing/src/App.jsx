@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import ErrorBoundary from '@shared/components/ErrorBoundary.jsx'
 import Navigation from './components/layout/Navigation'
 import Hero from './components/sections/Hero'
 import Features from './components/sections/Features'
@@ -20,20 +21,22 @@ function App() {
   }, [scrollToTop])
 
   return (
-    <div className="min-h-screen bg-griya-bg antialiased">
-      <Navigation />
-      <main className="relative">
-        <Hero />
-        <Features />
-        <Products />
-        <About />
-        <FeaturedProducts />
-        <Testimonials />
-        <Contact />
-      </main>
-      <Footer />
-      <ScrollToTop />
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-griya-bg antialiased">
+        <Navigation />
+        <main className="relative">
+          <Hero />
+          <Features />
+          <Products />
+          <About />
+          <FeaturedProducts />
+          <Testimonials />
+          <Contact />
+        </main>
+        <Footer />
+        <ScrollToTop />
+      </div>
+    </ErrorBoundary>
   )
 }
 
