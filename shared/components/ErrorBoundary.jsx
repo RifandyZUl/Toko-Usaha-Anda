@@ -24,6 +24,13 @@ class ErrorBoundary extends Component {
   }
 
   handleReset = () => {
+    try {
+      // Clear potentially corrupted session/auth storage to reset clean state
+      localStorage.removeItem('toko-auth-storage')
+      sessionStorage.clear()
+    } catch (e) {
+      console.warn('Could not reset storage:', e)
+    }
     this.setState({ hasError: false, error: null, errorInfo: null })
     window.location.reload()
   }

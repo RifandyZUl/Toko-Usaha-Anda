@@ -1679,7 +1679,8 @@ function CheckoutPage() {
                 {(() => {
                   const isCod = values.paymentMethod === 'cod'
                   const isCodBlocked = isCod && !codEligibilityState.eligible
-                  const isCodUnverified = isCod && !isPhoneVerified && !codEligibilityState.isPhoneVerified
+                  const isPhoneVerifiedNow = isSamePhoneNumber(values.shippingPhone, verifiedPhone)
+                  const isCodUnverified = isCod && !isPhoneVerifiedNow
                   const isButtonDisabled = isSubmitting || isProcessing || isCodBlocked
 
                   return (
