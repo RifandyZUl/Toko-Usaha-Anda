@@ -1,6 +1,11 @@
 import prisma from '../config/database.js'
 import { transformProduct } from '../utils/productUtils.js'
 import paymentService from '../services/paymentService.js'
+import { isOrderExpired, expireOrder } from '../services/orderExpiryService.js'
+import { isOrderEligibleForAutoComplete, autoCompleteOrder } from '../services/orderAutoCompleteService.js'
+import { trackOrderShipping } from '../services/shippingTrackingService.js'
+import { validateCodEligibility } from '../services/codGuardService.js'
+import { isPhoneNumberVerified, normalizePhoneNumber } from '../services/otpService.js'
 
 /**
  * Create order
@@ -56,6 +61,47 @@ export const createOrder = async (req, res, next) => {
         quantity: cartItem.quantity,
         price: cartItem.product.price,
       })
+    }
+
+    // Validate COD payment method with Phone Verification and COD Guard rules
+    if (paymentMethod && paymentMethod.toLowerCase() === 'cod') {
+      let isVerified = isPhoneNumberVerified(shippingPhone)
+
+      // Fallback: If user has saved verified phone in database matching shippingPhone
+      if (!isVerified && req.userId && shippingPhone) {
+        const userRecord = await prisma.user.findUnique({
+          where: { id: req.userId },
+          select: { phone: true },
+        })
+        if (
+          userRecord?.phone &&
+          normalizePhoneNumber(userRecord.phone) === normalizePhoneNumber(shippingPhone)
+        ) {
+          isVerified = true
+        }
+      }
+
+      if (!isVerified) {
+        return res.status(400).json({
+          error:
+            'Nomor WhatsApp penerima belum diverifikasi. Silakan lakukan verifikasi OTP WhatsApp terlebih dahulu untuk memilih metode pembayaran COD.',
+          code: 'PHONE_NOT_VERIFIED',
+        })
+      }
+
+      const totalWithShipping = totalAmount + (Number(shippingFee) || 0)
+      const codCheck = await validateCodEligibility({
+        userId: req.userId,
+        shippingPhone,
+        totalAmount: totalWithShipping,
+      })
+
+      if (!codCheck.eligible) {
+        return res.status(400).json({
+          error: codCheck.message,
+          code: codCheck.reason,
+        })
+      }
     }
 
     // Create order with items (transaction)
@@ -256,8 +302,9 @@ export const getOrders = async (req, res, next) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20))
     const skip = (page - 1) * limit
 
-    // If admin, get all orders. Otherwise, get only user's orders
-    const where = req.userRole === 'ADMIN' ? {} : { userId: req.userId }
+    // Only return all orders if explicit admin query: req.query.all === 'true' && req.userRole === 'ADMIN'
+    const showAllOrders = req.userRole === 'ADMIN' && req.query.all === 'true'
+    const where = showAllOrders ? {} : { userId: req.userId }
 
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
@@ -327,7 +374,7 @@ export const getOrderById = async (req, res, next) => {
   try {
     const { id } = req.params
 
-    const order = await prisma.order.findUnique({
+    let order = await prisma.order.findUnique({
       where: { id },
       include: {
         items: {
@@ -357,6 +404,22 @@ export const getOrderById = async (req, res, next) => {
       return res.status(403).json({ error: 'Unauthorized' })
     }
 
+    // Check and trigger lazy expiry if order is past expiration window
+    if (isOrderExpired(order)) {
+      const expired = await expireOrder(order.id)
+      if (expired) {
+        order = expired
+      }
+    }
+
+    // Check and trigger lazy auto-complete if shipped order passed 2 days window
+    if (isOrderEligibleForAutoComplete(order)) {
+      const completed = await autoCompleteOrder(order.id)
+      if (completed) {
+        order = completed
+      }
+    }
+
     // Transform products in order items to ensure image URLs are complete
     const transformedOrder = {
       ...order,
@@ -375,7 +438,35 @@ export const getOrderById = async (req, res, next) => {
 }
 
 /**
+ * Get shipping tracking info for an order
+ * GET /api/orders/:id/tracking
+ */
+export const getOrderTracking = async (req, res, next) => {
+  try {
+    const { id } = req.params
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+    })
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' })
+    }
+
+    if (order.userId !== req.userId && req.userRole !== 'ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized' })
+    }
+
+    const tracking = await trackOrderShipping(order)
+    res.json({ success: true, tracking })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
  * Update order status (Admin only)
+ * Atomically handles stock reversion on cancellation (e.g. COD return)
  */
 export const updateOrderStatus = async (req, res, next) => {
   try {
@@ -391,21 +482,135 @@ export const updateOrderStatus = async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid status' })
     }
 
-    const order = await prisma.order.update({
+    // 1. Fetch current order with items
+    const existingOrder = await prisma.order.findUnique({
       where: { id },
-      data: { status },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
+      include: { items: true },
     })
 
+    if (!existingOrder) {
+      return res.status(404).json({ error: 'Order not found' })
+    }
+
+    // 2. Adjust paymentStatus according to workflow
+    let paymentStatus = existingOrder.paymentStatus
+
+    // For COD: Delivered implies cash collected (PAID)
+    if (existingOrder.paymentMethod === 'COD' && status === 'DELIVERED') {
+      paymentStatus = 'PAID'
+    }
+
+    // For Cancelled: Mark FAILED if not already paid
+    if (status === 'CANCELLED' && paymentStatus !== 'PAID') {
+      paymentStatus = 'FAILED'
+    }
+
+    // 3. Atomically update status and revert product stock if cancelled (e.g. COD return)
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // Revert product stock when moving to CANCELLED from non-cancelled
+      if (status === 'CANCELLED' && existingOrder.status !== 'CANCELLED') {
+        for (const item of existingOrder.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stock: {
+                increment: item.quantity,
+              },
+            },
+          })
+        }
+      }
+
+      // Re-decrement stock if un-cancelling an order
+      if (existingOrder.status === 'CANCELLED' && status !== 'CANCELLED') {
+        for (const item of existingOrder.items) {
+          const updateResult = await tx.product.updateMany({
+            where: {
+              id: item.productId,
+              stock: { gte: item.quantity },
+            },
+            data: {
+              stock: {
+                decrement: item.quantity,
+              },
+            },
+          })
+
+          if (updateResult.count === 0) {
+            throw new Error('Stok tidak mencukupi untuk mengembalikan pesanan')
+          }
+        }
+      }
+
+      const existingDetails = (typeof existingOrder.paymentDetails === 'object' && existingOrder.paymentDetails !== null)
+        ? existingOrder.paymentDetails
+        : {}
+
+      let newPaymentDetails = existingOrder.paymentDetails
+      if (req.body.trackingNumber || status === 'SHIPPED') {
+        const trackingNum = req.body.trackingNumber?.trim() || existingDetails.shippingDetails?.trackingNumber || `RESI-${(req.body.courier || existingOrder.shippingCourier || 'JNE').toUpperCase()}-${existingOrder.id.slice(0, 8).toUpperCase()}`
+        const courier = req.body.courier?.trim() || existingOrder.shippingCourier || 'JNE'
+        newPaymentDetails = {
+          ...existingDetails,
+          shippingDetails: {
+            ...(existingDetails.shippingDetails || {}),
+            trackingNumber: trackingNum,
+            courier,
+            shippedAt: status === 'SHIPPED' ? new Date().toISOString() : existingDetails.shippingDetails?.shippedAt,
+            deliveredAt: status === 'DELIVERED' ? new Date().toISOString() : existingDetails.shippingDetails?.deliveredAt,
+          },
+        }
+      }
+
+      return await tx.order.update({
+        where: { id },
+        data: {
+          status,
+          paymentStatus,
+          paymentDetails: newPaymentDetails,
+        },
+        include: {
+          items: {
+            include: {
+              product: {
+                include: {
+                  category: {
+                    select: {
+                      id: true,
+                      name: true,
+                      slug: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+    })
+
+    // If cancelled and was linked to Midtrans, cancel on Midtrans gateway
+    if (status === 'CANCELLED' && existingOrder.status !== 'CANCELLED') {
+      try {
+        await paymentService.cancelTransaction(existingOrder.id)
+      } catch (cancelErr) {
+        console.warn('Failed to cancel Midtrans transaction in updateOrderStatus:', cancelErr)
+      }
+    }
+
+    const transformedOrder = {
+      ...updatedOrder,
+      items: await Promise.all(
+        updatedOrder.items.map(async item => ({
+          ...item,
+          product: await transformProduct(item.product),
+        }))
+      ),
+    }
+
     res.json({
-      message: 'Order status updated',
-      order,
+      message: 'Order status updated successfully',
+      order: transformedOrder,
     })
   } catch (error) {
     next(error)
@@ -516,4 +721,442 @@ export const cancelOrder = async (req, res, next) => {
     next(error)
   }
 }
+
+/**
+ * Confirm order received / complete order (Customer / Admin)
+ * POST /api/orders/:id/complete
+ */
+export const completeOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    })
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' })
+    }
+
+    if (order.userId !== req.userId && req.userRole !== 'ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized' })
+    }
+
+    if (order.status !== 'SHIPPED') {
+      return res.status(400).json({
+        error: 'Hanya pesanan yang sedang dikirim (SHIPPED) yang dapat dikonfirmasi selesai',
+      })
+    }
+
+    const existingDetails = (typeof order.paymentDetails === 'object' && order.paymentDetails !== null)
+      ? order.paymentDetails
+      : {}
+
+    const newPaymentDetails = {
+      ...existingDetails,
+      shippingDetails: {
+        ...(existingDetails.shippingDetails || {}),
+        deliveredAt: existingDetails.shippingDetails?.deliveredAt || new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        completedBy: 'CUSTOMER',
+      },
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id },
+      data: {
+        status: 'DELIVERED',
+        paymentStatus: order.paymentMethod === 'COD' ? 'PAID' : order.paymentStatus,
+        paymentDetails: newPaymentDetails,
+      },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: {
+                category: {
+                  select: { id: true, name: true, slug: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const transformedOrder = {
+      ...updatedOrder,
+      items: await Promise.all(
+        updatedOrder.items.map(async item => ({
+          ...item,
+          product: await transformProduct(item.product),
+        }))
+      ),
+    }
+
+    res.json({
+      message: 'Pesanan berhasil diselesaikan. Terima kasih telah berbelanja!',
+      order: transformedOrder,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Handle COD Return / Package rejected by customer at door
+ * Atomically cancels order, marks FAILED, and returns product stock to warehouse
+ * POST /api/orders/:id/reject-cod (Admin only)
+ */
+export const rejectCodOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { reason = 'Paket ditolak oleh pembeli saat pengiriman COD' } = req.body
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    })
+
+    if (!order) return res.status(404).json({ error: 'Order not found' })
+    if (order.paymentMethod !== 'COD') {
+      return res.status(400).json({ error: 'Hanya pesanan metode COD yang dapat diproses sebagai Retur COD' })
+    }
+
+    if (order.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'Pesanan sudah berstatus dibatalkan' })
+    }
+
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // 1. Revert product stocks to warehouse
+      for (const item of order.items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        })
+      }
+
+      // 2. Update order status and record COD rejection metadata
+      const existingDetails = (typeof order.paymentDetails === 'object' && order.paymentDetails !== null)
+        ? order.paymentDetails
+        : {}
+
+      return await tx.order.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          paymentStatus: 'FAILED',
+          paymentDetails: {
+            ...existingDetails,
+            codReturn: {
+              isCodRejected: true,
+              reason,
+              rejectedAt: new Date().toISOString(),
+              processedBy: req.userId,
+              returnedToWarehouse: true,
+            },
+          },
+        },
+      })
+    })
+
+    res.json({
+      success: true,
+      message: 'Retur COD berhasil diproses. Stok produk telah dikembalikan ke gudang.',
+      order: updatedOrder,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * File an official dispute / return request before auto-complete
+ * POST /api/orders/:id/dispute (Customer / Admin)
+ */
+export const createOrderDispute = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { reason, description, solutionExpected = 'Pengembalian Dana / Barang' } = req.body
+
+    if (!reason || !description) {
+      return res.status(400).json({ error: 'Alasan komplain dan deskripsi wajib diisi' })
+    }
+
+    const order = await prisma.order.findUnique({ where: { id } })
+    if (!order) return res.status(404).json({ error: 'Order not found' })
+
+    if (order.userId !== req.userId && req.userRole !== 'ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized' })
+    }
+
+    if (!['SHIPPED', 'DELIVERED'].includes(order.status)) {
+      return res.status(400).json({ error: 'Komplain hanya dapat diajukan saat barang dikirim atau diterima' })
+    }
+
+    const existingDetails = (typeof order.paymentDetails === 'object' && order.paymentDetails !== null)
+      ? order.paymentDetails
+      : {}
+
+    const updatedOrder = await prisma.order.update({
+      where: { id },
+      data: {
+        paymentDetails: {
+          ...existingDetails,
+          disputeDetails: {
+            isDisputed: true,
+            reason,
+            description,
+            solutionExpected,
+            disputedAt: new Date().toISOString(),
+            status: 'PENDING_REVIEW',
+          },
+        },
+      },
+    })
+
+    res.json({
+      success: true,
+      message: 'Komplain berhasil diajukan. Timer selesai otomatis ditangguhkan selama peninjauan admin.',
+      order: updatedOrder,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Resolve an order dispute (Admin only)
+ * POST /api/orders/:id/resolve-dispute
+ */
+export const resolveOrderDispute = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { decision, adminNotes } = req.body // ACCEPT_RETURN or REJECT_DISPUTE
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    })
+
+    if (!order) return res.status(404).json({ error: 'Order not found' })
+    const existingDetails = (typeof order.paymentDetails === 'object' && order.paymentDetails !== null)
+      ? order.paymentDetails
+      : {}
+
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      if (decision === 'ACCEPT_RETURN') {
+        // Return product stock
+        for (const item of order.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
+          })
+        }
+
+        return await tx.order.update({
+          where: { id },
+          data: {
+            status: 'CANCELLED',
+            paymentStatus: order.paymentStatus === 'PAID' ? 'REFUNDED' : 'FAILED',
+            paymentDetails: {
+              ...existingDetails,
+              disputeDetails: {
+                ...(existingDetails.disputeDetails || {}),
+                status: 'ACCEPTED_RETURN',
+                adminNotes,
+                resolvedAt: new Date().toISOString(),
+              },
+            },
+          },
+        })
+      }
+
+      // If rejected, restore dispute status
+      return await tx.order.update({
+        where: { id },
+        data: {
+          paymentDetails: {
+            ...existingDetails,
+            disputeDetails: {
+              ...(existingDetails.disputeDetails || {}),
+              status: 'REJECTED',
+              adminNotes,
+              resolvedAt: new Date().toISOString(),
+            },
+          },
+        },
+      })
+    })
+
+    res.json({
+      success: true,
+      message: `Komplain berhasil diselesaikan dengan keputusan: ${decision}`,
+      order: updatedOrder,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Submit product review & star rating for a completed order
+ * POST /api/orders/:id/review
+ */
+export const createOrderReview = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { productId, rating, comment } = req.body
+
+    const parsedRating = parseInt(rating)
+    if (!parsedRating || parsedRating < 1 || parsedRating > 5) {
+      return res.status(400).json({ error: 'Rating harus bernilai angka antara 1 sampai 5 bintang' })
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        user: { select: { name: true } },
+        items: true,
+      },
+    })
+
+    if (!order) return res.status(404).json({ error: 'Order not found' })
+    if (order.userId !== req.userId && req.userRole !== 'ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized' })
+    }
+
+    if (order.status !== 'DELIVERED') {
+      return res.status(400).json({ error: 'Ulasan hanya dapat diberikan untuk pesanan yang sudah selesai (DELIVERED)' })
+    }
+
+    const isItemInOrder = order.items.some(it => it.productId === productId)
+    if (!isItemInOrder) {
+      return res.status(400).json({ error: 'Produk tidak ditemukan di dalam pesanan ini' })
+    }
+
+    const existingDetails = (typeof order.paymentDetails === 'object' && order.paymentDetails !== null)
+      ? order.paymentDetails
+      : {}
+
+    const currentReviews = Array.isArray(existingDetails.reviews) ? existingDetails.reviews : []
+    const updatedReviews = currentReviews.filter(r => r.productId !== productId)
+
+    const newReview = {
+      productId,
+      orderId: order.id,
+      rating: parsedRating,
+      comment: (comment || '').trim(),
+      reviewerName: order.user?.name || 'Pelanggan',
+      createdAt: new Date().toISOString(),
+    }
+    updatedReviews.push(newReview)
+
+    await prisma.order.update({
+      where: { id },
+      data: {
+        paymentDetails: {
+          ...existingDetails,
+          reviews: updatedReviews,
+        },
+      },
+    })
+
+    res.status(201).json({
+      success: true,
+      message: 'Ulasan berhasil disimpan. Terima kasih atas ulasan Anda!',
+      review: newReview,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Fetch verified reviews for a specific product across all completed orders
+ * GET /api/products/:id/reviews
+ */
+export const getProductReviews = async (req, res, next) => {
+  try {
+    const { id: productId } = req.params
+
+    const completedOrders = await prisma.order.findMany({
+      where: {
+        status: 'DELIVERED',
+        items: { some: { productId } },
+      },
+      select: {
+        paymentDetails: true,
+      },
+      take: 100,
+    })
+
+    const productReviews = []
+    for (const order of completedOrders) {
+      const details = order.paymentDetails
+      if (details && Array.isArray(details.reviews)) {
+        const matching = details.reviews.filter(r => r.productId === productId)
+        productReviews.push(...matching)
+      }
+    }
+
+    // Sort newest first
+    productReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+
+    const averageRating = productReviews.length > 0
+      ? Number((productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length).toFixed(1))
+      : 5.0
+
+    res.json({
+      success: true,
+      reviews: productReviews,
+      averageRating,
+      totalReviews: productReviews.length,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * GET /api/orders/cod-eligibility
+ * Check if the current user and phone number are eligible for COD payment
+ */
+export const checkCodEligibility = async (req, res, next) => {
+  try {
+    const phone = req.query.phone || ''
+    const amount = Number(req.query.amount) || 0
+
+    const eligibility = await validateCodEligibility({
+      userId: req.userId,
+      shippingPhone: phone,
+      totalAmount: amount,
+    })
+
+    let isVerified = isPhoneNumberVerified(phone)
+    if (!isVerified && req.userId && phone) {
+      const userRecord = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { phone: true },
+      })
+      if (
+        userRecord?.phone &&
+        normalizePhoneNumber(userRecord.phone) === normalizePhoneNumber(phone)
+      ) {
+        isVerified = true
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      ...eligibility,
+      isPhoneVerified: isVerified,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+
 

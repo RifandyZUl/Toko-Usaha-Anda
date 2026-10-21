@@ -18,7 +18,6 @@ function CartPage() {
     items,
     updateQuantity,
     removeItem,
-    clearCart,
     getTotalPrice,
   } = useCartStore()
   const { isAuthenticated } = useAuthStore()

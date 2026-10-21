@@ -80,3 +80,28 @@ export const getCategories = async () => {
   }
 }
 
+/**
+ * Get reviews for a specific product
+ * @param {string} productId - Product ID
+ */
+export const getProductReviews = async productId => {
+  try {
+    const response = await apiClient.get(`/products/${productId}/reviews`)
+    return {
+      success: true,
+      reviews: response.reviews || [],
+      averageRating: response.averageRating ?? 5.0,
+      totalReviews: response.totalReviews ?? 0,
+    }
+  } catch (error) {
+    logError('Error fetching product reviews', error)
+    return {
+      success: false,
+      reviews: [],
+      averageRating: 5.0,
+      totalReviews: 0,
+    }
+  }
+}
+
+

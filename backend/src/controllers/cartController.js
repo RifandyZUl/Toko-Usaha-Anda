@@ -261,3 +261,70 @@ export const clearCart = async (req, res, next) => {
   }
 }
 
+/**
+ * Synchronize local cart to database atomically
+ * POST /api/cart/sync
+ */
+export const syncCart = async (req, res, next) => {
+  try {
+    const { items } = req.body
+
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ error: 'Items must be an array' })
+    }
+
+    if (items.length === 0) {
+      await prisma.cartItem.deleteMany({
+        where: { userId: req.userId },
+      })
+      return res.json({ success: true, message: 'Cart cleared' })
+    }
+
+    let syncedCount = 0
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Clear existing items
+      await tx.cartItem.deleteMany({
+        where: { userId: req.userId },
+      })
+
+      // 2. Insert valid items with stock validation
+      for (const item of items) {
+        if (!item?.id && !item?.productId) continue
+
+        const pId = String(item.id || item.productId)
+        const qty = parseInt(item.quantity, 10) || 1
+        if (qty < 1) continue
+
+        const product = await tx.product.findUnique({
+          where: { id: pId },
+        })
+
+        if (!product || product.stock < 1) continue
+
+        const safeQty = Math.min(qty, product.stock)
+
+        await tx.cartItem.create({
+          data: {
+            userId: req.userId,
+            productId: pId,
+            quantity: safeQty,
+          },
+        })
+        syncedCount++
+      }
+    })
+
+    if (syncedCount === 0) {
+      return res.status(400).json({
+        error:
+          'Produk dalam keranjang tidak ditemukan di database atau stok habis. Silakan pilih kembali dari katalog.',
+      })
+    }
+
+    res.json({ success: true, message: 'Cart synchronized successfully' })
+  } catch (error) {
+    next(error)
+  }
+}
+

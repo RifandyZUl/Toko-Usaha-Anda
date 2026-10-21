@@ -4,6 +4,7 @@ import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
 import { getOrderById, simulateOrderPayment } from '../services/orders'
 import ShopNavigation from '../components/ShopNavigation'
+import { useAuthStore } from '../stores/authStore'
 import Loading from '../components/Loading'
 import ErrorMessage from '../components/ErrorMessage'
 import { formatCurrency } from '../utils/format'
@@ -230,11 +231,19 @@ function PaymentInstructions({ bank }) {
 function OrderSuccessPage() {
   const location = useLocation()
   const navigate = useNavigate()
+  const user = useAuthStore(state => state.user)
   const orderId = location.state?.orderId
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(!!orderId)
   const [error, setError] = useState(null)
   const [isSimulating, setIsSimulating] = useState(false)
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!user) {
+      navigate('/shop/login', { replace: true })
+    }
+  }, [user, navigate])
 
   const handleSimulatePayment = async () => {
     if (!orderId) return
@@ -253,7 +262,7 @@ function OrderSuccessPage() {
   }
 
   const fetchOrder = useCallback(async () => {
-    if (!orderId) {
+    if (!orderId || !user) {
       setError('Order ID tidak ditemukan')
       setLoading(false)
       return
@@ -438,7 +447,7 @@ function OrderSuccessPage() {
                         ⚠️ MODE TESTING OFFLINE / SIMULASI
                       </p>
                       <p className="text-[10px] text-gray-500 mb-3">
-                        Kunci server Midtrans tidak valid. Anda dapat menguji alur pembayaran secara penuh menggunakan tombol simulasi di bawah ini.
+                        Channel pembayaran belum diaktifkan di Midtrans. Anda dapat menguji alur pembayaran secara penuh menggunakan tombol simulasi di bawah ini.
                       </p>
                       <button
                         type="button"

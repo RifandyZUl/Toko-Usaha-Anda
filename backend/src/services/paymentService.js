@@ -55,10 +55,10 @@ class PaymentService {
       },
       item_details: [
         ...items.map(item => ({
-          id: item.productId,
-          price: Math.round(Number(item.product.price)),
+          id: item.productId || item.id,
+          price: Math.round(Number(item.product?.price ?? item.price ?? 0)),
           quantity: item.quantity,
-          name: item.product.name.slice(0, 50),
+          name: (item.product?.name ?? item.name ?? 'Produk').slice(0, 50),
         })),
         {
           id: 'shipping-fee',

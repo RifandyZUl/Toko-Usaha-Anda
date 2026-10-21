@@ -10,9 +10,11 @@ import { syncCartToBackend } from '../services/cart'
 import { createOrder } from '../services/orders'
 import ShopNavigation from '../components/ShopNavigation'
 import Loading from '../components/Loading'
+import CodVerificationSection from '../components/CodVerificationSection'
 import { formatCurrency } from '../utils/format'
 import { logError } from '../utils/logger'
 import { updateProfile } from '../services/auth'
+import { apiClient } from '../config/api'
 
 /**
  * Dynamic script loader for Midtrans Snap JS
@@ -119,23 +121,29 @@ function CheckoutPage() {
   const { user, setAuth } = useAuthStore()
   const [orderError, setOrderError] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [postalCodeOptions, setPostalCodeOptions] = useState([])
+  const [isLoadingPostalCodes, setIsLoadingPostalCodes] = useState(false)
+  const [isManualPostalCode, setIsManualPostalCode] = useState(false)
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false)
+  const [codEligibilityState, setCodEligibilityState] = useState({ eligible: true })
 
   const totalPrice = useMemo(() => getTotalPrice(), [getTotalPrice])
 
   // Pre-fill form with user data if available
   const initialValues = useMemo(() => {
+    const activeUser = user?.user || user
     let parsedAddress = {}
-    if (user?.address) {
+    if (activeUser?.address) {
       try {
-        parsedAddress = JSON.parse(user.address)
+        parsedAddress = JSON.parse(activeUser.address)
       } catch (e) {
-        parsedAddress = { addressDetail: user.address }
+        parsedAddress = { addressDetail: activeUser.address }
       }
     }
 
     return {
-      receiverName: parsedAddress.receiverName || user?.name || '',
-      shippingPhone: parsedAddress.shippingPhone || user?.phone || '',
+      receiverName: parsedAddress.receiverName || activeUser?.name || '',
+      shippingPhone: parsedAddress.shippingPhone || activeUser?.phone || '',
       addressDetail: parsedAddress.addressDetail || '',
       province: parsedAddress.province || '',
       city: parsedAddress.city || '',
@@ -151,32 +159,76 @@ function CheckoutPage() {
     }
   }, [user])
 
+  const scrollToError = useCallback(() => {
+    setTimeout(() => {
+      const errEl = document.getElementById('checkout-error-banner')
+      if (errEl) {
+        errEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    }, 50)
+  }, [])
+
   const onSubmit = useCallback(
     async values => {
       setIsProcessing(true)
       setOrderError(null)
 
       try {
+        // 0. Ensure cart has items
+        if (!items || items.length === 0) {
+          setOrderError('Keranjang belanja kosong. Silakan pilih produk terlebih dahulu.')
+          setIsProcessing(false)
+          scrollToError()
+          return
+        }
+
+        // Validate COD requirements
+        if (values.paymentMethod === 'cod') {
+          if (!codEligibilityState.eligible) {
+            setOrderError(codEligibilityState.message || 'Metode COD tidak memenuhi syarat.')
+            setIsProcessing(false)
+            scrollToError()
+            return
+          }
+
+          if (!isPhoneVerified && !codEligibilityState.isPhoneVerified) {
+            setOrderError('Nomor WhatsApp belum diverifikasi. Silakan klik tombol "Kirim OTP via WhatsApp" pada panel di atas.')
+            setIsProcessing(false)
+            const el = document.getElementById('cod-verification-panel')
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              el.classList.add('ring-2', 'ring-emerald-500')
+              setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-500'), 2500)
+            } else {
+              scrollToError()
+            }
+            return
+          }
+        }
+
         // 1. Sync local cart to backend
         const syncResult = await syncCartToBackend(items)
         if (!syncResult.success) {
-          setOrderError(syncResult.error || 'Gagal sync keranjang ke server')
+          setOrderError(syncResult.error || 'Gagal menyinkronkan keranjang belanja ke server.')
           setIsProcessing(false)
+          scrollToError()
           return
         }
 
         // 2. Prepare structured order payload
         const orderPayload = {
-          receiverName: values.receiverName,
-          shippingPhone: values.shippingPhone,
-          addressDetail: values.addressDetail,
-          province: values.province,
-          city: values.city,
-          subdistrict: values.subdistrict,
-          kelurahan: values.kelurahan,
-          postalCode: values.postalCode,
-          latitude: values.latitude,
-          longitude: values.longitude,
+          receiverName: values.receiverName?.trim(),
+          shippingPhone: values.shippingPhone?.trim(),
+          addressDetail: values.addressDetail?.trim(),
+          province: values.province?.trim(),
+          city: values.city?.trim(),
+          subdistrict: values.subdistrict?.trim(),
+          kelurahan: values.kelurahan?.trim(),
+          postalCode: values.postalCode?.trim(),
+          latitude: values.latitude ? String(values.latitude).trim() : null,
+          longitude: values.longitude ? String(values.longitude).trim() : null,
           shippingCourier: values.shippingCourier,
           shippingFee: Number(values.shippingFee),
           paymentMethod:
@@ -225,6 +277,7 @@ function CheckoutPage() {
             if (!isSnapLoaded) {
               setOrderError('Gagal memuat sistem pembayaran Midtrans. Silakan coba lagi.')
               setIsProcessing(false)
+              scrollToError()
               return
             }
 
@@ -245,14 +298,17 @@ function CheckoutPage() {
                 console.error('Midtrans payment error:', err)
                 setOrderError('Pembayaran gagal atau dibatalkan.')
                 setIsProcessing(false)
+                scrollToError()
               },
               onClose: () => {
                 clearCart()
-                navigate('/shop/profile')
+                navigate(`/shop/order/${orderResult.order.id}`, {
+                  state: { isPending: true },
+                })
               },
             })
           } else {
-            // Cash/Transfer success
+            // Cash / Virtual Account Transfer / QRIS success
             clearCart()
             navigate('/shop/order-success', {
               state: { orderId: orderResult.order.id },
@@ -267,6 +323,7 @@ function CheckoutPage() {
           } else {
             setOrderError(orderResult.error || 'Gagal membuat pesanan')
           }
+          scrollToError()
         }
       } catch (error) {
         logError('Checkout error', error)
@@ -276,11 +333,12 @@ function CheckoutPage() {
         } else {
           setOrderError(error.message || 'Terjadi kesalahan saat checkout')
         }
+        scrollToError()
       } finally {
         setIsProcessing(false)
       }
     },
-    [items, clearCart, navigate, setAuth, user?.name, user?.phone]
+    [items, clearCart, navigate, setAuth, user?.name, user?.phone, scrollToError]
   )
 
   const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit } = useForm(
@@ -332,31 +390,66 @@ function CheckoutPage() {
     }
   }, [subdistricts, values.subdistrict, fetchVillages])
 
-  const fetchPostalCode = useCallback(
-    async (kelurahanName, subdistrictName) => {
-      try {
-        const query = encodeURIComponent(`${kelurahanName} ${subdistrictName}`)
-        const res = await fetch(`https://carikodepos.id/api/search?q=${query}`)
-        const json = await res.json()
-        if (json.success && json.data && json.data.length > 0) {
-          const match =
-            json.data.find(
-              item =>
-                item.type === 'postal' &&
-                item.village?.name?.toLowerCase() === kelurahanName.toLowerCase() &&
-                item.district?.name?.toLowerCase() === subdistrictName.toLowerCase()
-            ) || json.data.find(item => item.type === 'postal')
+  const fetchPostalCodeOptions = useCallback(
+    async (kelurahanName, subdistrictName, cityName, provinceName) => {
+      if (!kelurahanName && !subdistrictName) {
+        setPostalCodeOptions([])
+        return
+      }
 
-          if (match && match.postalCode) {
-            handleChange({ target: { name: 'postalCode', value: match.postalCode } })
+      setIsLoadingPostalCodes(true)
+      try {
+        const res = await apiClient.get('/location/postal-code', {
+          kelurahan: kelurahanName || '',
+          subdistrict: subdistrictName || '',
+          city: cityName || values.city || '',
+          province: provinceName || values.province || '',
+        })
+
+        const options = (res?.data || []).map(item => ({
+          code: item.postalCode,
+          label: item.label,
+        }))
+
+        setPostalCodeOptions(options)
+
+        // Auto-select logic
+        if (options.length === 1) {
+          handleChange({ target: { name: 'postalCode', value: options[0].code } })
+        } else if (options.length > 1) {
+          if (!values.postalCode || !options.some(o => o.code === values.postalCode)) {
+            handleChange({ target: { name: 'postalCode', value: options[0].code } })
           }
         }
       } catch (err) {
-        console.error('Failed to fetch postal code:', err)
+        console.error('Failed to resolve postal code options:', err)
+        setPostalCodeOptions([])
+      } finally {
+        setIsLoadingPostalCodes(false)
       }
     },
-    [handleChange]
+    [handleChange, values.city, values.postalCode, values.province]
   )
+
+  // Auto-resolve postal codes if kelurahan and subdistrict are pre-filled
+  useEffect(() => {
+    if (
+      values.kelurahan &&
+      values.subdistrict &&
+      postalCodeOptions.length === 0 &&
+      !isManualPostalCode
+    ) {
+      fetchPostalCodeOptions(values.kelurahan, values.subdistrict, values.city, values.province)
+    }
+  }, [
+    values.kelurahan,
+    values.subdistrict,
+    values.city,
+    values.province,
+    postalCodeOptions.length,
+    isManualPostalCode,
+    fetchPostalCodeOptions,
+  ])
 
   // Map-related refs and state
   const mapRef = useRef(null)
@@ -969,6 +1062,8 @@ function CheckoutPage() {
                         setCities([])
                         setSubdistricts([])
                         setVillages([])
+                        setPostalCodeOptions([])
+                        setIsManualPostalCode(false)
                         handleChange({ target: { name: 'city', value: '' } })
                         handleChange({ target: { name: 'subdistrict', value: '' } })
                         handleChange({ target: { name: 'kelurahan', value: '' } })
@@ -1012,6 +1107,8 @@ function CheckoutPage() {
 
                         setSubdistricts([])
                         setVillages([])
+                        setPostalCodeOptions([])
+                        setIsManualPostalCode(false)
                         handleChange({ target: { name: 'subdistrict', value: '' } })
                         handleChange({ target: { name: 'kelurahan', value: '' } })
                         handleChange({ target: { name: 'postalCode', value: '' } })
@@ -1055,6 +1152,8 @@ function CheckoutPage() {
                         }
 
                         setVillages([])
+                        setPostalCodeOptions([])
+                        setIsManualPostalCode(false)
                         handleChange({ target: { name: 'kelurahan', value: '' } })
                         handleChange({ target: { name: 'postalCode', value: '' } })
                       }}
@@ -1087,10 +1186,13 @@ function CheckoutPage() {
                       onChange={e => {
                         const selectedName = e.target.value
                         handleChange(e)
+                        setIsManualPostalCode(false)
 
                         if (selectedName && values.subdistrict) {
-                          fetchPostalCode(selectedName, values.subdistrict)
+                          handleChange({ target: { name: 'postalCode', value: '' } })
+                          fetchPostalCodeOptions(selectedName, values.subdistrict, values.city, values.province)
                         } else {
+                          setPostalCodeOptions([])
                           handleChange({ target: { name: 'postalCode', value: '' } })
                         }
                       }}
@@ -1111,21 +1213,72 @@ function CheckoutPage() {
                   </div>
                 </div>
 
-                {/* Kode Pos */}
+                {/* Kode Pos (Dropdown dengan Fallback Manual) */}
                 <div>
-                  <label className="block text-xs font-body font-medium text-gray-900 mb-2 uppercase tracking-wider">
-                    Kode Pos
-                  </label>
-                  <input
-                    type="text"
-                    name="postalCode"
-                    value={values.postalCode}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    className="w-full px-4 py-3 border border-gray-300 focus:border-gray-900 focus:outline-none transition-colors"
-                    placeholder="Contoh: 40135"
-                    disabled={isSubmitting || isProcessing}
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-body font-medium text-gray-900 uppercase tracking-wider">
+                      Kode Pos
+                    </label>
+                    {!isManualPostalCode ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsManualPostalCode(true)}
+                        className="text-[11px] text-primary-700 hover:text-primary-900 hover:underline font-body transition-colors"
+                      >
+                        Input Manual
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsManualPostalCode(false)}
+                        className="text-[11px] text-primary-700 hover:text-primary-900 hover:underline font-body transition-colors"
+                      >
+                        Pilih dari Dropdown
+                      </button>
+                    )}
+                  </div>
+
+                  {isLoadingPostalCodes ? (
+                    <div className="flex items-center gap-2 px-4 py-3 border border-gray-300 bg-gray-50 text-gray-600 text-xs font-body">
+                      <Icon name="Loader2" size={16} className="animate-spin text-gray-600" />
+                      <span>Mencari kode pos wilayah {values.kelurahan || values.subdistrict}...</span>
+                    </div>
+                  ) : !isManualPostalCode ? (
+                    <select
+                      name="postalCode"
+                      value={values.postalCode}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className="w-full px-4 py-3 border border-gray-300 focus:border-gray-900 focus:outline-none transition-colors bg-white appearance-none"
+                      disabled={isSubmitting || isProcessing}
+                    >
+                      <option value="">
+                        {postalCodeOptions.length === 0
+                          ? values.kelurahan
+                            ? 'Kode pos tidak ditemukan otomatis (klik Input Manual)'
+                            : 'Pilih Kelurahan terlebih dahulu'
+                          : '-- Pilih Kode Pos --'}
+                      </option>
+                      {postalCodeOptions.map(opt => (
+                        <option key={opt.code} value={opt.code}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      name="postalCode"
+                      maxLength="5"
+                      value={values.postalCode}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className="w-full px-4 py-3 border border-gray-300 focus:border-gray-900 focus:outline-none transition-colors"
+                      placeholder="Contoh: 10330 (5 digit angka)"
+                      disabled={isSubmitting || isProcessing}
+                    />
+                  )}
+
                   {errors.postalCode && touched.postalCode && (
                     <p className="mt-1 text-xs text-red-500">{errors.postalCode}</p>
                   )}
@@ -1422,6 +1575,21 @@ function CheckoutPage() {
                     </label>
                   </div>
 
+                  {/* COD Guard & Phone Verification Panel */}
+                  {values.paymentMethod === 'cod' && (
+                    <CodVerificationSection
+                      shippingPhone={values.shippingPhone}
+                      onPhoneChange={(val) => {
+                        handleChange({ target: { name: 'shippingPhone', value: val } })
+                        setIsPhoneVerified(false)
+                      }}
+                      orderTotal={totalPrice + Number(values.shippingFee || 0)}
+                      isPhoneVerified={isPhoneVerified}
+                      onPhoneVerified={() => setIsPhoneVerified(true)}
+                      onEligibilityChange={setCodEligibilityState}
+                    />
+                  )}
+
                   {/* Sub-panel for Bank Transfer Selection */}
                   {values.paymentMethod === 'transfer' && (
                     <div className="mt-4 p-5 border border-primary-100 bg-primary-50/10 rounded-lg transition-all duration-300">
@@ -1468,23 +1636,73 @@ function CheckoutPage() {
                   )}
                 </div>
 
-                <Button
-                  type="submit"
-                  variant="primary"
-                  fullWidth
-                  size="lg"
-                  disabled={isSubmitting || isProcessing}
-                  className="uppercase tracking-wider mt-8"
-                >
-                  {isSubmitting || isProcessing ? (
-                    <>
-                      <Icon name="Loader2" size={20} className="animate-spin mr-2" />
-                      Processing...
-                    </>
-                  ) : (
-                    'Checkout'
-                  )}
-                </Button>
+                {/* Error Banner Above Checkout Button */}
+                {orderError && (
+                  <div
+                    id="checkout-error-banner"
+                    className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-700 text-sm mt-6"
+                  >
+                    <Icon name="AlertCircle" size={20} className="shrink-0 mt-0.5 text-red-600" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-red-900">Gagal Memproses Pesanan</p>
+                      <p className="mt-0.5 text-red-700">{orderError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {Object.keys(errors).length > 0 && Object.keys(touched).length > 0 && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3 text-amber-800 text-sm mt-6">
+                    <Icon name="AlertCircle" size={20} className="shrink-0 mt-0.5 text-amber-600" />
+                    <div>
+                      <p className="font-semibold text-amber-900">Periksa Kembali Data Pengiriman</p>
+                      <p className="mt-0.5 text-xs text-amber-700">
+                        Mohon lengkapi kolom yang bertanda merah sebelum melanjutkan checkout.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {(() => {
+                  const isCod = values.paymentMethod === 'cod'
+                  const isCodBlocked = isCod && !codEligibilityState.eligible
+                  const isCodUnverified = isCod && !isPhoneVerified && !codEligibilityState.isPhoneVerified
+                  const isButtonDisabled = isSubmitting || isProcessing || isCodBlocked
+
+                  return (
+                    <div className="mt-8 flex flex-col items-center">
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="md"
+                        disabled={isButtonDisabled}
+                        className="py-3.5 px-10 text-sm font-semibold tracking-wider uppercase rounded-lg shadow-sm hover:shadow transition-all w-full max-w-md mx-auto flex items-center justify-center"
+                      >
+                        {isSubmitting || isProcessing ? (
+                          <>
+                            <Icon name="Loader2" size={18} className="animate-spin mr-2" />
+                            Processing...
+                          </>
+                        ) : (
+                          'Checkout'
+                        )}
+                      </Button>
+
+                      {isCodUnverified && !isSubmitting && !isProcessing && (
+                        <p className="text-center text-xs text-gray-500 font-body mt-2.5 flex items-center justify-center gap-1.5">
+                          <Icon name="ShieldCheck" size={14} className="text-emerald-600 shrink-0" />
+                          <span>Klik tombol <strong>Kirim OTP via WhatsApp</strong> di atas untuk memverifikasi pesanan COD</span>
+                        </p>
+                      )}
+
+                      {isCodBlocked && !isSubmitting && !isProcessing && (
+                        <p className="text-center text-xs text-amber-800 font-body mt-2.5 flex items-center justify-center gap-1.5 bg-amber-50 py-2 px-3 rounded-lg border border-amber-200">
+                          <Icon name="AlertCircle" size={14} className="text-amber-600 shrink-0" />
+                          <span>Metode COD tidak memenuhi syarat. Silakan pilih Transfer Bank atau QRIS.</span>
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
               </form>
             </div>
           </div>

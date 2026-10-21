@@ -323,15 +323,29 @@ function ShopNavigation() {
 
             {/* Login/User Menu */}
             {isAuthenticated() ? (
-              <Link
-                to="/shop/profile"
-                className="hidden md:flex items-center gap-2 text-xs font-body text-gray-600 hover:text-primary-600 uppercase tracking-wider transition-colors px-3 py-1.5 rounded-full hover:bg-primary-50 group"
-              >
-                <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center group-hover:bg-primary-200 transition-colors">
-                  <Icon name="Users" size={14} className="text-primary-600" />
-                </div>
-                <span className="font-medium">{user?.name || 'Profil Saya'}</span>
-              </Link>
+              <div className="hidden md:flex items-center gap-1">
+                <Link
+                  to="/shop/profile"
+                  className="flex items-center gap-2 text-xs font-body text-gray-700 hover:text-primary-600 uppercase tracking-wider transition-colors px-3 py-1.5 rounded-full hover:bg-primary-50 group"
+                  title="Buka Profil Saya"
+                >
+                  <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center group-hover:bg-primary-200 transition-colors">
+                    <Icon name="Users" size={14} className="text-primary-600" />
+                  </div>
+                  <span className="font-semibold">{user?.name || 'Profil'}</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await logout()
+                    navigate('/shop/login')
+                  }}
+                  title="Keluar dari akun"
+                  className="p-1.5 text-gray-400 hover:text-red-600 rounded-full hover:bg-red-50 transition-colors"
+                >
+                  <Icon name="LogOut" size={15} />
+                </button>
+              </div>
             ) : (
               <Link
                 to="/shop/login"
@@ -448,14 +462,28 @@ function ShopNavigation() {
 
           <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
             {isAuthenticated() ? (
-              <Link
-                to="/shop/profile"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center gap-2 text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider"
-              >
-                <Icon name="Users" size={14} className="text-primary-600" />
-                <span>{user?.name || 'Profil Saya'}</span>
-              </Link>
+              <>
+                <Link
+                  to="/shop/profile"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider"
+                >
+                  <Icon name="Users" size={14} className="text-primary-600" />
+                  <span>{user?.name || 'Profil Saya'}</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsMobileMenuOpen(false)
+                    await logout()
+                    navigate('/shop/login')
+                  }}
+                  className="flex items-center gap-2 text-xs font-body font-medium text-red-600 hover:text-red-700 uppercase tracking-wider text-left pt-1"
+                >
+                  <Icon name="LogOut" size={14} />
+                  <span>Keluar Akun</span>
+                </button>
+              </>
             ) : (
               <Link
                 to="/shop/login"

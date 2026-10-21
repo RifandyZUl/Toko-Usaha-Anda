@@ -1,12 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import Icon from '@shared/components/Icon.jsx'
 import ShopNavigation from '../components/ShopNavigation'
 import Loading from '../components/Loading'
 import ErrorMessage from '../components/ErrorMessage'
+import TrackingModal from '../components/TrackingModal'
+import DisputeModal from '../components/DisputeModal'
+import ReviewModal from '../components/ReviewModal'
 import { useAuthStore } from '../stores/authStore'
-import { getAllOrders } from '../services/orders'
+import { getAllOrders, cancelOrder, completeOrder } from '../services/orders'
 import { updateProfile } from '../services/auth'
+import { apiClient } from '../config/api'
 import { formatCurrency, formatDateTime } from '../utils/format'
 import { logError } from '../utils/logger'
 import { useLocation as useLocationHook } from '../hooks/useLocation'
@@ -83,11 +87,20 @@ async function geocodeWithFallbacks(queries) {
  */
 function ProfilePage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const searchTab = new URLSearchParams(location.search).get('tab')
   const { user, isAuthenticated, logout, setAuth } = useAuthStore()
-  const [activeTab, setActiveTab] = useState('profile')
+  const [activeTab, setActiveTab] = useState(searchTab === 'orders' ? 'orders' : 'profile')
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState(null)
+  const [orderFilter, setOrderFilter] = useState('ALL')
+  const [cancellingOrderId, setCancellingOrderId] = useState(null)
+  const [completingOrderId, setCompletingOrderId] = useState(null)
+  const [lastOrderUpdated, setLastOrderUpdated] = useState(null)
+  const [trackingModalOrderId, setTrackingModalOrderId] = useState(null)
+  const [disputeModalOrder, setDisputeModalOrder] = useState(null)
+  const [reviewModalData, setReviewModalData] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isEditingAddress, setIsEditingAddress] = useState(false)
 
@@ -115,25 +128,26 @@ function ProfilePage() {
 
   // Redirect if not authenticated
   useEffect(() => {
-    if (!isAuthenticated()) {
+    if (!user) {
       navigate('/shop/login', { state: { from: { pathname: '/shop/profile' } } })
     }
-  }, [isAuthenticated, navigate])
+  }, [user, navigate])
 
   // Load user data into form states
   useEffect(() => {
-    if (user) {
+    const activeUser = user?.user || user
+    if (activeUser) {
       setFormData({
-        name: user.name || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        address: user.address || '',
+        name: activeUser.name || '',
+        email: activeUser.email || '',
+        phone: activeUser.phone || '',
+        address: activeUser.address || '',
       })
 
       // Parse structured address if stored as JSON
       let parsed = {
-        receiverName: user.name || '',
-        shippingPhone: user.phone || '',
+        receiverName: activeUser.name || '',
+        shippingPhone: activeUser.phone || '',
         addressDetail: '',
         province: '',
         city: '',
@@ -144,12 +158,12 @@ function ProfilePage() {
         longitude: '',
       }
 
-      if (user.address) {
+      if (activeUser.address) {
         try {
-          const parsedAddress = JSON.parse(user.address)
+          const parsedAddress = JSON.parse(activeUser.address)
           parsed = {
-            receiverName: parsedAddress.receiverName || user.name || '',
-            shippingPhone: parsedAddress.shippingPhone || user.phone || '',
+            receiverName: parsedAddress.receiverName || activeUser.name || '',
+            shippingPhone: parsedAddress.shippingPhone || activeUser.phone || '',
             addressDetail: parsedAddress.addressDetail || '',
             province: parsedAddress.province || '',
             city: parsedAddress.city || '',
@@ -161,7 +175,7 @@ function ProfilePage() {
           }
         } catch (e) {
           // Fallback if not valid JSON
-          parsed.addressDetail = user.address
+          parsed.addressDetail = activeUser.address
         }
       }
       setAddressForm(parsed)
@@ -498,16 +512,14 @@ function ProfilePage() {
   // Postal code resolver
   const fetchPostalCode = useCallback(async (kelurahanName, subdistrictName) => {
     try {
-      const query = encodeURIComponent(`${kelurahanName} ${subdistrictName}`)
-      const res = await fetch(`https://carikodepos.id/api/search?q=${query}`)
-      const json = await res.json()
-      if (json.success && json.data && json.data.length > 0) {
-        const match = json.data.find(item => 
-          item.type === 'postal' &&
-          item.village?.name?.toLowerCase() === kelurahanName.toLowerCase() &&
-          item.district?.name?.toLowerCase() === subdistrictName.toLowerCase()
-        ) || json.data.find(item => item.type === 'postal')
-        
+      const res = await apiClient.get('/location/postal-code', {
+        kelurahan: kelurahanName || '',
+        subdistrict: subdistrictName || '',
+        city: addressForm.city || '',
+        province: addressForm.province || '',
+      })
+      if (res?.data && res.data.length > 0) {
+        const match = res.data[0]
         if (match && match.postalCode) {
           setAddressForm(prev => ({ ...prev, postalCode: match.postalCode }))
         }
@@ -515,24 +527,155 @@ function ProfilePage() {
     } catch (err) {
       console.error('Failed to fetch postal code:', err)
     }
-  }, [])
+  }, [addressForm.city, addressForm.province])
 
-  // Fetch orders API call
-  const fetchOrders = async () => {
-    setOrdersLoading(true)
+  // Fetch orders API call with silent background refresh support
+  const fetchOrders = useCallback(async (isSilent = false) => {
+    if (!user) {
+      setOrders([])
+      return
+    }
+    if (!isSilent) setOrdersLoading(true)
     setOrdersError(null)
     try {
       const result = await getAllOrders()
       if (result.success) {
         setOrders(result.orders || [])
+        setLastOrderUpdated(new Date())
       } else {
-        setOrdersError(result.error || 'Gagal memuat riwayat pesanan')
+        if (!isSilent) setOrdersError(result.error || 'Gagal memuat riwayat pesanan')
       }
     } catch (err) {
       logError('Error fetching orders', err)
-      setOrdersError('Gagal memuat riwayat pesanan')
+      if (!isSilent) setOrdersError('Gagal memuat riwayat pesanan')
     } finally {
-      setOrdersLoading(false)
+      if (!isSilent) setOrdersLoading(false)
+    }
+  }, [user])
+
+  // Customer manual confirmation that package was received
+  const handleCompleteOrder = useCallback(async (orderId) => {
+    if (!window.confirm('Konfirmasi bahwa paket telah Anda terima dengan baik? Pesanan akan ditandai selesai.')) {
+      return
+    }
+    setCompletingOrderId(orderId)
+    try {
+      const result = await completeOrder(orderId)
+      if (result.success) {
+        fetchOrders(true)
+      } else {
+        alert(`Gagal menyelesaikan pesanan: ${result.error || 'Terjadi kesalahan'}`)
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan saat menyelesaikan pesanan')
+    } finally {
+      setCompletingOrderId(null)
+    }
+  }, [fetchOrders])
+
+  // Auto-fetch and real-time polling every 10 seconds while on orders tab
+  useEffect(() => {
+    if (activeTab === 'orders' && user) {
+      fetchOrders()
+      const interval = setInterval(() => {
+        fetchOrders(true)
+      }, 10000)
+      return () => clearInterval(interval)
+    }
+  }, [activeTab, user, fetchOrders])
+
+  // Count orders per status category
+  const orderCounts = useMemo(() => {
+    return {
+      ALL: orders.length,
+      UNPAID: orders.filter(o => o.status === 'PENDING' && o.paymentStatus === 'PENDING').length,
+      PROCESSING: orders.filter(o => o.status === 'PROCESSING' || (o.paymentStatus === 'PAID' && o.status === 'PENDING')).length,
+      SHIPPED: orders.filter(o => o.status === 'SHIPPED').length,
+      DELIVERED: orders.filter(o => o.status === 'DELIVERED').length,
+      CANCELLED: orders.filter(o => o.status === 'CANCELLED' || o.status === 'EXPIRED').length,
+    }
+  }, [orders])
+
+  // Filter orders according to selected tab
+  const filteredOrders = useMemo(() => {
+    if (orderFilter === 'ALL') return orders
+    if (orderFilter === 'UNPAID') {
+      return orders.filter(o => o.status === 'PENDING' && o.paymentStatus === 'PENDING')
+    }
+    if (orderFilter === 'PROCESSING') {
+      return orders.filter(o => o.status === 'PROCESSING' || (o.paymentStatus === 'PAID' && o.status === 'PENDING'))
+    }
+    if (orderFilter === 'SHIPPED') {
+      return orders.filter(o => o.status === 'SHIPPED')
+    }
+    if (orderFilter === 'DELIVERED') {
+      return orders.filter(o => o.status === 'DELIVERED')
+    }
+    if (orderFilter === 'CANCELLED') {
+      return orders.filter(o => o.status === 'CANCELLED' || o.status === 'EXPIRED')
+    }
+    return orders
+  }, [orders, orderFilter])
+
+  // Helper to determine stepper progress and status styling
+  const getOrderStepInfo = useCallback((order) => {
+    if (order.status === 'CANCELLED' || order.status === 'EXPIRED') {
+      return {
+        step: -1,
+        isCancelled: true,
+        label: order.status === 'EXPIRED' ? 'Kedaluwarsa' : 'Dibatalkan',
+        badgeClass: 'bg-red-50 text-red-700 border border-red-200',
+      }
+    }
+    if (order.status === 'DELIVERED') {
+      return {
+        step: 4,
+        isCancelled: false,
+        label: 'Selesai',
+        badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+      }
+    }
+    if (order.status === 'SHIPPED') {
+      return {
+        step: 3,
+        isCancelled: false,
+        label: 'Sedang Dikirim',
+        badgeClass: 'bg-blue-50 text-blue-700 border border-blue-200',
+      }
+    }
+    if (order.status === 'PROCESSING' || order.paymentStatus === 'PAID') {
+      return {
+        step: 2,
+        isCancelled: false,
+        label: 'Sedang Dikemas',
+        badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200',
+      }
+    }
+    return {
+      step: 1,
+      isCancelled: false,
+      label: 'Menunggu Pembayaran',
+      badgeClass: 'bg-orange-50 text-orange-700 border border-orange-200',
+    }
+  }, [])
+
+  // Cancel order directly from profile
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm('Apakah Anda yakin ingin membatalkan pesanan ini? Stok produk akan dikembalikan ke inventaris.')) {
+      return
+    }
+    setCancellingOrderId(orderId)
+    try {
+      const result = await cancelOrder(orderId)
+      if (result.success) {
+        await fetchOrders()
+      } else {
+        alert(result.error || 'Gagal membatalkan pesanan')
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan saat membatalkan pesanan')
+    } finally {
+      setCancellingOrderId(null)
     }
   }
 
@@ -586,10 +729,11 @@ function ProfilePage() {
     }
 
     try {
+      const activeUser = user?.user || user
       const serializedAddress = JSON.stringify(addressForm)
       const result = await updateProfile({
-        name: user.name,
-        phone: user.phone || addressForm.shippingPhone,
+        name: activeUser?.name || addressForm.receiverName,
+        phone: activeUser?.phone || addressForm.shippingPhone,
         address: serializedAddress,
       })
       if (result.success && result.user) {
@@ -616,7 +760,7 @@ function ProfilePage() {
     { id: 'address', label: 'Alamat Pengiriman', icon: 'MapPin' },
   ]
 
-  if (!isAuthenticated()) {
+  if (!user) {
     return <Loading message="Redirecting..." />
   }
 
@@ -761,107 +905,441 @@ function ProfilePage() {
 
               {/* Orders Tab */}
               {activeTab === 'orders' && (
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <h2 className="text-xl font-heading font-semibold text-gray-900 mb-6">
-                    Pesanan Saya
-                  </h2>
+                <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6 shadow-sm">
+                  {/* Header: Title, Live Status Indicator, Refresh Button */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-gray-100">
+                    <div>
+                      <h2 className="text-xl font-heading font-semibold text-gray-900">
+                        Pesanan Saya
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Lacak alur pembayaran, pengemasan, dan pengiriman secara real-time
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      {lastOrderUpdated && (
+                        <span className="text-[10px] text-gray-400 hidden sm:inline">
+                          Diperbarui {lastOrderUpdated.toLocaleTimeString('id-ID')}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        <span className="font-medium">Live Tracking</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => fetchOrders()}
+                        disabled={ordersLoading}
+                        className="inline-flex items-center gap-1.5 text-xs text-gray-700 hover:text-primary-700 hover:bg-gray-100 px-3 py-1.5 rounded transition-colors border border-gray-200"
+                        title="Segarkan status pesanan"
+                      >
+                        <Icon
+                          name="RefreshCw"
+                          size={13}
+                          className={ordersLoading ? 'animate-spin text-primary-600' : ''}
+                        />
+                        <span>{ordersLoading ? 'Memuat...' : 'Segarkan'}</span>
+                      </button>
+                    </div>
+                  </div>
 
-                  {ordersLoading ? (
+                  {/* Status Filter Tabs (Shopee / Tokopedia Style) */}
+                  <div className="flex items-center gap-1.5 border-b border-gray-200 mb-6 overflow-x-auto pb-1 text-xs">
+                    {[
+                      { id: 'ALL', label: 'Semua', count: orderCounts.ALL },
+                      { id: 'UNPAID', label: 'Belum Bayar', count: orderCounts.UNPAID },
+                      { id: 'PROCESSING', label: 'Dikemas', count: orderCounts.PROCESSING },
+                      { id: 'SHIPPED', label: 'Dikirim', count: orderCounts.SHIPPED },
+                      { id: 'DELIVERED', label: 'Selesai', count: orderCounts.DELIVERED },
+                      { id: 'CANCELLED', label: 'Dibatalkan', count: orderCounts.CANCELLED },
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setOrderFilter(tab.id)}
+                        className={`px-3.5 py-2 font-medium whitespace-nowrap transition-colors border-b-2 flex items-center gap-1.5 ${
+                          orderFilter === tab.id
+                            ? 'border-primary-600 text-primary-700 font-semibold'
+                            : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        {tab.count > 0 && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              orderFilter === tab.id
+                                ? 'bg-primary-100 text-primary-800'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {tab.count}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {ordersLoading && orders.length === 0 ? (
                     <div className="text-center py-12">
-                      <Loading message="Memuat pesanan..." />
+                      <Loading message="Memuat riwayat pesanan..." />
                     </div>
                   ) : ordersError ? (
                     <ErrorMessage message={ordersError} onRetry={fetchOrders} />
-                  ) : orders.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Icon name="Package" size={48} className="text-gray-300 mx-auto mb-4" />
-                      <p className="text-gray-600 mb-2">Belum ada pesanan</p>
+                  ) : filteredOrders.length === 0 ? (
+                    <div className="text-center py-12 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                      <Icon name="Package" size={44} className="text-gray-300 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-gray-700 mb-1">
+                        {orderFilter === 'ALL'
+                          ? 'Belum ada pesanan'
+                          : `Tidak ada pesanan dengan status "${orderFilter}"`}
+                      </p>
+                      <p className="text-xs text-gray-500 mb-4">
+                        Jelajahi berbagai produk perkakas rumah tangga di katalog kami
+                      </p>
                       <button
                         onClick={() => navigate('/shop')}
-                        className="text-primary-600 hover:text-primary-700 font-medium"
+                        className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded transition-colors"
                       >
                         Mulai Belanja
                       </button>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {orders.map(order => (
-                        <div
-                          key={order.id}
-                          className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 transition-colors"
-                        >
-                          <div className="flex items-start justify-between mb-4">
-                            <div>
-                              <p className="text-sm font-body text-gray-500 mb-1">
-                                Pesanan #{order.id?.slice(-8).toUpperCase()}
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                {formatDateTime(order.createdAt)}
-                              </p>
-                            </div>
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                order.status === 'DELIVERED'
-                                  ? 'bg-green-100 text-green-700 border border-green-200'
-                                  : order.status === 'PENDING'
-                                  ? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
-                                  : order.status === 'CANCELLED'
-                                  ? 'bg-red-100 text-red-700 border border-red-200'
-                                  : order.status === 'SHIPPED'
-                                  ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
-                                  : 'bg-blue-100 text-blue-700 border border-blue-200'
-                              }`}
-                            >
-                              {order.status === 'DELIVERED'
-                                ? 'Selesai'
-                                : order.status === 'PENDING'
-                                ? 'Menunggu Pembayaran'
-                                : order.status === 'CANCELLED'
-                                ? 'Dibatalkan'
-                                : order.status === 'SHIPPED'
-                                ? 'Dikirim'
-                                : 'Dikemas'}
-                            </span>
-                          </div>
+                    <div className="space-y-5">
+                      {filteredOrders.map(order => {
+                        const stepInfo = getOrderStepInfo(order)
+                        const totalAmountNum = Number(order.totalAmount || 0) + Number(order.shippingFee || 0)
 
-                          <div className="space-y-2 mb-4">
-                            {order.items?.map((item, idx) => (
-                              <div key={idx} className="flex items-center gap-3">
-                                <div className="w-16 h-16 bg-gray-100 rounded border border-gray-200 flex-shrink-0">
-                                  {item.image && (
-                                    <img
-                                      src={item.image}
-                                      alt={item.name}
-                                      className="w-full h-full object-cover rounded"
+                        return (
+                          <div
+                            key={order.id}
+                            className="border border-gray-200 rounded-lg p-4 md:p-5 hover:border-gray-300 transition-all bg-white shadow-sm"
+                          >
+                            {/* Card Header */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-gray-100">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-mono font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded">
+                                  #{order.id?.slice(-8).toUpperCase()}
+                                </span>
+                                <span className="text-xs text-gray-400">•</span>
+                                <span className="text-xs text-gray-500">
+                                  {formatDateTime(order.createdAt)}
+                                </span>
+                                {order.shippingCourier && (
+                                  <>
+                                    <span className="text-xs text-gray-400">•</span>
+                                    <span className="text-xs text-gray-600 font-medium flex items-center gap-1">
+                                      <Icon name="Truck" size={12} className="text-gray-400" />
+                                      {order.shippingCourier}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                              <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${stepInfo.badgeClass}`}>
+                                {stepInfo.label}
+                              </span>
+                            </div>
+
+                            {/* Tracking Progress Stepper */}
+                            {!stepInfo.isCancelled ? (
+                              <div className="my-4 py-3 px-3 bg-gray-50/70 rounded-lg border border-gray-100">
+                                <div className="relative flex items-center justify-between">
+                                  {/* Progress Line */}
+                                  <div className="absolute top-3.5 left-6 right-6 h-0.5 bg-gray-200 -z-0">
+                                    <div
+                                      className="h-full bg-primary-600 transition-all duration-500"
+                                      style={{
+                                        width:
+                                          stepInfo.step <= 1
+                                            ? '0%'
+                                            : stepInfo.step === 2
+                                            ? '33%'
+                                            : stepInfo.step === 3
+                                            ? '66%'
+                                            : '100%',
+                                      }}
                                     />
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-body text-gray-900 truncate">
-                                    {item.name}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {item.quantity} x {formatCurrency(item.price)}
-                                  </p>
+                                  </div>
+
+                                  {/* Stepper Points */}
+                                  {[
+                                    { step: 1, label: 'Dipesan', icon: 'Clock' },
+                                    { step: 2, label: 'Dikemas', icon: 'Package' },
+                                    { step: 3, label: 'Dikirim', icon: 'Truck' },
+                                    { step: 4, label: 'Selesai', icon: 'CheckCircle' },
+                                  ].map(s => {
+                                    const isDone = stepInfo.step >= s.step
+                                    const isCurrent = stepInfo.step === s.step
+                                    return (
+                                      <div key={s.step} className="flex-1 flex flex-col items-center relative z-10">
+                                        <div
+                                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs transition-all ${
+                                            isDone
+                                              ? 'bg-primary-600 text-white shadow-sm'
+                                              : 'bg-white border-2 border-gray-300 text-gray-400'
+                                          } ${isCurrent ? 'ring-4 ring-primary-100' : ''}`}
+                                        >
+                                          <Icon name={s.icon} size={13} />
+                                        </div>
+                                        <span
+                                          className={`text-[10px] md:text-[11px] mt-1 text-center font-medium ${
+                                            isDone ? 'text-gray-900 font-semibold' : 'text-gray-400'
+                                          }`}
+                                        >
+                                          {s.label}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
                                 </div>
                               </div>
-                            ))}
-                          </div>
+                            ) : (
+                              <div className="my-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2.5 text-xs text-red-800">
+                                <Icon name="AlertCircle" size={16} className="text-red-600 flex-shrink-0" />
+                                <span>
+                                  Pesanan dibatalkan ({order.status === 'EXPIRED' ? 'Batas waktu pembayaran habis' : 'Dibatalkan oleh pembeli'}). Seluruh stok produk telah dikembalikan ke inventaris.
+                                </span>
+                              </div>
+                            )}
 
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                            <p className="text-sm font-body text-gray-600">
-                              Total: <span className="font-semibold text-gray-900">{formatCurrency(order.total)}</span>
-                            </p>
-                            <button
-                              onClick={() => navigate(`/shop/order/${order.id}`)}
-                              className="text-sm font-body text-primary-600 hover:text-primary-700 font-medium"
-                            >
-                              Lihat Detail
-                            </button>
+                            {/* Order Items */}
+                            <div className="divide-y divide-gray-100 my-3">
+                              {order.items?.map((item, idx) => {
+                                const productName = item.product?.name || item.name || 'Produk'
+                                const productImage =
+                                  item.product?.images?.[0] ||
+                                  item.product?.image ||
+                                  item.image ||
+                                  '/placeholder-product.png'
+
+                                return (
+                                  <div key={idx} className="py-2.5 flex items-center gap-3">
+                                    <div className="w-14 h-14 bg-gray-50 rounded border border-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
+                                      <img
+                                        src={productImage}
+                                        alt={productName}
+                                        className="w-full h-full object-cover"
+                                        onError={e => {
+                                          e.target.onerror = null
+                                          e.target.src = '/placeholder-product.png'
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs md:text-sm font-body font-medium text-gray-900 truncate">
+                                        {productName}
+                                      </p>
+                                      <p className="text-xs text-gray-500 mt-0.5">
+                                        {item.quantity} barang x {formatCurrency(item.price)}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-xs md:text-sm font-semibold text-gray-900">
+                                        {formatCurrency(Number(item.price) * item.quantity)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+
+                            {/* Card Footer: Total, Method & Actions */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                              <div className="text-left">
+                                <span className="text-xs text-gray-500">Total Belanja: </span>
+                                <span className="text-sm font-heading font-bold text-gray-900">
+                                  {formatCurrency(totalAmountNum)}
+                                </span>
+                                <span className="text-[11px] text-gray-400 ml-2">
+                                  ({order.paymentMethod || 'Transfer'})
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 self-end sm:self-auto">
+                                {/* If PENDING and UNPAID: Allow Pay Now or Cancel */}
+                                {order.status === 'PENDING' && order.paymentStatus === 'PENDING' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCancelOrder(order.id)}
+                                      disabled={cancellingOrderId === order.id}
+                                      className="px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 border border-red-200 rounded transition-colors disabled:opacity-50"
+                                    >
+                                      {cancellingOrderId === order.id ? 'Membatalkan...' : 'Batalkan'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(`/shop/order/${order.id}`)}
+                                      className="px-4 py-1.5 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded transition-colors shadow-sm"
+                                    >
+                                      Bayar Sekarang
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* If PROCESSING: View Details */}
+                                {order.status === 'PROCESSING' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/shop/order/${order.id}`)}
+                                    className="px-3.5 py-1.5 text-xs font-medium text-gray-700 hover:text-primary-700 border border-gray-300 hover:border-primary-400 rounded transition-colors"
+                                  >
+                                    Lihat Rincian
+                                  </button>
+                                )}
+
+                                {/* If SHIPPED: Track Package, Confirm Received, and Dispute */}
+                                {order.status === 'SHIPPED' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={completingOrderId === order.id}
+                                      onClick={() => handleCompleteOrder(order.id)}
+                                      className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded transition-colors shadow-sm flex items-center gap-1.5"
+                                    >
+                                      <Icon name="CheckCircle" size={13} />
+                                      <span>{completingOrderId === order.id ? 'Memproses...' : 'Pesanan Diterima'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setTrackingModalOrderId(order.id)}
+                                      className="px-3.5 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded transition-colors flex items-center gap-1.5"
+                                    >
+                                      <Icon name="Truck" size={13} />
+                                      <span>Lacak Paket</span>
+                                    </button>
+                                    {!order.paymentDetails?.disputeDetails?.isDisputed && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setDisputeModalOrder(order)}
+                                        className="px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 border border-amber-200 rounded transition-colors"
+                                      >
+                                        Komplain
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(`/shop/order/${order.id}`)}
+                                      className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 border border-gray-200 rounded transition-colors"
+                                    >
+                                      Rincian
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* If DELIVERED: Review, Buy Again, or Dispute */}
+                                {order.status === 'DELIVERED' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => setReviewModalData({ orderId: order.id, product: order.items[0]?.product })}
+                                      className="px-3.5 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded transition-colors flex items-center gap-1"
+                                    >
+                                      <Icon name="Star" size={13} className="fill-amber-400 text-amber-500" />
+                                      <span>Beri Ulasan</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setTrackingModalOrderId(order.id)}
+                                      className="px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 border border-blue-200 rounded transition-colors flex items-center gap-1"
+                                    >
+                                      <Icon name="Truck" size={12} />
+                                      <span>Lacak</span>
+                                    </button>
+                                    {!order.paymentDetails?.disputeDetails?.isDisputed && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setDisputeModalOrder(order)}
+                                        className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 border border-gray-200 rounded transition-colors"
+                                      >
+                                        Komplain
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate('/shop')}
+                                      className="px-3 py-1.5 text-xs font-medium text-primary-600 hover:bg-primary-50 border border-primary-300 rounded transition-colors"
+                                    >
+                                      Beli Lagi
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(`/shop/order/${order.id}`)}
+                                      className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 border border-gray-200 rounded transition-colors"
+                                    >
+                                      Rincian
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* If CANCELLED: Buy Again */}
+                                {stepInfo.isCancelled && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate('/shop')}
+                                      className="px-3 py-1.5 text-xs font-medium text-primary-600 hover:bg-primary-50 border border-primary-300 rounded transition-colors"
+                                    >
+                                      Beli Lagi
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(`/shop/order/${order.id}`)}
+                                      className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 border border-gray-200 rounded transition-colors"
+                                    >
+                                      Rincian
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Dispute Active Alert */}
+                            {order.paymentDetails?.disputeDetails?.isDisputed && (
+                              <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-amber-800 bg-amber-50 px-2.5 py-1.5 rounded border border-amber-200">
+                                <span className="flex items-center gap-1.5 font-medium">
+                                  <Icon name="AlertTriangle" size={13} className="text-amber-600 shrink-0" />
+                                  <span>Komplain Diajukan: <strong>{order.paymentDetails.disputeDetails.reason}</strong> ({order.paymentDetails.disputeDetails.status})</span>
+                                </span>
+                                <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded font-bold">
+                                  Ditangguhkan
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Auto-complete notice for SHIPPED orders without dispute */}
+                            {order.status === 'SHIPPED' && !order.paymentDetails?.disputeDetails?.isDisputed && (
+                              <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50/80 px-2.5 py-1.5 rounded border border-amber-100">
+                                <Icon name="Clock" size={13} className="text-amber-600 shrink-0" />
+                                <span>Pesanan otomatis diselesaikan dalam <strong>2 hari</strong> setelah barang diterima jika belum dikonfirmasi.</span>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
+                  )}
+
+                  {/* Modals */}
+                  {trackingModalOrderId && (
+                    <TrackingModal
+                      orderId={trackingModalOrderId}
+                      onClose={() => setTrackingModalOrderId(null)}
+                    />
+                  )}
+                  {disputeModalOrder && (
+                    <DisputeModal
+                      order={disputeModalOrder}
+                      onClose={() => setDisputeModalOrder(null)}
+                      onSuccess={() => fetchOrders(true)}
+                    />
+                  )}
+                  {reviewModalData && (
+                    <ReviewModal
+                      orderId={reviewModalData.orderId}
+                      product={reviewModalData.product}
+                      onClose={() => setReviewModalData(null)}
+                      onSuccess={() => fetchOrders(true)}
+                    />
                   )}
                 </div>
               )}

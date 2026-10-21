@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 import Icon from '@shared/components/Icon'
-import useCartStore from '../stores/cartStore'
+import { useCartStore } from '../stores/cartStore'
 
 /**
  * Shop Navigation Component
  */
 function Navigation() {
-  const { getTotalItems, isOpen, toggleCart } = useCartStore()
+  const { getTotalItems, toggleCart } = useCartStore()
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl shadow-md border-b border-gray-100">

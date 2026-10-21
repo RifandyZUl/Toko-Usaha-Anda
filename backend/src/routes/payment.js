@@ -7,7 +7,7 @@ const router = express.Router()
 // Webhook notification from Midtrans
 router.post('/notification', handleNotification)
 
-// Simulate successful payment in development mode (Admin only)
-router.post('/simulate', authenticate, adminOnly, simulatePayment)
+// Simulate successful payment in development mode (Owner or Admin)
+router.post('/simulate', authenticate, simulatePayment)
 
 export default router

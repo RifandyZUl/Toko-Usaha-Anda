@@ -31,6 +31,9 @@ import cartRoutes from './routes/cart.js'
 import orderRoutes from './routes/orders.js'
 import uploadRoutes from './routes/upload.js'
 import paymentRoutes from './routes/payment.js'
+import locationRoutes from './routes/location.js'
+import { startOrderExpiryCron } from './services/orderExpiryService.js'
+import { startOrderAutoCompleteCron } from './services/orderAutoCompleteService.js'
 
 import { errorHandler } from './middleware/errorHandler.js'
 import {
@@ -90,7 +93,14 @@ app.use(
     },
     credentials: true, // Required for cookies
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'X-Idempotency-Key',
+      'Idempotency-Key',
+      'Accept',
+    ],
     optionsSuccessStatus: 200,
   })
 )
@@ -142,6 +152,7 @@ app.use('/api/cart', cartRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/upload', uploadLimiter, uploadRoutes)
 app.use('/api/payment', paymentRoutes)
+app.use('/api/location', locationRoutes)
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 
@@ -175,4 +186,10 @@ app.listen(PORT, async () => {
   } catch {
     logWarn('Could not verify Supabase configuration on startup')
   }
+
+  // Start background auto-expiry service for pending orders
+  startOrderExpiryCron(60 * 1000)
+
+  // Start background auto-complete service for shipped orders (2 days window)
+  startOrderAutoCompleteCron(5 * 60 * 1000)
 })

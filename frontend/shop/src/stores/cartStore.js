@@ -16,18 +16,23 @@ export const useCartStore = create(
       addItem: (product, quantity = 1) => {
         const items = get().items
         const existingItem = items.find(item => item.id === product.id)
+        const maxStock = typeof product.stock === 'number' ? product.stock : 9999
+
+        if (maxStock <= 0) return // Don't add out of stock products
 
         if (existingItem) {
+          const newQty = Math.min(existingItem.quantity + quantity, maxStock)
           set({
             items: items.map(item =>
               item.id === product.id
-                ? { ...item, quantity: item.quantity + quantity }
+                ? { ...item, ...product, quantity: newQty }
                 : item
             ),
           })
         } else {
+          const initialQty = Math.min(Math.max(1, quantity), maxStock)
           set({
-            items: [...items, { ...product, quantity }],
+            items: [...items, { ...product, quantity: initialQty }],
           })
         }
       },
@@ -44,9 +49,14 @@ export const useCartStore = create(
           return
         }
 
+        const items = get().items
+        const targetItem = items.find(item => item.id === productId)
+        const maxStock = targetItem && typeof targetItem.stock === 'number' ? targetItem.stock : 9999
+        const finalQty = Math.min(quantity, maxStock)
+
         set({
-          items: get().items.map(item =>
-            item.id === productId ? { ...item, quantity } : item
+          items: items.map(item =>
+            item.id === productId ? { ...item, quantity: finalQty } : item
           ),
         })
       },

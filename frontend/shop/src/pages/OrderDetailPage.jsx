@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import Icon from '@shared/components/Icon.jsx'
 import ShopNavigation from '../components/ShopNavigation'
+import { useAuthStore } from '../stores/authStore'
 import Loading from '../components/Loading'
 import ErrorMessage from '../components/ErrorMessage'
-import { getOrderById, simulateOrderPayment, cancelOrder } from '../services/orders'
+import TrackingModal from '../components/TrackingModal'
+import DisputeModal from '../components/DisputeModal'
+import ReviewModal from '../components/ReviewModal'
+import { getOrderById, simulateOrderPayment, cancelOrder, completeOrder } from '../services/orders'
 import { formatCurrency, formatDateTime } from '../utils/format'
 import { logError } from '../utils/logger'
 
@@ -229,11 +233,46 @@ function PaymentInstructions({ bank }) {
  */
 function OrderDetailPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
+  const user = useAuthStore(state => state.user)
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isSimulating, setIsSimulating] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [isCompleting, setIsCompleting] = useState(false)
+  const [showTrackingModal, setShowTrackingModal] = useState(false)
+  const [showDisputeModal, setShowDisputeModal] = useState(false)
+  const [reviewModalProduct, setReviewModalProduct] = useState(null)
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!user) {
+      navigate('/shop/login', { replace: true, state: { from: { pathname: `/shop/order/${id}` } } })
+    }
+  }, [user, id, navigate])
+
+  const handleCompleteOrder = async () => {
+    if (!window.confirm('Konfirmasi bahwa barang sudah Anda terima dengan baik? Pesanan akan ditandai selesai.')) {
+      return
+    }
+
+    setIsCompleting(true)
+    try {
+      const result = await completeOrder(id)
+      if (result.success) {
+        alert(result.message || 'Pesanan berhasil diselesaikan. Terima kasih!')
+        fetchOrder()
+      } else {
+        alert(`Gagal menyelesaikan pesanan: ${result.error || 'Terjadi kesalahan'}`)
+      }
+    } catch (err) {
+      console.error('Failed to complete order:', err)
+      alert('Terjadi kesalahan saat menyelesaikan pesanan')
+    } finally {
+      setIsCompleting(false)
+    }
+  }
 
   const handleCancelOrder = async () => {
     if (!window.confirm('Apakah Anda yakin ingin membatalkan pesanan ini?')) {
@@ -270,7 +309,7 @@ function OrderDetailPage() {
   }
 
   const fetchOrder = useCallback(async () => {
-    if (!id) return
+    if (!id || !user) return
     setLoading(true)
     setError(null)
     try {
@@ -286,7 +325,7 @@ function OrderDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [id])
+  }, [id, user])
 
   useEffect(() => {
     fetchOrder()
@@ -568,7 +607,7 @@ function OrderDetailPage() {
                         ⚠️ MODE TESTING OFFLINE / SIMULASI
                       </p>
                       <p className="text-[10px] text-gray-500 mb-3">
-                        Kunci server Midtrans tidak valid. Anda dapat menguji alur pembayaran secara penuh menggunakan tombol simulasi di bawah ini.
+                        Channel pembayaran belum diaktifkan di Midtrans. Anda dapat menguji alur pembayaran secara penuh menggunakan tombol simulasi di bawah ini.
                       </p>
                       <button
                         type="button"
@@ -924,6 +963,111 @@ function OrderDetailPage() {
 
           {/* Delivery & Payment Methods (Right / Sidebar) */}
           <div className="md:col-span-1 space-y-6">
+            {/* Courier Tracking Card */}
+            {(order.status === 'SHIPPED' || order.status === 'DELIVERED' || order.status === 'PROCESSING') && (
+              <div className="bg-white border border-primary-200 rounded-lg p-5 shadow-sm">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
+                  <div className="w-6 h-6 rounded bg-primary-100 text-primary-700 flex items-center justify-center">
+                    <Icon name="Truck" size={14} />
+                  </div>
+                  <h2 className="text-xs font-heading font-semibold text-gray-900 uppercase tracking-wider">
+                    Status Pengiriman
+                  </h2>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-gray-600">
+                    <span>Ekspedisi:</span>
+                    <strong className="text-gray-900">{order.shippingCourier || 'JNE'}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-gray-600">
+                    <span>Nomor Resi:</span>
+                    <span className="font-mono font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+                      {order.paymentDetails?.shippingDetails?.trackingNumber || `RESI-${(order.shippingCourier || 'JNE').toUpperCase()}-${order.id.slice(0, 8).toUpperCase()}`}
+                    </span>
+                  </div>
+                  <div className="pt-2 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowTrackingModal(true)}
+                      className="w-full py-2 px-4 bg-primary-600 hover:bg-primary-700 text-white rounded text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                    >
+                      <Icon name="Truck" size={14} />
+                      <span>Lacak Posisi Paket</span>
+                    </button>
+
+                    {order.status === 'SHIPPED' && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={isCompleting}
+                          onClick={handleCompleteOrder}
+                          className="w-full py-2 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                        >
+                          <Icon name="CheckCircle" size={14} />
+                          <span>{isCompleting ? 'Memproses...' : 'Pesanan Diterima (Selesai)'}</span>
+                        </button>
+
+                        {!order.paymentDetails?.disputeDetails?.isDisputed && (
+                          <button
+                            type="button"
+                            onClick={() => setShowDisputeModal(true)}
+                            className="w-full py-2 px-4 bg-white hover:bg-gray-50 border border-amber-300 text-amber-800 rounded text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                          >
+                            <Icon name="AlertCircle" size={14} />
+                            <span>Ajukan Komplain / Pengembalian</span>
+                          </button>
+                        )}
+
+                        {!order.paymentDetails?.disputeDetails?.isDisputed && (
+                          <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded border border-amber-100 flex items-center gap-1.5">
+                            <Icon name="Clock" size={13} className="text-amber-600 shrink-0" />
+                            <span>Pesanan otomatis masuk ke selesai dalam <strong>2 hari</strong> setelah barang sampai jika belum dikonfirmasi.</span>
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {order.status === 'DELIVERED' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setReviewModalProduct(order.items[0]?.product)}
+                          className="w-full py-2 px-4 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                        >
+                          <Icon name="Star" size={14} className="fill-amber-400 text-amber-500" />
+                          <span>Beri Ulasan & Rating Bintang</span>
+                        </button>
+                        {!order.paymentDetails?.disputeDetails?.isDisputed && (
+                          <button
+                            type="button"
+                            onClick={() => setShowDisputeModal(true)}
+                            className="w-full py-2 px-4 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 rounded text-xs font-medium flex items-center justify-center gap-2 transition-colors"
+                          >
+                            <Icon name="AlertCircle" size={14} />
+                            <span>Ajukan Komplain / Pengembalian</span>
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    {/* Dispute Banner if active */}
+                    {order.paymentDetails?.disputeDetails?.isDisputed && (
+                      <div className="p-2.5 bg-amber-50 rounded border border-amber-200 text-xs text-amber-900 space-y-1">
+                        <div className="flex items-center justify-between font-bold">
+                          <span className="flex items-center gap-1.5">
+                            <Icon name="AlertTriangle" size={14} className="text-amber-600" />
+                            <span>Komplain Ditinjau Admin</span>
+                          </span>
+                          <span className="text-[10px] bg-amber-200 px-1.5 py-0.5 rounded">Ditangguhkan</span>
+                        </div>
+                        <p className="text-[11px] text-gray-700">Alasan: {order.paymentDetails.disputeDetails.reason}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Delivery Info */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100">
@@ -982,6 +1126,29 @@ function OrderDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Modals */}
+        {showTrackingModal && (
+          <TrackingModal
+            orderId={order.id}
+            onClose={() => setShowTrackingModal(false)}
+          />
+        )}
+        {showDisputeModal && (
+          <DisputeModal
+            order={order}
+            onClose={() => setShowDisputeModal(false)}
+            onSuccess={() => fetchOrder()}
+          />
+        )}
+        {reviewModalProduct && (
+          <ReviewModal
+            orderId={order.id}
+            product={reviewModalProduct}
+            onClose={() => setReviewModalProduct(null)}
+            onSuccess={() => fetchOrder()}
+          />
+        )}
       </main>
     </div>
   )

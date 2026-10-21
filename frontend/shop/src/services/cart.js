@@ -96,16 +96,7 @@ export const removeFromCart = async itemId => {
  */
 export const clearCart = async () => {
   try {
-    // Get all cart items first
-    const cart = await getCart()
-    if (!cart.success) {
-      return { success: false, error: cart.error }
-    }
-
-    // Delete all items
-    const deletePromises = cart.items.map(item => removeFromCart(item.id))
-    await Promise.all(deletePromises)
-
+    await apiClient.delete('/cart')
     return { success: true }
   } catch (error) {
     logError('Error clearing cart', error)
@@ -117,37 +108,18 @@ export const clearCart = async () => {
 }
 
 /**
- * Sync local cart to backend
+ * Sync local cart to backend atomically
  * @param {Array} localItems - Local cart items from Zustand store
  */
 export const syncCartToBackend = async localItems => {
   try {
-    // Clear backend cart first
-    const cart = await getCart()
-    if (cart.success && cart.items.length > 0) {
-      const deletePromises = cart.items.map(item => removeFromCart(item.id))
-      await Promise.all(deletePromises)
-    }
+    const formattedItems = (localItems || []).map(item => ({
+      productId: String(item.id),
+      quantity: item.quantity || 1,
+    }))
 
-    // Add all local items to backend
-    const addPromises = localItems.map(item =>
-      addToCart({
-        productId: item.id.toString(),
-        quantity: item.quantity,
-      })
-    )
-
-    const results = await Promise.all(addPromises)
-    const failedItems = results.filter(r => !r.success)
-
-    if (failedItems.length > 0) {
-      return {
-        success: false,
-        error: `Gagal menyinkronkan ${failedItems.length} produk ke keranjang. Silakan coba lagi.`,
-      }
-    }
-
-    return { success: true }
+    const response = await apiClient.post('/cart/sync', { items: formattedItems })
+    return { success: response.success ?? true }
   } catch (error) {
     logError('Error syncing cart', error)
     return {

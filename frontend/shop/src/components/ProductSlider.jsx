@@ -71,13 +71,6 @@ function ProductSlider({
     sliderRef.current.scrollLeft = scrollLeft - walk
   }
 
-  // Get products for current slide
-  const getCurrentSlideProducts = () => {
-    const start = currentIndex * itemsPerSlide
-    const end = start + itemsPerSlide
-    return products.slice(start, end)
-  }
-
   if (products.length === 0) {
     return null
   }

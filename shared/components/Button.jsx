@@ -10,7 +10,7 @@ import { forwardRef } from 'react'
  */
 const Button = forwardRef(
   ({ variant = 'primary', size = 'md', fullWidth = false, children, className = '', ...props }, ref) => {
-    const baseStyles = 'btn-base focus:ring-primary-500'
+    const baseStyles = 'btn-base focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:transform-none disabled:shadow-none'
     
     const variants = {
       primary: 'bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:shadow-xl hover:-translate-y-0.5 hover:scale-105',

@@ -60,6 +60,31 @@ export const authenticate = (req, res, next) => {
 }
 
 /**
+ * Optional Authentication Middleware
+ * Attaches user info if valid token exists, but does not reject request if not
+ */
+export const optionalAuthenticate = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization
+    let token = null
+    if (req.cookies && req.cookies.token) {
+      token = req.cookies.token
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1]
+    }
+
+    if (token) {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET)
+      req.userId = decoded.userId
+      req.userRole = decoded.role
+    }
+  } catch {
+    // Continue without user info
+  }
+  next()
+}
+
+/**
  * Admin Only Middleware
  * Ensures only admin users can access the route
  * @param {Object} req - Express request

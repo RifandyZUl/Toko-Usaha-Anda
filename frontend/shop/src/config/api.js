@@ -44,6 +44,10 @@ class ApiClient {
         error: 'An error occurred',
       }))
       const apiError = new Error(error.error || error.message || 'Request failed')
+      apiError.status = response.status
+      if (response.status === 401) {
+        apiError.isAuthError = true
+      }
       if (error.errors) {
         apiError.errors = error.errors
       }

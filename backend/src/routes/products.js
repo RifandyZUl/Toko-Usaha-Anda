@@ -13,6 +13,7 @@ import {
   updateProduct,
   deleteProduct,
 } from '../controllers/productController.js'
+import { getProductReviews } from '../controllers/orderController.js'
 import { authenticate, adminOnly } from '../middleware/auth.js'
 import {
   validateProductInput,
@@ -27,6 +28,7 @@ router.get('/', validatePagination, getProducts)
 router.get('/featured', getFeaturedProducts)
 router.get('/categories', getCategories)
 router.get('/:id', validateUuidParam('id'), getProductById)
+router.get('/:id/reviews', validateUuidParam('id'), getProductReviews)
 
 // ── Admin-only routes ─────────────────────────────────────────────────────────
 router.post('/', authenticate, adminOnly, validateProductInput, createProduct)

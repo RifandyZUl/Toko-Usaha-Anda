@@ -21,6 +21,15 @@ function App() {
 
   useEffect(() => {
     checkAuth()
+
+    // Sync auth state across multiple browser tabs
+    const handleStorageChange = (e) => {
+      if (e.key === 'toko-auth-storage') {
+        checkAuth()
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [checkAuth])
 
   return (

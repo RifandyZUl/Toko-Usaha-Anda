@@ -4,13 +4,13 @@ import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
 import { useCartStore } from '../stores/cartStore'
 import { useAuthStore } from '../stores/authStore'
-import { getProductById } from '../services/products'
+import { getProductById, getProductReviews } from '../services/products'
 import ShopNavigation from '../components/ShopNavigation'
 import Loading from '../components/Loading'
 import ErrorMessage from '../components/ErrorMessage'
 import { formatCurrency } from '../utils/format'
 import { useDataFetching } from '../hooks'
-import { logDebug } from '../utils/logger'
+import { logDebug, logError } from '../utils/logger'
 
 /**
  * Product Detail Page - Elegant design inspired by Nike
@@ -105,34 +105,27 @@ function ProductDetailPage() {
     }))
   }, [])
 
-  // Mock reviews data (can be replaced with API call later)
-  const reviews = useMemo(
-    () => [
-      {
-        id: 1,
-        user: 'Budi Santoso',
-        rating: 5,
-        date: '2024-01-15',
-        comment: 'Produk sangat bagus, kualitas sesuai dengan harga. Pengiriman cepat dan aman.',
-      },
-      {
-        id: 2,
-        user: 'Siti Nurhaliza',
-        rating: 4,
-        date: '2024-01-10',
-        comment: 'Barang sesuai deskripsi, packing rapi. Recommended!',
-      },
-    ],
-    []
-  )
+  const [productReviews, setProductReviews] = useState([])
 
-  const averageRating = useMemo(
-    () =>
-      reviews.length > 0
-        ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
-        : 0,
-    [reviews]
-  )
+  // Fetch verified reviews for this product
+  useEffect(() => {
+    if (!product?.id) return
+    let isMounted = true
+    getProductReviews(product.id).then(res => {
+      if (isMounted && res.success && res.reviews) {
+        setProductReviews(res.reviews)
+      }
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [product?.id])
+
+  const averageRating = useMemo(() => {
+    if (productReviews.length === 0) return 0
+    const total = productReviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0)
+    return total / productReviews.length
+  }, [productReviews])
 
   // Handle ESC key to close modal
   useEffect(() => {
@@ -362,9 +355,9 @@ function ProductDetailPage() {
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-heading font-medium text-black">
-                          Reviews ({reviews.length})
+                          Reviews ({productReviews.length})
                         </span>
-                        {reviews.length > 0 && (
+                        {productReviews.length > 0 && (
                           <div className="flex items-center gap-1">
                             {[...Array(5)].map((_, i) => (
                               <span
@@ -378,6 +371,9 @@ function ProductDetailPage() {
                                 ★
                               </span>
                             ))}
+                            <span className="text-xs text-gray-500 ml-1">
+                              ({averageRating.toFixed(1)})
+                            </span>
                           </div>
                         )}
                       </div>
@@ -391,13 +387,18 @@ function ProductDetailPage() {
                     </button>
                     {expandedSections.reviews && (
                       <div className="pb-4 space-y-4">
-                        {reviews.length > 0 ? (
-                          reviews.map(review => (
+                        {productReviews.length > 0 ? (
+                          productReviews.map(review => (
                             <div key={review.id} className="border-b border-gray-100 pb-3 last:border-0">
                               <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-xs font-medium text-gray-900">
-                                  {review.user}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-gray-900">
+                                    {review.user}
+                                  </span>
+                                  <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                                    Terverifikasi
+                                  </span>
+                                </div>
                                 <div className="flex items-center gap-1">
                                   {[...Array(5)].map((_, i) => (
                                     <span
@@ -422,7 +423,7 @@ function ProductDetailPage() {
                             </div>
                           ))
                         ) : (
-                          <p className="text-xs text-gray-500">Belum ada review untuk produk ini.</p>
+                          <p className="text-xs text-gray-500">Belum ada review untuk produk ini. Ulasan akan muncul setelah pembeli menyelesaikan pesanan.</p>
                         )}
                       </div>
                     )}

@@ -58,7 +58,8 @@ export const login = async credentials => {
  */
 export const getCurrentUser = async () => {
   try {
-    const user = await apiClient.get('/auth/me')
+    const response = await apiClient.get('/auth/me')
+    const user = response?.user || response
     return {
       success: true,
       user,
@@ -116,4 +117,61 @@ export const updateProfile = async profileData => {
     }
   }
 }
+
+/**
+ * Send WhatsApp OTP for phone verification
+ */
+export const sendOtp = async phone => {
+  try {
+    const response = await apiClient.post('/auth/send-otp', { phone })
+    return {
+      success: true,
+      ...response,
+    }
+  } catch (error) {
+    logError('Error sending OTP', error)
+    return {
+      success: false,
+      error: error.message || 'Gagal mengirim kode OTP.',
+    }
+  }
+}
+
+/**
+ * Verify submitted OTP code
+ */
+export const verifyOtp = async (phone, otp) => {
+  try {
+    const response = await apiClient.post('/auth/verify-otp', { phone, otp })
+    return {
+      success: true,
+      ...response,
+    }
+  } catch (error) {
+    logError('Error verifying OTP', error)
+    return {
+      success: false,
+      error: error.message || 'Kode OTP tidak valid atau kedaluwarsa.',
+    }
+  }
+}
+
+/**
+ * Check if a phone is verified
+ */
+export const checkPhoneStatus = async phone => {
+  try {
+    const response = await apiClient.get('/auth/check-phone', { phone })
+    return {
+      success: true,
+      verified: Boolean(response.verified),
+    }
+  } catch (error) {
+    return {
+      success: false,
+      verified: false,
+    }
+  }
+}
+
 

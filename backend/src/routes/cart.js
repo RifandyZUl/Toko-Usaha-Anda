@@ -5,6 +5,7 @@ import {
   updateCartItem,
   removeFromCart,
   clearCart,
+  syncCart,
 } from '../controllers/cartController.js'
 import { authenticate } from '../middleware/auth.js'
 
@@ -26,6 +27,7 @@ const validateCartItem = [
 ]
 
 router.get('/', getCart)
+router.post('/sync', syncCart)
 router.post('/', validateCartItem, addToCart)
 router.put('/:id', validateUuidParam('id'), validateCartItem, updateCartItem)
 router.delete('/:id', validateUuidParam('id'), removeFromCart)

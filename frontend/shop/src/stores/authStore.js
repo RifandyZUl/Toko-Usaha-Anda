@@ -2,22 +2,40 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { login, register, getCurrentUser, logout as logoutAPI } from '../services/auth'
 
+const authChannel =
+  typeof window !== 'undefined' && 'BroadcastChannel' in window
+    ? new BroadcastChannel('toko_auth_sync')
+    : null
+
 /**
  * Auth Store using Zustand
  * Manages authentication state
  */
 export const useAuthStore = create(
   persist(
-    (set, get) => ({
-      // State
-      user: null,
-      isLoading: false,
-      error: null,
+    (set, get) => {
+      if (authChannel) {
+        authChannel.onmessage = (event) => {
+          if (event.data?.type === 'LOGOUT') {
+            set({ user: null, error: null })
+          } else if (event.data?.type === 'LOGIN') {
+            get().checkAuth()
+          }
+        }
+      }
 
-      // Actions
-      setAuth: (user) => {
-        set({ user, error: null })
-      },
+      return {
+        // State
+        user: null,
+        isLoading: false,
+        error: null,
+
+        // Actions
+        setAuth: (user) => {
+          const unwrapped = user?.user || user
+          set({ user: unwrapped, error: null })
+          authChannel?.postMessage({ type: 'LOGIN' })
+        },
 
       /**
        * Clear auth state locally only (no API call).
@@ -72,6 +90,7 @@ export const useAuthStore = create(
        */
       logout: async () => {
         set({ user: null, error: null })
+        authChannel?.postMessage({ type: 'LOGOUT' })
         try {
           await logoutAPI()
         } catch {
@@ -82,8 +101,9 @@ export const useAuthStore = create(
       checkAuth: async () => {
         try {
           const result = await getCurrentUser()
-          if (result.success && result.user) {
-            set({ user: result.user })
+          const user = result?.user?.user || result?.user
+          if (result.success && user) {
+            set({ user })
             return true
           } else {
             // Only clear local state — don't call logout API
@@ -105,13 +125,14 @@ export const useAuthStore = create(
       isAdmin: () => {
         return get().user?.role === 'ADMIN'
       },
-    }),
-    {
-      name: 'toko-auth-storage', // localStorage key
-      partialize: (state) => ({
-        user: state.user,
-      }),
     }
-  )
+  },
+  {
+    name: 'toko-auth-storage', // localStorage key
+    partialize: (state) => ({
+      user: state.user,
+    }),
+  }
+)
 )
 

@@ -62,6 +62,14 @@ export function useForm(initialValues = {}, validate, onSubmit) {
               return acc
             }, {})
           )
+
+          // Smoothly scroll to the first field with validation error
+          const firstErrorKey = Object.keys(validationErrors)[0]
+          const errorElement = document.querySelector(`[name="${firstErrorKey}"]`)
+          if (errorElement) {
+            errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            errorElement.focus()
+          }
           return
         }
       }
@@ -80,7 +88,7 @@ export function useForm(initialValues = {}, validate, onSubmit) {
         setIsSubmitting(false)
       }
     },
-    [values, validate, onSubmit, initialValues]
+    [values, validate, onSubmit]
   )
 
   return {
@@ -91,6 +99,7 @@ export function useForm(initialValues = {}, validate, onSubmit) {
     handleChange,
     handleBlur,
     handleSubmit,
+    setValues,
   }
 }
 

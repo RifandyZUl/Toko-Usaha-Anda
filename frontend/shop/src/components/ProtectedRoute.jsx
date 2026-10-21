@@ -1,22 +1,20 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
-import Loading from './Loading'
 
 /**
  * Protected Route Component
  * Redirects to login if user is not authenticated
  */
 function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useAuthStore()
+  const user = useAuthStore(state => state.user)
   const location = useLocation()
 
-  // Check if authenticated (will be reactive)
-  if (isAuthenticated()) {
-    return children
+  // Strictly require active user object
+  if (!user) {
+    return <Navigate to="/shop/login" state={{ from: location }} replace />
   }
 
-  // Redirect to login with return path
-  return <Navigate to="/shop/login" state={{ from: location }} replace />
+  return children
 }
 
 export default ProtectedRoute

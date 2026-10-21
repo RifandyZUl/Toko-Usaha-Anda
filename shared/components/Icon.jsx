@@ -52,6 +52,8 @@ const iconMap = {
   Clock,
   Share2, // Direct mapping for Share2
   AtSign, // Direct mapping for AtSign
+  Shield: ShieldCheck,
+  AlertTriangle: AlertCircle,
   Facebook: Share2, // Using Share2 as alternative for Facebook
   Instagram: AtSign, // Using AtSign as alternative for Instagram
   ChevronUp,

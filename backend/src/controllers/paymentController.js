@@ -127,12 +127,29 @@ export const simulatePayment = async (req, res, next) => {
       return res.status(HTTP_STATUS.FORBIDDEN).json({ error: 'Only allowed in development mode' })
     }
 
+    if (!orderId) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: 'Order ID is required' })
+    }
+
     const order = await prisma.order.findUnique({
       where: { id: orderId },
     })
 
     if (!order) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ error: 'Order not found' })
+    }
+
+    // Must be an admin or the owner of the order
+    if (req.userRole !== 'ADMIN' && order.userId !== req.userId) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
+        error: 'Access denied: You can only simulate payment for your own orders',
+      })
+    }
+
+    if (order.status === 'CANCELLED' || order.status === 'EXPIRED') {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        error: 'Cannot pay a cancelled or expired order',
+      })
     }
 
     const updatedOrder = await prisma.order.update({
@@ -143,7 +160,7 @@ export const simulatePayment = async (req, res, next) => {
       },
     })
 
-    logInfo('Payment simulated successfully for order', { orderId })
+    logInfo('Payment simulated successfully for order', { orderId, userId: req.userId })
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: 'Pembayaran berhasil disimulasikan',
