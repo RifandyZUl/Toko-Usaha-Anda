@@ -31,6 +31,8 @@ import {
   ShoppingCart,
   Search,
   Loader2,
+  LogOut,
+  History,
 } from 'lucide-react'
 
 /**
@@ -43,6 +45,8 @@ const iconMap = {
   Wallet,
   CheckCircle,
   Truck,
+  LogOut,
+  History,
   MessageCircle,
   ShieldCheck,
   Star,

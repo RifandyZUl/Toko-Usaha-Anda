@@ -48,6 +48,19 @@ class ErrorBoundary extends Component {
               berlanjut.
             </p>
 
+            {this.state.error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-left text-xs font-mono text-red-800 overflow-auto max-h-56">
+                <p className="font-bold text-red-900 mb-1">Detail Error:</p>
+                <p className="break-all">{this.state.error?.message || String(this.state.error)}</p>
+                {this.state.errorInfo?.componentStack && (
+                  <details className="mt-2 text-[11px] text-gray-700">
+                    <summary className="cursor-pointer text-red-700 font-semibold">Stack Trace Komponen</summary>
+                    <pre className="mt-1 whitespace-pre-wrap">{this.state.errorInfo.componentStack}</pre>
+                  </details>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
               <Button variant="primary" onClick={this.handleReset}>
                 <Icon name="RefreshCw" size={18} />

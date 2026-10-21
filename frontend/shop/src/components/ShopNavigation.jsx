@@ -14,7 +14,7 @@ const LANDING_URL =
  */
 function ShopNavigation() {
   const { getTotalItems } = useCartStore()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, logout } = useAuthStore()
   const totalItems = getTotalItems()
   const [searchQuery, setSearchQuery] = useState('')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)

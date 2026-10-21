@@ -161,21 +161,25 @@ function ProfilePage() {
       if (activeUser.address) {
         try {
           const parsedAddress = JSON.parse(activeUser.address)
-          parsed = {
-            receiverName: parsedAddress.receiverName || activeUser.name || '',
-            shippingPhone: parsedAddress.shippingPhone || activeUser.phone || '',
-            addressDetail: parsedAddress.addressDetail || '',
-            province: parsedAddress.province || '',
-            city: parsedAddress.city || '',
-            subdistrict: parsedAddress.subdistrict || '',
-            kelurahan: parsedAddress.kelurahan || '',
-            postalCode: parsedAddress.postalCode || '',
-            latitude: parsedAddress.latitude || '',
-            longitude: parsedAddress.longitude || '',
+          if (parsedAddress && typeof parsedAddress === 'object') {
+            parsed = {
+              receiverName: parsedAddress.receiverName || activeUser.name || '',
+              shippingPhone: parsedAddress.shippingPhone || activeUser.phone || '',
+              addressDetail: parsedAddress.addressDetail || '',
+              province: parsedAddress.province || '',
+              city: parsedAddress.city || '',
+              subdistrict: parsedAddress.subdistrict || '',
+              kelurahan: parsedAddress.kelurahan || '',
+              postalCode: parsedAddress.postalCode || '',
+              latitude: parsedAddress.latitude || '',
+              longitude: parsedAddress.longitude || '',
+            }
+          } else {
+            parsed.addressDetail = String(activeUser.address)
           }
         } catch (e) {
           // Fallback if not valid JSON
-          parsed.addressDetail = activeUser.address
+          parsed.addressDetail = String(activeUser.address)
         }
       }
       setAddressForm(parsed)

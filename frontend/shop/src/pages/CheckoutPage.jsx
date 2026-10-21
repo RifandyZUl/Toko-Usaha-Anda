@@ -144,9 +144,14 @@ function CheckoutPage() {
     let parsedAddress = {}
     if (activeUser?.address) {
       try {
-        parsedAddress = JSON.parse(activeUser.address)
+        const parsed = JSON.parse(activeUser.address)
+        if (parsed && typeof parsed === 'object') {
+          parsedAddress = parsed
+        } else {
+          parsedAddress = { addressDetail: String(activeUser.address) }
+        }
       } catch (e) {
-        parsedAddress = { addressDetail: activeUser.address }
+        parsedAddress = { addressDetail: String(activeUser.address) }
       }
     }
 

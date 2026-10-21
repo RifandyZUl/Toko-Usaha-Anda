@@ -130,7 +130,9 @@ function RegisterPage() {
             <div className="mb-6 p-4 bg-red-50 border border-red-200">
               <div className="flex items-center gap-2 text-red-600">
                 <Icon name="AlertCircle" size={18} />
-                <p className="text-xs font-medium">{formError || error}</p>
+                <p className="text-xs font-medium">
+                  {formError || (typeof error === 'string' ? error : error?.message || 'Registrasi gagal')}
+                </p>
               </div>
             </div>
           )}
