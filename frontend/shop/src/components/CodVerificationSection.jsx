@@ -13,6 +13,7 @@ export default function CodVerificationSection({
   orderTotal,
   isPhoneVerified,
   onPhoneVerified,
+  onResetVerification,
   onEligibilityChange,
 }) {
   const [eligibility, setEligibility] = useState({ eligible: true, message: '', isPhoneVerified: false })
@@ -27,11 +28,25 @@ export default function CodVerificationSection({
 
   const phoneInputRef = useRef(null)
   const timerRef = useRef(null)
+  const prevPhoneRef = useRef(shippingPhone)
+
   const onEligibilityChangeRef = useRef(onEligibilityChange)
   onEligibilityChangeRef.current = onEligibilityChange
 
   const onPhoneVerifiedRef = useRef(onPhoneVerified)
   onPhoneVerifiedRef.current = onPhoneVerified
+
+  // Reset OTP state whenever phone changes
+  useEffect(() => {
+    if (prevPhoneRef.current !== shippingPhone) {
+      prevPhoneRef.current = shippingPhone
+      setOtpSent(false)
+      setOtpCode('')
+      setDevOtp(null)
+      setErrorMessage('')
+      setSuccessMessage('')
+    }
+  }, [shippingPhone])
 
   // Countdown timer for resend
   useEffect(() => {
@@ -167,9 +182,9 @@ export default function CodVerificationSection({
   }
 
   // 2. Phone is already verified
-  if (isPhoneVerified || eligibility.isPhoneVerified) {
+  if (isPhoneVerified) {
     return (
-      <div className="mt-4 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 shadow-sm flex items-center justify-between">
+      <div className="mt-4 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
             <Icon name="CheckCircle" size={18} />
@@ -183,9 +198,18 @@ export default function CodVerificationSection({
             </p>
           </div>
         </div>
-        <span className="text-[11px] font-medium bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full border border-emerald-200">
-          Siap Checkout
-        </span>
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          <button
+            type="button"
+            onClick={() => onResetVerification?.()}
+            className="text-xs text-emerald-800 hover:text-emerald-950 underline font-medium cursor-pointer"
+          >
+            Ganti Nomor
+          </button>
+          <span className="text-[11px] font-medium bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full border border-emerald-200">
+            Siap Checkout
+          </span>
+        </div>
       </div>
     )
   }

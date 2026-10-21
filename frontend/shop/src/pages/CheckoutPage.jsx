@@ -112,6 +112,15 @@ async function geocodeWithFallbacks(queries) {
   return null
 }
 
+function isSamePhoneNumber(phone1, phone2) {
+  if (!phone1 || !phone2) return false
+  const p1 = String(phone1).replace(/[^0-9]/g, '')
+  const p2 = String(phone2).replace(/[^0-9]/g, '')
+  const c1 = p1.startsWith('62') ? '0' + p1.slice(2) : p1
+  const c2 = p2.startsWith('62') ? '0' + p2.slice(2) : p2
+  return c1 === c2 && c1.length >= 8
+}
+
 /**
  * Checkout Page - Elegant design inspired by Arhaus
  */
@@ -124,7 +133,7 @@ function CheckoutPage() {
   const [postalCodeOptions, setPostalCodeOptions] = useState([])
   const [isLoadingPostalCodes, setIsLoadingPostalCodes] = useState(false)
   const [isManualPostalCode, setIsManualPostalCode] = useState(false)
-  const [isPhoneVerified, setIsPhoneVerified] = useState(false)
+  const [verifiedPhone, setVerifiedPhone] = useState('')
   const [codEligibilityState, setCodEligibilityState] = useState({ eligible: true })
 
   const totalPrice = useMemo(() => getTotalPrice(), [getTotalPrice])
@@ -193,8 +202,8 @@ function CheckoutPage() {
             return
           }
 
-          if (!isPhoneVerified && !codEligibilityState.isPhoneVerified) {
-            setOrderError('Nomor WhatsApp belum diverifikasi. Silakan klik tombol "Kirim OTP via WhatsApp" pada panel di atas.')
+          if (!isSamePhoneNumber(values.shippingPhone, verifiedPhone)) {
+            setOrderError('Nomor WhatsApp belum diverifikasi atau telah diganti. Silakan verifikasi nomor Anda dengan tombol "Kirim OTP via WhatsApp" pada panel di bawah.')
             setIsProcessing(false)
             const el = document.getElementById('cod-verification-panel')
             if (el) {
@@ -338,7 +347,7 @@ function CheckoutPage() {
         setIsProcessing(false)
       }
     },
-    [items, clearCart, navigate, setAuth, user?.name, user?.phone, scrollToError]
+    [items, clearCart, navigate, setAuth, user?.name, user?.phone, scrollToError, verifiedPhone, codEligibilityState]
   )
 
   const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit } = useForm(
@@ -1581,11 +1590,11 @@ function CheckoutPage() {
                       shippingPhone={values.shippingPhone}
                       onPhoneChange={(val) => {
                         handleChange({ target: { name: 'shippingPhone', value: val } })
-                        setIsPhoneVerified(false)
                       }}
                       orderTotal={totalPrice + Number(values.shippingFee || 0)}
-                      isPhoneVerified={isPhoneVerified}
-                      onPhoneVerified={() => setIsPhoneVerified(true)}
+                      isPhoneVerified={isSamePhoneNumber(values.shippingPhone, verifiedPhone)}
+                      onPhoneVerified={(phone) => setVerifiedPhone(phone)}
+                      onResetVerification={() => setVerifiedPhone('')}
                       onEligibilityChange={setCodEligibilityState}
                     />
                   )}
