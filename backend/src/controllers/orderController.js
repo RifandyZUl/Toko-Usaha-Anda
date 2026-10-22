@@ -302,8 +302,8 @@ export const getOrders = async (req, res, next) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20))
     const skip = (page - 1) * limit
 
-    // Only return all orders if explicit admin query: req.query.all === 'true' && req.userRole === 'ADMIN'
-    const showAllOrders = req.userRole === 'ADMIN' && req.query.all === 'true'
+    // Allow ADMIN to see all orders by default unless explicit self query is passed
+    const showAllOrders = req.userRole === 'ADMIN' && req.query.self !== 'true'
     const where = showAllOrders ? {} : { userId: req.userId }
 
     const [orders, total] = await Promise.all([

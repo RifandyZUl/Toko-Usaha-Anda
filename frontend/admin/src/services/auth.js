@@ -37,14 +37,16 @@ export const login = async (credentials) => {
     }
 
     const response = await apiClient.post('/auth/login', { email, password })
+    const user = response?.user || response
+    const token = response?.token || null
 
     // Store token if provided
-    if (response.token) {
-      apiClient.setToken(response.token)
+    if (token) {
+      apiClient.setToken(token)
     }
 
     // Verify user is admin
-    if (response.user?.role !== USER_ROLE.ADMIN) {
+    if (user?.role !== USER_ROLE.ADMIN) {
       apiClient.setToken(null)
       return {
         success: false,
@@ -56,8 +58,8 @@ export const login = async (credentials) => {
 
     return {
       success: true,
-      token: response.token,
-      user: response.user,
+      token,
+      user,
       error: null,
     }
   } catch (error) {
@@ -78,10 +80,11 @@ export const login = async (credentials) => {
  */
 export const getCurrentUser = async () => {
   try {
-    const user = await apiClient.get('/auth/me')
+    const data = await apiClient.get('/auth/me')
+    const user = data?.user || data
 
     // Verify user is admin
-    if (user.role !== USER_ROLE.ADMIN) {
+    if (!user || user.role !== USER_ROLE.ADMIN) {
       return {
         success: false,
         error: 'Akses ditolak. Hanya akun admin yang diizinkan.',

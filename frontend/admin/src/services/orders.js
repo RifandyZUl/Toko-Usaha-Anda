@@ -16,7 +16,7 @@ import { logError } from '../utils/logger.js'
  */
 export const getAllOrders = async (params = {}) => {
   try {
-    const response = await apiClient.get('/orders', params)
+    const response = await apiClient.get('/orders', { all: 'true', ...params })
     return {
       success: true,
       orders: response.orders || [],

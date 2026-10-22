@@ -24,7 +24,7 @@ import Pagination from '../components/common/Pagination'
 import ProductModal from '../components/products/ProductModal'
 import SearchBar from '../components/common/SearchBar'
 import FilterSelect from '../components/common/FilterSelect'
-import { usePagination, useSearchFilter, useConfirmDialog } from '../hooks'
+import { usePagination, useSearchFilter, useConfirmDialog, useProducts } from '../hooks'
 import { executeApiCall, createErrorHandler } from '../utils/apiHelpers'
 import { logError, logDebug } from '../utils/logger'
 

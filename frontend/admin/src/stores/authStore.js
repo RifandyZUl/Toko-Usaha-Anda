@@ -114,16 +114,19 @@ export const useAuthStore = create(
        */
       checkAuth: async () => {
         const { token } = get()
+        const activeToken = token || apiClient.getToken()
 
-        if (!token) {
+        if (!activeToken) {
           return false
         }
+
+        apiClient.setToken(activeToken)
 
         try {
           const result = await getCurrentUser()
 
           if (result.success && result.user) {
-            set({ user: result.user, error: null })
+            set({ user: result.user, token: activeToken, error: null })
             return true
           } else {
             // Token invalid or user not admin
@@ -143,7 +146,7 @@ export const useAuthStore = create(
        */
       isAuthenticated: () => {
         const state = get()
-        return !!(state.token && state.user)
+        return !!(state.user && (state.token || apiClient.getToken()))
       },
 
       /**
@@ -161,7 +164,7 @@ export const useAuthStore = create(
         user: state.user,
         token: state.token,
       }),
-      onRehydrateStorage: () => async (state) => {
+      onRehydrateStorage: () => (state) => {
         // Set token to API client after rehydration
         if (state?.token && typeof window !== 'undefined') {
           apiClient.setToken(state.token)

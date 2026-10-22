@@ -30,7 +30,7 @@ import { useToast } from '../hooks/useToast'
 import Pagination from '../components/common/Pagination'
 import SearchBar from '../components/common/SearchBar'
 import FilterSelect from '../components/common/FilterSelect'
-import { usePagination, useSearchFilter, useConfirmDialog } from '../hooks'
+import { usePagination, useSearchFilter, useConfirmDialog, useOrders } from '../hooks'
 import { createErrorHandler } from '../utils/apiHelpers'
 import { logError } from '../utils/logger'
 

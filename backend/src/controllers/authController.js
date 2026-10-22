@@ -50,6 +50,7 @@ const sendTokenResponse = (res, user, statusCode, message) => {
   res.status(statusCode).json({
     success: true,
     message,
+    token,
     user: {
       id: user.id,
       email: user.email,

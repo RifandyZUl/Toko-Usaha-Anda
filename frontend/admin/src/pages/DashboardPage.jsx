@@ -63,9 +63,9 @@ export default function DashboardPage() {
 
         // Get current date ranges
         const now = new Date()
-        const todayStart = new Date(now.setHours(0, 0, 0, 0))
-        const weekStart = new Date(now.setDate(now.getDate() - 7))
-        const monthStart = new Date(now.setMonth(now.getMonth() - 1))
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+        const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        const monthStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
         // Calculate total revenue from delivered orders
         const revenue = orders.reduce((sum, order) => {
