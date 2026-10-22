@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import Loading from './common/Loading'
 import { ROUTES } from '../constants/routes'
@@ -13,36 +13,29 @@ import { logError } from '../utils/logger'
 
 /**
  * @param {Object} props
- * @param {React.ReactNode} props.children - Child components to render if authenticated
+ * @param {React.ReactNode} [props.children] - Child components to render if authenticated
  */
 export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, isAdmin, checkAuth, user, token } = useAuthStore()
-  const [isChecking, setIsChecking] = useState(true)
+  const { isAuthenticated, isAdmin, checkAuth } = useAuthStore()
+  const [isChecking, setIsChecking] = useState(() => !(isAuthenticated() && isAdmin()))
 
   useEffect(() => {
     let isMounted = true
 
     const verifyAuth = async () => {
-      try {
-        // Quick check: if we have user and token, verify they're still valid
-        if (user && token) {
-          // Quick client-side check first
-          if (isAuthenticated() && isAdmin()) {
-            if (isMounted) {
-              setIsChecking(false)
-            }
-            return
-          }
-        }
-
-        // Verify with server
-        await checkAuth()
-
+      // If already authenticated and verified as admin, no need to block
+      if (isAuthenticated() && isAdmin()) {
         if (isMounted) {
           setIsChecking(false)
         }
+        return
+      }
+
+      try {
+        await checkAuth()
       } catch (error) {
         logError('Auth verification error', error)
+      } finally {
         if (isMounted) {
           setIsChecking(false)
         }
@@ -54,7 +47,7 @@ export default function ProtectedRoute({ children }) {
     return () => {
       isMounted = false
     }
-  }, [checkAuth, user, token, isAuthenticated, isAdmin])
+  }, [checkAuth, isAuthenticated, isAdmin])
 
   // Show loading state while checking authentication
   if (isChecking) {
@@ -67,5 +60,5 @@ export default function ProtectedRoute({ children }) {
   }
 
   // Render protected content
-  return <>{children}</>
+  return children ? <>{children}</> : <Outlet />
 }

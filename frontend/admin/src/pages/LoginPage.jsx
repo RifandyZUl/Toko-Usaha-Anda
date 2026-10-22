@@ -80,12 +80,11 @@ export default function LoginPage() {
       await new Promise(resolve => setTimeout(resolve, 300))
 
       // Verify auth state before navigating
-      const currentState = authStore
+      const currentState = useAuthStore.getState()
       if (currentState.isAuthenticated() && currentState.isAdmin()) {
         navigate(ROUTES.DASHBOARD, { replace: true })
       } else {
-        // Fallback: force navigation
-        window.location.href = ROUTES.DASHBOARD
+        navigate(ROUTES.DASHBOARD, { replace: true })
       }
     } else {
       setLocalError(result.error || 'Login gagal')

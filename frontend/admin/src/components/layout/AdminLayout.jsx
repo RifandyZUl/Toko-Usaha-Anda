@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { LayoutDashboard, Package, ShoppingCart, LogOut, Menu, X } from 'lucide-react'
 import { ROUTES } from '../../constants/routes'
@@ -126,7 +126,7 @@ export default function AdminLayout({ children }) {
         </header>
 
         {/* Page Content */}
-        <main className="p-4 lg:p-6">{children}</main>
+        <main className="p-4 lg:p-6">{children || <Outlet />}</main>
       </div>
     </div>
   )

@@ -32,23 +32,18 @@ function App() {
 
           {/* Protected Admin Routes */}
           <Route
-            path="/*"
             element={
               <ProtectedRoute>
-                <AdminLayout>
-                  <ErrorBoundary>
-                    <Routes>
-                      <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-                      <Route path={ROUTES.PRODUCTS} element={<ProductsPage />} />
-                      <Route path={ROUTES.ORDERS} element={<OrdersPage />} />
-                      <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
-                      <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
-                    </Routes>
-                  </ErrorBoundary>
-                </AdminLayout>
+                <AdminLayout />
               </ProtectedRoute>
             }
-          />
+          >
+            <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+            <Route path={ROUTES.PRODUCTS} element={<ProductsPage />} />
+            <Route path={ROUTES.ORDERS} element={<OrdersPage />} />
+            <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
+            <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
+          </Route>
         </Routes>
       </BrowserRouter>
     </ErrorBoundary>
