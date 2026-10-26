@@ -89,7 +89,7 @@ function ProfilePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const searchTab = new URLSearchParams(location.search).get('tab')
-  const { user, isAuthenticated, logout, setAuth } = useAuthStore()
+  const { user, logout, setAuth } = useAuthStore()
   const [activeTab, setActiveTab] = useState(searchTab === 'orders' ? 'orders' : 'profile')
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(false)
@@ -1299,7 +1299,7 @@ function ProfilePage() {
 
                             {/* Dispute Active Alert */}
                             {order.paymentDetails?.disputeDetails?.isDisputed && (
-                              <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-amber-800 bg-amber-50 px-2.5 py-1.5 rounded border border-amber-200">
+                              <div className="mt-2.5 flex items-center justify-between text-[11px] text-amber-800 bg-amber-50 px-2.5 py-1.5 rounded border border-amber-200">
                                 <span className="flex items-center gap-1.5 font-medium">
                                   <Icon name="AlertTriangle" size={13} className="text-amber-600 shrink-0" />
                                   <span>Komplain Diajukan: <strong>{order.paymentDetails.disputeDetails.reason}</strong> ({order.paymentDetails.disputeDetails.status})</span>
@@ -1312,7 +1312,7 @@ function ProfilePage() {
 
                             {/* Auto-complete notice for SHIPPED orders without dispute */}
                             {order.status === 'SHIPPED' && !order.paymentDetails?.disputeDetails?.isDisputed && (
-                              <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50/80 px-2.5 py-1.5 rounded border border-amber-100">
+                              <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50/80 px-2.5 py-1.5 rounded border border-amber-100">
                                 <Icon name="Clock" size={13} className="text-amber-600 shrink-0" />
                                 <span>Pesanan otomatis diselesaikan dalam <strong>2 hari</strong> setelah barang diterima jika belum dikonfirmasi.</span>
                               </div>
