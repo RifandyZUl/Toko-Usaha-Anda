@@ -132,57 +132,46 @@ router.post('/image', authenticate, adminOnly, async (req, res) => {
       let fileUrl
 
       // Upload to Supabase if configured
+      // Upload to Supabase if configured
       if (isSupabaseConfigured()) {
         try {
+          const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath
+
+          // Ensure bucket exists or auto-create as public bucket
+          try {
+            const { data: buckets } = await supabase.storage.listBuckets()
+            if (!buckets?.some((b) => b.name === STORAGE_BUCKET)) {
+              await supabase.storage.createBucket(STORAGE_BUCKET, { public: true })
+            }
+          } catch (bucketCheckErr) {
+            console.warn('Supabase bucket check notice:', bucketCheckErr.message)
+          }
+
           // Upload file to Supabase Storage
-          const { data, error: uploadError } = await supabase.storage
+          const { error: uploadError } = await supabase.storage
             .from(STORAGE_BUCKET)
-            .upload(filePath, req.file.buffer, {
+            .upload(cleanPath, req.file.buffer, {
               contentType: req.file.mimetype,
-              upsert: false,
+              upsert: true,
             })
 
-          if (uploadError) {
-            console.error('Supabase upload error:', uploadError)
-            throw uploadError
-          }
+          if (uploadError) throw uploadError
 
-          // Get signed URL instead of public URL
-          // Signed URL works even if bucket is not public
-          // Note: path should not have leading slash
-          const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath
-          
-          console.log(`📤 Creating signed URL for path: ${cleanPath}`)
-          
-          // Create signed URL (valid for 1 year = 31536000 seconds)
-          // This works for both public and private buckets
-          const {
-            data: { signedUrl },
-            error: signError,
-          } = await supabase.storage
+          // Get permanent public URL for public bucket
+          const { data: publicData } = supabase.storage
             .from(STORAGE_BUCKET)
-            .createSignedUrl(cleanPath, 31536000) // 1 year expiry
+            .getPublicUrl(cleanPath)
 
-          if (signError) {
-            console.error('❌ Error creating signed URL:', signError)
-            throw signError
+          fileUrl = publicData?.publicUrl
+
+          if (!fileUrl) {
+            const { data: signData } = await supabase.storage
+              .from(STORAGE_BUCKET)
+              .createSignedUrl(cleanPath, 31536000)
+            fileUrl = signData?.signedUrl
           }
-
-          if (!signedUrl) {
-            console.error('❌ Signed URL is null')
-            throw new Error('Failed to create signed URL')
-          }
-
-          fileUrl = signedUrl
-
-          console.log(`✅ Image uploaded to Supabase`)
-          console.log(`   File path: ${filePath}`)
-          console.log(`   Clean path: ${cleanPath}`)
-          console.log(`   Signed URL: ${fileUrl.substring(0, 100)}...`)
-          console.log(`   URL expires in: 1 year`)
         } catch (supabaseError) {
-          console.error('Supabase upload failed, falling back to local:', supabaseError)
-          // Fallback to local storage
+          console.warn('Supabase upload failed, falling back to local storage:', supabaseError.message)
           fileUrl = await uploadToLocal(req.file, filename)
         }
       } else {

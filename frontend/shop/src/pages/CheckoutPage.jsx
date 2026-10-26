@@ -14,6 +14,7 @@ import CodVerificationSection from '../components/CodVerificationSection'
 import { formatCurrency } from '../utils/format'
 import { logError } from '../utils/logger'
 import { updateProfile } from '../services/auth'
+import { getShippingRates } from '../services/shipping'
 import { apiClient } from '../config/api'
 
 /**
@@ -816,8 +817,37 @@ function CheckoutPage() {
     }, 0)
   }, [items])
 
-  // Calculate dynamic courier shipping fees based on origin, destination and weight
+  const [serverCourierOptions, setServerCourierOptions] = useState(null)
+
+  // Fetch live shipping rates from backend API (RajaOngkir / zoned rates)
+  useEffect(() => {
+    if (!values.province || !values.city) {
+      setServerCourierOptions(null)
+      return
+    }
+
+    let isMounted = true
+    getShippingRates({
+      city: values.city,
+      province: values.province,
+      weight: Math.round(totalWeight * 1000),
+    }).then(result => {
+      if (isMounted && result?.options) {
+        setServerCourierOptions(result.options)
+      }
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [values.province, values.city, totalWeight])
+
+  // Calculate dynamic courier shipping fees based on server rates with local fallback
   const courierOptions = useMemo(() => {
+    if (serverCourierOptions && serverCourierOptions.length > 0) {
+      return serverCourierOptions
+    }
+
     if (!values.province || !values.city) {
       // Fallback/standard static fees if address is not complete
       return [
@@ -897,7 +927,7 @@ function CheckoutPage() {
         available: isTangerangArea && weightKg <= 20,
       },
     ]
-  }, [values.province, values.city, totalWeight])
+  }, [serverCourierOptions, values.province, values.city, totalWeight])
 
   // Keep form's shippingFee and selected courier in sync with calculated courier options
   useEffect(() => {

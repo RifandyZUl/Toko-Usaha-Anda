@@ -6,6 +6,7 @@ import { isOrderEligibleForAutoComplete, autoCompleteOrder } from '../services/o
 import { trackOrderShipping } from '../services/shippingTrackingService.js'
 import { validateCodEligibility } from '../services/codGuardService.js'
 import { isPhoneNumberVerified, normalizePhoneNumber } from '../services/otpService.js'
+import { calculateOrderShippingFee } from '../services/shippingService.js'
 
 /**
  * Create order
@@ -63,6 +64,18 @@ export const createOrder = async (req, res, next) => {
       })
     }
 
+    // Verify and calculate shipping fee on server (never trust client shipping fee directly)
+    let totalWeight = 0
+    for (const cartItem of cartItems) {
+      totalWeight += Number(cartItem.product.weight || 1000) * cartItem.quantity
+    }
+    const verifiedShippingFee = await calculateOrderShippingFee({
+      city,
+      province,
+      courier: shippingCourier || 'JNE',
+      weight: totalWeight,
+    })
+
     // Validate COD payment method with Phone Verification and COD Guard rules
     if (paymentMethod && paymentMethod.toLowerCase() === 'cod') {
       let isVerified = isPhoneNumberVerified(shippingPhone)
@@ -89,7 +102,7 @@ export const createOrder = async (req, res, next) => {
         })
       }
 
-      const totalWithShipping = totalAmount + (Number(shippingFee) || 0)
+      const totalWithShipping = totalAmount + verifiedShippingFee
       const codCheck = await validateCodEligibility({
         userId: req.userId,
         shippingPhone,
@@ -113,8 +126,8 @@ export const createOrder = async (req, res, next) => {
           totalAmount,
           shippingAddress,
           shippingPhone,
-          shippingCourier,
-          shippingFee,
+          shippingCourier: shippingCourier || 'JNE',
+          shippingFee: verifiedShippingFee,
           paymentMethod,
           latitude,
           longitude,
