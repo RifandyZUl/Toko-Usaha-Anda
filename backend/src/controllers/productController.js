@@ -13,7 +13,7 @@ import { HTTP_STATUS, SUCCESS_MESSAGES } from '../constants/index.js'
 export const getProducts = asyncHandler(async (req, res) => {
   const result = await productService.getAllProducts({
     ...req.query,
-    isAdmin: req.user?.role === 'ADMIN'
+    isAdmin: req.userRole === 'ADMIN' || req.user?.role === 'ADMIN'
   })
   res.status(HTTP_STATUS.OK).json(result)
 })

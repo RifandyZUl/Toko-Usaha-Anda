@@ -36,6 +36,13 @@ export default function ProductModal({
     setSlugManuallyEdited(false)
   }, [product])
 
+  // Auto-select first category if empty when creating a product
+  useEffect(() => {
+    if (!product && !formData.categoryId && categories && categories.length > 0) {
+      setFormData(prev => ({ ...prev, categoryId: categories[0].id }))
+    }
+  }, [categories, product, formData.categoryId, setFormData])
+
   // Keyboard shortcuts: ESC to close, Enter to submit (when form is valid)
   useEffect(() => {
     const handleKeyDown = e => {
@@ -84,10 +91,10 @@ export default function ProductModal({
       // Prepare product data
       const productData = {
         name: formData.name.trim(),
-        slug: formData.slug.trim(),
+        slug: formData.slug?.trim() || generateSlug(formData.name),
         description: formData.description?.trim() || null,
         price: parseFloat(formData.price),
-        stock: parseInt(formData.stock),
+        stock: isNaN(parseInt(formData.stock, 10)) ? 0 : parseInt(formData.stock, 10),
         categoryId: formData.categoryId,
         isActive: formData.isActive ?? true,
         // Set both image (single) and images (array) for compatibility
@@ -261,18 +268,29 @@ export default function ProductModal({
               <input
                 type="number"
                 value={formData.stock}
-                onChange={e => setFormData({ ...formData, stock: e.target.value })}
-                className="input"
+                onChange={e => {
+                  setFormData({ ...formData, stock: e.target.value })
+                  if (formErrors.stock) {
+                    setFormErrors({ ...formErrors, stock: '' })
+                  }
+                }}
+                className={`input ${formErrors.stock ? 'border-red-500' : ''}`}
                 required
               />
+              {formErrors.stock && <p className="mt-1 text-sm text-red-600">{formErrors.stock}</p>}
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Kategori *</label>
             <select
               value={formData.categoryId}
-              onChange={e => setFormData({ ...formData, categoryId: e.target.value })}
-              className="input"
+              onChange={e => {
+                setFormData({ ...formData, categoryId: e.target.value })
+                if (formErrors.categoryId) {
+                  setFormErrors({ ...formErrors, categoryId: '' })
+                }
+              }}
+              className={`input ${formErrors.categoryId ? 'border-red-500' : ''}`}
               required
             >
               <option value="">Pilih Kategori</option>
@@ -282,6 +300,9 @@ export default function ProductModal({
                 </option>
               ))}
             </select>
+            {formErrors.categoryId && (
+              <p className="mt-1 text-sm text-red-600">{formErrors.categoryId}</p>
+            )}
           </div>
           {/* Image Upload */}
           <div>

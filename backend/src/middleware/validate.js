@@ -76,11 +76,10 @@ export const validateProductInput = [
   body('name')
     .trim()
     .notEmpty().withMessage('Product name is required')
-    .isLength({ min: 2, max: 200 }).withMessage('Name must be between 2 and 200 characters')
-    .escape(),
+    .isLength({ min: 2, max: 200 }).withMessage('Name must be between 2 and 200 characters'),
 
   body('slug')
-    .optional()
+    .optional({ values: 'falsy' })
     .trim()
     .matches(/^[a-z0-9-]+$/).withMessage('Slug can only contain lowercase letters, numbers, and hyphens'),
 
@@ -89,11 +88,11 @@ export const validateProductInput = [
     .isFloat({ min: 0, max: 999999999 }).withMessage('Price must be a positive number'),
 
   body('stock')
-    .optional()
+    .optional({ values: 'falsy' })
     .isInt({ min: 0, max: 999999 }).withMessage('Stock must be a non-negative integer'),
 
   body('description')
-    .optional()
+    .optional({ values: 'falsy' })
     .trim()
     .isLength({ max: 2000 }).withMessage('Description must not exceed 2000 characters'),
 
@@ -238,7 +237,7 @@ export const validatePagination = [
 
   query('limit')
     .optional()
-    .isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+    .isInt({ min: 1, max: 1000 }).withMessage('Limit must be between 1 and 1000')
     .toInt(),
 
   query('search')

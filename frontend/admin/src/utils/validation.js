@@ -62,9 +62,8 @@ export const validateProduct = (data) => {
     errors.name = 'Nama produk harus diisi'
   }
 
-  if (!isRequired(data.slug)) {
-    errors.slug = 'Slug harus diisi'
-  } else if (!/^[a-z0-9-]+$/.test(data.slug)) {
+  const slug = (data.slug || '').trim()
+  if (slug && !/^[a-z0-9-]+$/.test(slug)) {
     errors.slug = 'Slug hanya boleh mengandung huruf kecil, angka, dan tanda hubung'
   }
 

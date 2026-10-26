@@ -29,12 +29,6 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, isAdmin, navigate])
 
-  // Watch for auth state changes after login
-  useEffect(() => {
-    if (user && user.role === 'ADMIN') {
-      navigate('/dashboard', { replace: true })
-    }
-  }, [user, navigate])
 
   /**
    * Validate form data

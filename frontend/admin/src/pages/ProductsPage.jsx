@@ -24,16 +24,56 @@ import Pagination from '../components/common/Pagination'
 import ProductModal from '../components/products/ProductModal'
 import SearchBar from '../components/common/SearchBar'
 import FilterSelect from '../components/common/FilterSelect'
-import { usePagination, useSearchFilter, useConfirmDialog, useProducts } from '../hooks'
+import { useConfirmDialog, useProducts } from '../hooks'
 import { executeApiCall, createErrorHandler } from '../utils/apiHelpers'
 import { logError, logDebug } from '../utils/logger'
 
 export default function ProductsPage() {
-  const { products, categories, loading, error, refresh, removeProduct } = useProducts()
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('')
+
+  // Debounce search input to avoid excessive network requests
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm)
+      setCurrentPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  const handleCategoryChange = useCallback(value => {
+    setSelectedCategory(value)
+    setCurrentPage(1)
+  }, [])
+
+  const handleClearFilters = useCallback(() => {
+    setSearchTerm('')
+    setDebouncedSearch('')
+    setSelectedCategory('')
+    setCurrentPage(1)
+  }, [])
+
+  const {
+    products,
+    categories,
+    pagination,
+    loading,
+    error,
+    setError,
+    refresh,
+    removeProduct,
+  } = useProducts({
+    page: currentPage,
+    limit: itemsPerPage,
+    search: debouncedSearch,
+    category: selectedCategory,
+  })
   
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
-  const [itemsPerPage] = useState(10)
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -49,25 +89,6 @@ export default function ProductsPage() {
   const [uploadingImage, setUploadingImage] = useState(false)
 
   const { toasts, removeToast, success } = useToast()
-
-  // Search and filter hooks
-  const { searchTerm, filters, setSearch, setFilter, clearFilters } = useSearchFilter({
-    onFilterChange: () => pagination.resetPage(),
-  })
-  const selectedCategory = filters.category || ''
-
-  // Filter products
-  const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      const matchesSearch = !searchTerm || 
-        product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesCategory = !selectedCategory || product.categoryId === selectedCategory
-      return matchesSearch && matchesCategory
-    })
-  }, [products, searchTerm, selectedCategory])
-
-  const pagination = usePagination(itemsPerPage, filteredProducts.length)
   const deleteDialog = useConfirmDialog()
 
   /**
@@ -175,18 +196,6 @@ export default function ProductsPage() {
 
 
 
-  // Reset to page 1 when search or filter changes
-  useEffect(() => {
-    pagination.resetPage()
-  }, [searchTerm, selectedCategory, pagination])
-
-  // Paginate filtered products
-  const paginatedProducts = useMemo(() => {
-    const start = pagination.startIndex
-    const end = pagination.endIndex
-    return filteredProducts.slice(start, end)
-  }, [filteredProducts, pagination.startIndex, pagination.endIndex])
-
   // Category options for filter
   const categoryOptions = useMemo(() => {
     return categories.map(cat => ({
@@ -230,12 +239,12 @@ export default function ProductsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <SearchBar
             value={searchTerm}
-            onChange={setSearch}
+            onChange={setSearchTerm}
             placeholder="Cari produk..."
           />
           <FilterSelect
             value={selectedCategory}
-            onChange={value => setFilter('category', value)}
+            onChange={handleCategoryChange}
             options={categoryOptions}
             placeholder="Semua Kategori"
           />
@@ -256,7 +265,7 @@ export default function ProductsPage() {
             </tr>
           </thead>
           <tbody>
-            {paginatedProducts.length === 0 ? (
+            {products.length === 0 ? (
               <tr>
                 <td colSpan="6" className="text-center py-12">
                   <div className="flex flex-col items-center justify-center">
@@ -282,7 +291,7 @@ export default function ProductsPage() {
                     )}
                     {(searchTerm || selectedCategory) && (
                       <button
-                        onClick={clearFilters}
+                        onClick={handleClearFilters}
                         className="text-sm text-primary-600 hover:text-primary-700 font-medium"
                       >
                         Reset Filter
@@ -292,7 +301,7 @@ export default function ProductsPage() {
                 </td>
               </tr>
             ) : (
-              paginatedProducts.map(product => (
+              products.map(product => (
                 <tr key={product.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-4 px-4">
                     <div className="flex items-center space-x-3">
@@ -369,14 +378,14 @@ export default function ProductsPage() {
         </table>
 
         {/* Pagination */}
-        {filteredProducts.length > itemsPerPage && (
+        {pagination?.totalPages > 1 && (
           <Pagination
-            currentPage={pagination.currentPage}
-            totalPages={Math.ceil(filteredProducts.length / itemsPerPage)}
-            itemsPerPage={itemsPerPage}
-            totalItems={filteredProducts.length}
+            currentPage={pagination.page}
+            totalPages={pagination.totalPages}
+            itemsPerPage={pagination.limit}
+            totalItems={pagination.total}
             onPageChange={page => {
-              pagination.goToPage(page)
+              setCurrentPage(page)
               window.scrollTo({ top: 0, behavior: 'smooth' })
             }}
           />

@@ -14,7 +14,7 @@ import {
   deleteProduct,
 } from '../controllers/productController.js'
 import { getProductReviews } from '../controllers/orderController.js'
-import { authenticate, adminOnly } from '../middleware/auth.js'
+import { authenticate, optionalAuthenticate, adminOnly } from '../middleware/auth.js'
 import {
   validateProductInput,
   validatePagination,
@@ -24,7 +24,7 @@ import {
 const router = express.Router()
 
 // ── Public routes ─────────────────────────────────────────────────────────────
-router.get('/', validatePagination, getProducts)
+router.get('/', optionalAuthenticate, validatePagination, getProducts)
 router.get('/featured', getFeaturedProducts)
 router.get('/categories', getCategories)
 router.get('/:id', validateUuidParam('id'), getProductById)

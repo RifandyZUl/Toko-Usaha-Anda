@@ -128,14 +128,25 @@ export const createProduct = async (productData) => {
     logError('Error creating product', error)
     logDebug('Error details', { data: error.data, status: error.status })
     
-    // Handle validation errors from backend (format: { errors: { field: 'message' } })
+    // Handle validation errors from backend
     if (error instanceof ApiError && error.data?.errors) {
-      const errorMessages = Object.values(error.data.errors).join(', ')
-      logDebug('Validation errors', error.data.errors)
+      const fieldErrors = {}
+      const messageList = []
+      if (Array.isArray(error.data.errors)) {
+        error.data.errors.forEach(e => {
+          if (e.field) fieldErrors[e.field] = e.message
+          if (e.message) messageList.push(e.message)
+        })
+      } else if (typeof error.data.errors === 'object') {
+        Object.entries(error.data.errors).forEach(([field, msg]) => {
+          fieldErrors[field] = msg
+          messageList.push(msg)
+        })
+      }
       return {
         success: false,
-        error: errorMessages || 'Validasi gagal',
-        errors: error.data.errors,
+        error: messageList.join(', ') || error.data?.error || 'Validasi gagal',
+        errors: fieldErrors,
         product: null,
         message: null,
       }
@@ -206,12 +217,23 @@ export const updateProduct = async (id, productData) => {
 
     // Handle validation errors from backend
     if (error instanceof ApiError && error.data?.errors) {
-      const errorMessages = Object.values(error.data.errors).join(', ')
-      logDebug('Validation errors', error.data.errors)
+      const fieldErrors = {}
+      const messageList = []
+      if (Array.isArray(error.data.errors)) {
+        error.data.errors.forEach(e => {
+          if (e.field) fieldErrors[e.field] = e.message
+          if (e.message) messageList.push(e.message)
+        })
+      } else if (typeof error.data.errors === 'object') {
+        Object.entries(error.data.errors).forEach(([field, msg]) => {
+          fieldErrors[field] = msg
+          messageList.push(msg)
+        })
+      }
       return {
         success: false,
-        error: errorMessages || 'Validasi gagal',
-        errors: error.data.errors,
+        error: messageList.join(', ') || error.data?.error || 'Validasi gagal',
+        errors: fieldErrors,
         product: null,
         message: null,
       }

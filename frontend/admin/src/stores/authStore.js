@@ -117,6 +117,7 @@ export const useAuthStore = create(
         const activeToken = token || apiClient.getToken()
 
         if (!activeToken) {
+          get().clearAuth()
           return false
         }
 

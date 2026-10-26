@@ -16,15 +16,17 @@ import { logError } from '../utils/logger'
  * @param {React.ReactNode} [props.children] - Child components to render if authenticated
  */
 export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, isAdmin, checkAuth } = useAuthStore()
-  const [isChecking, setIsChecking] = useState(() => !(isAuthenticated() && isAdmin()))
+  const [isChecking, setIsChecking] = useState(() => {
+    const state = useAuthStore.getState()
+    return !(state.isAuthenticated() && state.isAdmin())
+  })
 
   useEffect(() => {
     let isMounted = true
 
     const verifyAuth = async () => {
-      // If already authenticated and verified as admin, no need to block
-      if (isAuthenticated() && isAdmin()) {
+      const state = useAuthStore.getState()
+      if (state.isAuthenticated() && state.isAdmin()) {
         if (isMounted) {
           setIsChecking(false)
         }
@@ -32,7 +34,7 @@ export default function ProtectedRoute({ children }) {
       }
 
       try {
-        await checkAuth()
+        await state.checkAuth()
       } catch (error) {
         logError('Auth verification error', error)
       } finally {
@@ -47,7 +49,9 @@ export default function ProtectedRoute({ children }) {
     return () => {
       isMounted = false
     }
-  }, [checkAuth, isAuthenticated, isAdmin])
+  }, [])
+
+  const { isAuthenticated, isAdmin } = useAuthStore()
 
   // Show loading state while checking authentication
   if (isChecking) {

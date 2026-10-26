@@ -30,8 +30,7 @@ function Footer() {
             Toko Usaha Anda
           </span>
           <p className="font-sans text-[13px] md:text-sm text-griya-muted mb-8 leading-relaxed max-w-md text-justify">
-            Menciptakan kemudahan untuk hunian dan usaha Anda sejak tahun 2000. Dedikasi kami adalah
-            pada kualitas barang perkakas, rumah tangga, otomotif, dan kepuasan pelanggan.
+            Toko perlengkapan terpercaya sejak 2000 — menyediakan alat rumah tangga, perkakas tukang, hingga perlengkapan otomotif motor. Kami hadir untuk memenuhi kebutuhan harian Anda dengan produk berkualitas dan harga yang bersahabat.
           </p>
         </div>
 
