@@ -70,12 +70,22 @@ export const handleNotification = async (req, res, next) => {
       paymentStatus = 'FAILED'
       orderStatus = 'CANCELLED'
 
-      // Revert product stocks if order is newly cancelled
+      // Revert product and variant stocks if order is newly cancelled
       if (order.status !== 'CANCELLED') {
         logInfo('Reverting stock for cancelled/expired order', { order_id })
         await prisma.$transaction(async (tx) => {
           for (const item of order.items) {
-            await tx.product.update({
+            if (item.variantId) {
+              await tx.productVariant.updateMany({
+                where: { id: item.variantId },
+                data: {
+                  stock: {
+                    increment: item.quantity,
+                  },
+                },
+              })
+            }
+            await tx.product.updateMany({
               where: { id: item.productId },
               data: {
                 stock: {

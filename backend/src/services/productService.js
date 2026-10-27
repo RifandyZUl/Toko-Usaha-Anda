@@ -48,7 +48,7 @@ class ProductService {
             select: { id: true, name: true, slug: true },
           },
           variants: {
-            where: isAdmin ? undefined : { isActive: true },
+            where: isAdmin ? { deletedAt: null } : { isActive: true, deletedAt: null },
             orderBy: { price: 'asc' },
           },
         },
@@ -85,7 +85,7 @@ class ProductService {
           select: { id: true, name: true, slug: true },
         },
         variants: {
-          where: { isActive: true },
+          where: { isActive: true, deletedAt: null },
           orderBy: { price: 'asc' },
         },
         _count: {
@@ -120,7 +120,7 @@ class ProductService {
       include: {
         category: true,
         variants: {
-          where: { isActive: true },
+          where: { isActive: true, deletedAt: null },
           orderBy: { price: 'asc' },
         },
       },
@@ -237,11 +237,16 @@ class ProductService {
 
         const incomingIds = parsedVariants.filter(v => v.id).map(v => v.id)
 
-        // Remove variants that were deleted in UI
-        await tx.productVariant.deleteMany({
+        // Soft-delete variants that were removed in UI (preserves historical references)
+        await tx.productVariant.updateMany({
           where: {
             productId: id,
             id: { notIn: incomingIds },
+            deletedAt: null,
+          },
+          data: {
+            deletedAt: new Date(),
+            isActive: false,
           },
         })
 
@@ -259,6 +264,7 @@ class ProductService {
                 image: v.image,
                 attributes: v.attributes,
                 isActive: v.isActive,
+                deletedAt: null,
               },
             })
           } else {
@@ -273,6 +279,7 @@ class ProductService {
                 image: v.image,
                 attributes: v.attributes,
                 isActive: v.isActive,
+                deletedAt: null,
               },
             })
           }
@@ -285,6 +292,7 @@ class ProductService {
         include: {
           category: true,
           variants: {
+            where: { deletedAt: null },
             orderBy: { price: 'asc' },
           },
         },

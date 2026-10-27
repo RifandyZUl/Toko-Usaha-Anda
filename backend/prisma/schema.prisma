@@ -87,15 +87,18 @@ model ProductVariant {
   weight      Int?     // Optional variant-specific weight in grams (e.g. 500, 2000)
   image       String?  // Optional variant-specific image
   attributes  Json?    // Menampung dimensi/matriks dinamis, contoh: {"Warna": "Merah", "Ukuran": "XL"}
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive    Boolean   @default(true)
+  deletedAt   DateTime? // Soft delete timestamp (null if active)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   
   cartItems   CartItem[]
   orderItems  OrderItem[]
   
   @@index([productId])
   @@index([productId, isActive])
+  @@index([productId, deletedAt])
+  @@index([productId, isActive, deletedAt])
   @@map("product_variants")
 }
 

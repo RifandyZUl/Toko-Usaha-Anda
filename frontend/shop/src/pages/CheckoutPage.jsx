@@ -136,6 +136,7 @@ function CheckoutPage() {
   const [isManualPostalCode, setIsManualPostalCode] = useState(false)
   const [verifiedPhone, setVerifiedPhone] = useState('')
   const [codEligibilityState, setCodEligibilityState] = useState({ eligible: true })
+  const setValuesRef = useRef(null)
 
   const totalPrice = useMemo(() => getTotalPrice(), [getTotalPrice])
 
@@ -330,7 +331,13 @@ function CheckoutPage() {
             })
           }
         } else {
-          if (orderResult.errors && Array.isArray(orderResult.errors)) {
+          if (orderResult.code === 'SHIPPING_FEE_CHANGED' && orderResult.newShippingFee) {
+            setValuesRef.current?.(prev => ({
+              ...prev,
+              shippingFee: Number(orderResult.newShippingFee),
+            }))
+            setOrderError(orderResult.error)
+          } else if (orderResult.errors && Array.isArray(orderResult.errors)) {
             const validationMsg = orderResult.errors
               .map(err => `${err.field}: ${err.message}`)
               .join(', ')
@@ -342,7 +349,13 @@ function CheckoutPage() {
         }
       } catch (error) {
         logError('Checkout error', error)
-        if (error.errors && Array.isArray(error.errors)) {
+        if (error.code === 'SHIPPING_FEE_CHANGED' && error.data?.newShippingFee) {
+          setValuesRef.current?.(prev => ({
+            ...prev,
+            shippingFee: Number(error.data.newShippingFee),
+          }))
+          setOrderError(error.message)
+        } else if (error.errors && Array.isArray(error.errors)) {
           const validationMsg = error.errors.map(err => `${err.field}: ${err.message}`).join(', ')
           setOrderError(`Validasi Gagal - ${validationMsg}`)
         } else {
@@ -356,11 +369,12 @@ function CheckoutPage() {
     [items, clearCart, navigate, setAuth, user?.name, user?.phone, scrollToError, verifiedPhone, codEligibilityState]
   )
 
-  const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit } = useForm(
+  const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit, setValues } = useForm(
     initialValues,
     validateCheckoutForm,
     onSubmit
   )
+  setValuesRef.current = setValues
 
   const {
     provinces,

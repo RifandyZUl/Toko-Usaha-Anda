@@ -27,6 +27,9 @@ export const createOrder = async (orderData, idempotencyKey) => {
       success: false,
       error: error.message,
       errors: error.errors,
+      code: error.code || error.data?.code,
+      newShippingFee: error.data?.newShippingFee,
+      oldShippingFee: error.data?.oldShippingFee,
     }
   }
 }

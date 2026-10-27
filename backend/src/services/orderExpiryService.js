@@ -68,23 +68,19 @@ export const expireOrder = async (orderId) => {
         return current
       }
 
-      // Revert product and variant stocks atomically
+      // Revert product and variant stocks atomically (safe even if variant or product deleted by admin)
       for (const item of order.items) {
         if (item.variantId) {
-          try {
-            await tx.productVariant.update({
-              where: { id: item.variantId },
-              data: {
-                stock: {
-                  increment: item.quantity,
-                },
+          await tx.productVariant.updateMany({
+            where: { id: item.variantId },
+            data: {
+              stock: {
+                increment: item.quantity,
               },
-            })
-          } catch (e) {
-            // Variant might have been deleted, continue safely
-          }
+            },
+          })
         }
-        await tx.product.update({
+        await tx.product.updateMany({
           where: { id: item.productId },
           data: {
             stock: {

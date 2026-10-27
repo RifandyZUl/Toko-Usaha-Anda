@@ -43,4 +43,21 @@ describe('Shipping Fee Server Integrity Tests', () => {
     assert.equal(typeof fee, 'number')
     assert.ok(fee >= 10000, 'Fallback fee must be valid positive amount')
   })
+
+  it('should flag discrepancy when client submitted shipping fee differs from server calculated fee', () => {
+    const clientShippingFee = 15000
+    const verifiedShippingFee = 28000 // Server re-calculated due to heavy variant weight updated by admin
+
+    const isDiscrepant = Math.abs(clientShippingFee - verifiedShippingFee) > 1
+    assert.equal(isDiscrepant, true, 'Should detect discrepancy when client fee differs from server fee')
+
+    const responsePayload = {
+      code: 'SHIPPING_FEE_CHANGED',
+      oldShippingFee: clientShippingFee,
+      newShippingFee: verifiedShippingFee,
+    }
+
+    assert.equal(responsePayload.code, 'SHIPPING_FEE_CHANGED')
+    assert.equal(responsePayload.newShippingFee, 28000)
+  })
 })

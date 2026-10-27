@@ -81,7 +81,7 @@ export const addToCart = async (req, res, next) => {
       where: { id: productId },
       include: {
         variants: {
-          where: { isActive: true },
+          where: { isActive: true, deletedAt: null },
         },
       },
     })
@@ -360,7 +360,7 @@ export const syncCart = async (req, res, next) => {
           where: { id: pId },
           include: {
             variants: {
-              where: { isActive: true },
+              where: { isActive: true, deletedAt: null },
             },
           },
         })

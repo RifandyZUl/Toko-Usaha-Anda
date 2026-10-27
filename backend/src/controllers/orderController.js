@@ -55,6 +55,12 @@ export const createOrder = async (req, res, next) => {
       const currentPrice = isVariant ? Number(cartItem.variant.price) : Number(cartItem.product.price)
       const itemName = isVariant ? `${cartItem.product.name} (${cartItem.variant.name})` : cartItem.product.name
 
+      if (cartItem.variantId && (!cartItem.variant || cartItem.variant.deletedAt !== null || !cartItem.variant.isActive)) {
+        return res.status(400).json({
+          error: `Varian untuk produk "${cartItem.product.name}" sudah tidak tersedia atau telah dihapus dari katalog. Silakan sesuaikan keranjang belanja Anda.`,
+        })
+      }
+
       if (currentStock < cartItem.quantity) {
         return res.status(400).json({
           error: `Stok tidak mencukupi untuk ${itemName} (tersedia ${currentStock})`,
@@ -85,6 +91,24 @@ export const createOrder = async (req, res, next) => {
       courier: shippingCourier || 'JNE',
       weight: totalWeight,
     })
+
+    // Strict integrity check: Verify that client shipping fee matches server-calculated fee
+    // Prevents checkout discrepancy if admin updated variant weight or rates while user was on checkout page
+    const clientShippingFee = Number(shippingFee)
+    if (!isNaN(clientShippingFee) && Math.abs(clientShippingFee - verifiedShippingFee) > 1) {
+      logWarn('Shipping fee discrepancy detected at checkout', {
+        userId: req.userId,
+        clientShippingFee,
+        verifiedShippingFee,
+        totalWeight,
+      })
+      return res.status(409).json({
+        error: `Tarif pengiriman telah diperbarui dari Rp${clientShippingFee.toLocaleString('id-ID')} menjadi Rp${verifiedShippingFee.toLocaleString('id-ID')} karena penyesuaian bobot atau kurir. Total pesanan telah disesuaikan. Silakan periksa kembali dan klik Bayar Sekarang.`,
+        code: 'SHIPPING_FEE_CHANGED',
+        oldShippingFee: clientShippingFee,
+        newShippingFee: verifiedShippingFee,
+      })
+    }
 
     // Validate COD payment method with Phone Verification and COD Guard rules
     if (paymentMethod && paymentMethod.toLowerCase() === 'cod') {
@@ -560,10 +584,17 @@ export const updateOrderStatus = async (req, res, next) => {
 
     // 3. Atomically update status and revert product stock if cancelled (e.g. COD return)
     const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Revert product stock when moving to CANCELLED from non-cancelled
+      // Revert product and variant stock when moving to CANCELLED from non-cancelled
+      // Uses updateMany so it never throws error or aborts transaction if variant/product was deleted by admin
       if (status === 'CANCELLED' && existingOrder.status !== 'CANCELLED') {
         for (const item of existingOrder.items) {
-          await tx.product.update({
+          if (item.variantId) {
+            await tx.productVariant.updateMany({
+              where: { id: item.variantId },
+              data: { stock: { increment: item.quantity } },
+            })
+          }
+          await tx.product.updateMany({
             where: { id: item.productId },
             data: {
               stock: {
@@ -577,6 +608,24 @@ export const updateOrderStatus = async (req, res, next) => {
       // Re-decrement stock if un-cancelling an order
       if (existingOrder.status === 'CANCELLED' && status !== 'CANCELLED') {
         for (const item of existingOrder.items) {
+          if (item.variantId) {
+            const variantExists = await tx.productVariant.findUnique({
+              where: { id: item.variantId },
+            })
+            if (!variantExists) {
+              throw new Error(`Varian "${item.variantName || 'Produk'}" telah dihapus secara permanen dari katalog, pesanan tidak dapat diaktifkan kembali`)
+            }
+            const vResult = await tx.productVariant.updateMany({
+              where: {
+                id: item.variantId,
+                stock: { gte: item.quantity },
+              },
+              data: { stock: { decrement: item.quantity } },
+            })
+            if (vResult.count === 0) {
+              throw new Error(`Stok varian "${item.variantName || 'Produk'}" tidak mencukupi untuk mengembalikan pesanan`)
+            }
+          }
           const updateResult = await tx.product.updateMany({
             where: {
               id: item.productId,
@@ -712,9 +761,19 @@ export const cancelOrder = async (req, res, next) => {
 
     // 4. Cancel order and revert product stocks in a Prisma transaction
     const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Revert product stocks
+      // Revert product and variant stocks safely (gracefully ignores if deleted by admin)
       for (const item of order.items) {
-        await tx.product.update({
+        if (item.variantId) {
+          await tx.productVariant.updateMany({
+            where: { id: item.variantId },
+            data: {
+              stock: {
+                increment: item.quantity,
+              },
+            },
+          })
+        }
+        await tx.product.updateMany({
           where: { id: item.productId },
           data: {
             stock: {
