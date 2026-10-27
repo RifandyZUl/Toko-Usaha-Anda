@@ -77,7 +77,7 @@ export const useConfirmDialog = () => {
     } else {
       closeDialog()
     }
-  }, [dialog.onConfirm, closeDialog, setLoading])
+  }, [dialog, closeDialog, setLoading])
 
   return {
     dialog,

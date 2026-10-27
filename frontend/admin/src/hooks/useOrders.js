@@ -55,7 +55,8 @@ export function useOrders() {
     orders,
     loading,
     error,
+    setError,
     refresh: fetchOrders,
-    updateStatus
+    updateStatus,
   }
 }

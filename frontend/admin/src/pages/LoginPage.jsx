@@ -14,7 +14,7 @@ import { ROUTES } from '../constants/routes'
 export default function LoginPage() {
   const navigate = useNavigate()
   const authStore = useAuthStore()
-  const { login, isAuthenticated, isAdmin, error, isLoading, user } = authStore
+  const { login, isAuthenticated, isAdmin, error, isLoading } = authStore
   const [formData, setFormData] = useState({
     email: '',
     password: '',

@@ -68,8 +68,22 @@ export const expireOrder = async (orderId) => {
         return current
       }
 
-      // Revert product stocks atomically
+      // Revert product and variant stocks atomically
       for (const item of order.items) {
+        if (item.variantId) {
+          try {
+            await tx.productVariant.update({
+              where: { id: item.variantId },
+              data: {
+                stock: {
+                  increment: item.quantity,
+                },
+              },
+            })
+          } catch (e) {
+            // Variant might have been deleted, continue safely
+          }
+        }
         await tx.product.update({
           where: { id: item.productId },
           data: {

@@ -7,6 +7,7 @@ import { trackOrderShipping } from '../services/shippingTrackingService.js'
 import { validateCodEligibility } from '../services/codGuardService.js'
 import { isPhoneNumberVerified, normalizePhoneNumber } from '../services/otpService.js'
 import { calculateOrderShippingFee } from '../services/shippingService.js'
+import { logInfo, logWarn, logError } from '../utils/logger.js'
 
 /**
  * Create order
@@ -36,6 +37,7 @@ export const createOrder = async (req, res, next) => {
       where: { userId: req.userId },
       include: {
         product: true,
+        variant: true,
       },
     })
 
@@ -48,26 +50,34 @@ export const createOrder = async (req, res, next) => {
     const orderItems = []
 
     for (const cartItem of cartItems) {
-      if (cartItem.product.stock < cartItem.quantity) {
+      const isVariant = Boolean(cartItem.variantId && cartItem.variant)
+      const currentStock = isVariant ? cartItem.variant.stock : cartItem.product.stock
+      const currentPrice = isVariant ? Number(cartItem.variant.price) : Number(cartItem.product.price)
+      const itemName = isVariant ? `${cartItem.product.name} (${cartItem.variant.name})` : cartItem.product.name
+
+      if (currentStock < cartItem.quantity) {
         return res.status(400).json({
-          error: `Insufficient stock for ${cartItem.product.name}`,
+          error: `Stok tidak mencukupi untuk ${itemName} (tersedia ${currentStock})`,
         })
       }
 
-      const itemTotal = Number(cartItem.product.price) * cartItem.quantity
+      const itemTotal = currentPrice * cartItem.quantity
       totalAmount += itemTotal
 
       orderItems.push({
         productId: cartItem.productId,
+        variantId: cartItem.variantId || null,
+        variantName: isVariant ? cartItem.variant.name : null,
         quantity: cartItem.quantity,
-        price: cartItem.product.price,
+        price: currentPrice,
       })
     }
 
     // Verify and calculate shipping fee on server (never trust client shipping fee directly)
     let totalWeight = 0
     for (const cartItem of cartItems) {
-      totalWeight += Number(cartItem.product.weight || 1000) * cartItem.quantity
+      const itemWeight = Number(cartItem.variant?.weight ?? cartItem.product.weight ?? 1000)
+      totalWeight += itemWeight * cartItem.quantity
     }
     const verifiedShippingFee = await calculateOrderShippingFee({
       city,
@@ -154,22 +164,50 @@ export const createOrder = async (req, res, next) => {
         },
       })
 
-      // 2. Atomically check and decrement product stock to prevent race conditions
+      // 2. Atomically check and decrement product and variant stock to prevent race conditions
       for (const cartItem of cartItems) {
-        const updateResult = await tx.product.updateMany({
-          where: {
-            id: cartItem.productId,
-            stock: { gte: cartItem.quantity },
-          },
-          data: {
-            stock: {
-              decrement: cartItem.quantity,
+        if (cartItem.variantId) {
+          const updateVariant = await tx.productVariant.updateMany({
+            where: {
+              id: cartItem.variantId,
+              stock: { gte: cartItem.quantity },
             },
-          },
-        })
+            data: {
+              stock: {
+                decrement: cartItem.quantity,
+              },
+            },
+          })
 
-        if (updateResult.count === 0) {
-          throw new Error(`Stok tidak mencukupi untuk ${cartItem.product.name}`)
+          if (updateVariant.count === 0) {
+            throw new Error(`Stok tidak mencukupi untuk varian ${cartItem.variant?.name || ''}`)
+          }
+
+          // Also keep parent product total stock in sync
+          await tx.product.update({
+            where: { id: cartItem.productId },
+            data: {
+              stock: {
+                decrement: cartItem.quantity,
+              },
+            },
+          })
+        } else {
+          const updateResult = await tx.product.updateMany({
+            where: {
+              id: cartItem.productId,
+              stock: { gte: cartItem.quantity },
+            },
+            data: {
+              stock: {
+                decrement: cartItem.quantity,
+              },
+            },
+          })
+
+          if (updateResult.count === 0) {
+            throw new Error(`Stok tidak mencukupi untuk ${cartItem.product.name}`)
+          }
         }
       }
 
@@ -332,6 +370,7 @@ export const getOrders = async (req, res, next) => {
           },
           items: {
             include: {
+              variant: true,
               product: {
                 include: {
                   category: {
@@ -392,6 +431,7 @@ export const getOrderById = async (req, res, next) => {
       include: {
         items: {
           include: {
+            variant: true,
             product: {
               include: {
                 category: {
@@ -607,7 +647,10 @@ export const updateOrderStatus = async (req, res, next) => {
       try {
         await paymentService.cancelTransaction(existingOrder.id)
       } catch (cancelErr) {
-        console.warn('Failed to cancel Midtrans transaction in updateOrderStatus:', cancelErr)
+        logWarn('Failed to cancel Midtrans transaction in updateOrderStatus', {
+          orderId: existingOrder.id,
+          error: cancelErr.message,
+        })
       }
     }
 
@@ -712,7 +755,9 @@ export const cancelOrder = async (req, res, next) => {
     try {
       await paymentService.cancelTransaction(order.id)
     } catch (midtransError) {
-      console.error('Failed to cancel Midtrans transaction during order cancellation:', midtransError)
+      logError('Failed to cancel Midtrans transaction during order cancellation', midtransError, {
+        orderId: order.id,
+      })
     }
 
     // 6. Transform products in order items to ensure image URLs are complete

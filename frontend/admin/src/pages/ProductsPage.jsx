@@ -5,13 +5,6 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Plus, Edit, Trash2, Package } from 'lucide-react'
-import {
-  getProducts,
-  deleteProduct,
-  getCategories,
-  createProduct,
-  updateProduct,
-} from '../services/products'
 import { uploadImage } from '../services/upload'
 import ErrorMessage from '../components/common/ErrorMessage'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -25,7 +18,6 @@ import ProductModal from '../components/products/ProductModal'
 import SearchBar from '../components/common/SearchBar'
 import FilterSelect from '../components/common/FilterSelect'
 import { useConfirmDialog, useProducts } from '../hooks'
-import { executeApiCall, createErrorHandler } from '../utils/apiHelpers'
 import { logError, logDebug } from '../utils/logger'
 
 export default function ProductsPage() {
@@ -107,6 +99,7 @@ export default function ProductsPage() {
 
   const handleEdit = product => {
     setEditingProduct(product)
+    const hasVariants = Boolean(product.variants && product.variants.length > 0)
     setFormData({
       name: product.name || '',
       slug: product.slug || generateSlug(product.name || ''),
@@ -116,6 +109,17 @@ export default function ProductsPage() {
       image: product.image || '',
       categoryId: product.categoryId || '',
       isActive: product.isActive ?? true,
+      hasVariants,
+      variants: hasVariants
+        ? product.variants.map(v => ({
+            id: v.id,
+            name: v.name || '',
+            price: v.price?.toString() || '',
+            stock: v.stock?.toString() || '',
+            sku: v.sku || '',
+            attributes: v.attributes || null,
+          }))
+        : [],
     })
     setError(null)
     setImageFile(null)
@@ -134,6 +138,8 @@ export default function ProductsPage() {
       image: '',
       categoryId: categories.length > 0 ? categories[0].id : '',
       isActive: true,
+      hasVariants: false,
+      variants: [],
     })
     setError(null)
     setImageFile(null)
@@ -339,7 +345,14 @@ export default function ProductsPage() {
                   </td>
                   <td className="py-4 px-4 text-gray-600">{product.category?.name || '-'}</td>
                   <td className="py-4 px-4 text-gray-900 font-medium">
-                    {formatCurrency(Number(product.price))}
+                    <div className="flex flex-col">
+                      <span>{formatCurrency(Number(product.price))}</span>
+                      {product.variants && product.variants.length > 0 && (
+                        <span className="inline-block mt-0.5 text-xs text-primary-600 font-normal">
+                          {product.variants.length} Varian
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-4 px-4 text-gray-600">{product.stock}</td>
                   <td className="py-4 px-4">

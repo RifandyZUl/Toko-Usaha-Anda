@@ -913,6 +913,11 @@ function OrderDetailPage() {
                       <h3 className="text-xs font-heading font-medium text-gray-900 line-clamp-2">
                         {item.product?.name}
                       </h3>
+                      {item.variantName && (
+                        <p className="text-[11px] font-semibold text-primary-700 mt-0.5">
+                          Varian: {item.variantName}
+                        </p>
+                      )}
                       {item.product?.category && (
                         <p className="text-[10px] text-gray-400 uppercase mt-0.5">
                           {item.product.category.name}

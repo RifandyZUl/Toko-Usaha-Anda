@@ -67,16 +67,29 @@ export const validateProduct = (data) => {
     errors.slug = 'Slug hanya boleh mengandung huruf kecil, angka, dan tanda hubung'
   }
 
-  if (!isRequired(data.price)) {
-    errors.price = 'Harga harus diisi'
-  } else if (!numberRange(data.price, 0, 999999999)) {
-    errors.price = 'Harga harus antara 0 dan 999.999.999'
-  }
+  if (data.hasVariants) {
+    if (!Array.isArray(data.variants) || data.variants.length === 0) {
+      errors.variants = 'Minimal harus menambahkan 1 varian produk'
+    } else {
+      const hasInvalid = data.variants.some(
+        v => !v.name || !String(v.name).trim() || isNaN(v.price) || Number(v.price) < 0 || isNaN(v.stock) || Number(v.stock) < 0
+      )
+      if (hasInvalid) {
+        errors.variants = 'Semua varian harus memiliki nama, harga (≥ 0), dan stok (≥ 0) yang valid'
+      }
+    }
+  } else {
+    if (!isRequired(data.price)) {
+      errors.price = 'Harga harus diisi'
+    } else if (!numberRange(data.price, 0, 999999999)) {
+      errors.price = 'Harga harus antara 0 dan 999.999.999'
+    }
 
-  if (!isRequired(data.stock)) {
-    errors.stock = 'Stok harus diisi'
-  } else if (!numberRange(data.stock, 0, 999999)) {
-    errors.stock = 'Stok harus antara 0 dan 999.999'
+    if (!isRequired(data.stock)) {
+      errors.stock = 'Stok harus diisi'
+    } else if (!numberRange(data.stock, 0, 999999)) {
+      errors.stock = 'Stok harus antara 0 dan 999.999'
+    }
   }
 
   if (!isRequired(data.categoryId)) {

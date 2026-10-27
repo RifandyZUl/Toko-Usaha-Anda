@@ -84,8 +84,19 @@ export const validateProductInput = [
     .matches(/^[a-z0-9-]+$/).withMessage('Slug can only contain lowercase letters, numbers, and hyphens'),
 
   body('price')
-    .notEmpty().withMessage('Price is required')
-    .isFloat({ min: 0, max: 999999999 }).withMessage('Price must be a positive number'),
+    .custom((val, { req }) => {
+      const hasVariants = Array.isArray(req.body.variants) && req.body.variants.length > 0
+      if (!hasVariants && (val === undefined || val === null || val === '')) {
+        throw new Error('Price is required')
+      }
+      if (val !== undefined && val !== null && val !== '') {
+        const num = parseFloat(val)
+        if (isNaN(num) || num < 0) {
+          throw new Error('Price must be a positive number')
+        }
+      }
+      return true
+    }),
 
   body('stock')
     .optional({ values: 'falsy' })
@@ -103,6 +114,10 @@ export const validateProductInput = [
   body('isActive')
     .optional()
     .isBoolean().withMessage('isActive must be a boolean'),
+
+  body('variants')
+    .optional()
+    .isArray().withMessage('Variants must be an array'),
 
   handleValidationErrors,
 ]

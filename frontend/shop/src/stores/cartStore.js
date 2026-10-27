@@ -15,7 +15,10 @@ export const useCartStore = create(
       // Actions
       addItem: (product, quantity = 1) => {
         const items = get().items
-        const existingItem = items.find(item => item.id === product.id)
+        const cartKey = product.variantId ? `${product.id}-${product.variantId}` : product.id
+        const existingItem = items.find(
+          item => (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) === cartKey
+        )
         const maxStock = typeof product.stock === 'number' ? product.stock : 9999
 
         if (maxStock <= 0) return // Don't add out of stock products
@@ -24,39 +27,50 @@ export const useCartStore = create(
           const newQty = Math.min(existingItem.quantity + quantity, maxStock)
           set({
             items: items.map(item =>
-              item.id === product.id
-                ? { ...item, ...product, quantity: newQty }
+              (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) === cartKey
+                ? { ...item, ...product, cartKey, quantity: newQty }
                 : item
             ),
           })
         } else {
           const initialQty = Math.min(Math.max(1, quantity), maxStock)
           set({
-            items: [...items, { ...product, quantity: initialQty }],
+            items: [...items, { ...product, cartKey, quantity: initialQty }],
           })
         }
       },
 
-      removeItem: productId => {
+      removeItem: cartKeyOrId => {
         set({
-          items: get().items.filter(item => item.id !== productId),
+          items: get().items.filter(
+            item =>
+              (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) !== cartKeyOrId &&
+              item.id !== cartKeyOrId
+          ),
         })
       },
 
-      updateQuantity: (productId, quantity) => {
+      updateQuantity: (cartKeyOrId, quantity) => {
         if (quantity <= 0) {
-          get().removeItem(productId)
+          get().removeItem(cartKeyOrId)
           return
         }
 
         const items = get().items
-        const targetItem = items.find(item => item.id === productId)
+        const targetItem = items.find(
+          item =>
+            (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) === cartKeyOrId ||
+            item.id === cartKeyOrId
+        )
         const maxStock = targetItem && typeof targetItem.stock === 'number' ? targetItem.stock : 9999
         const finalQty = Math.min(quantity, maxStock)
 
         set({
           items: items.map(item =>
-            item.id === productId ? { ...item, quantity: finalQty } : item
+            (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) === cartKeyOrId ||
+            item.id === cartKeyOrId
+              ? { ...item, quantity: finalQty }
+              : item
           ),
         })
       },

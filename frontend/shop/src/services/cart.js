@@ -31,11 +31,12 @@ export const getCart = async () => {
  * Add item to cart
  * @param {Object} data - Cart item data
  * @param {string} data.productId - Product ID
- * @param {number} data.quantity - Quantity
+ * @param {string} [data.variantId] - Variant ID (optional)
+ * @param {number} [data.quantity] - Quantity
  */
-export const addToCart = async ({ productId, quantity = 1 }) => {
+export const addToCart = async ({ productId, variantId = null, quantity = 1 }) => {
   try {
-    const response = await apiClient.post('/cart', { productId, quantity })
+    const response = await apiClient.post('/cart', { productId, variantId, quantity })
     return {
       success: true,
       cartItem: response.cartItem,
@@ -110,15 +111,17 @@ export const clearCart = async () => {
 /**
  * Sync local cart to backend atomically
  * @param {Array} localItems - Local cart items from Zustand store
+ * @param {'replace'|'merge'} [mode='replace'] - Sync mode
  */
-export const syncCartToBackend = async localItems => {
+export const syncCartToBackend = async (localItems, mode = 'replace') => {
   try {
     const formattedItems = (localItems || []).map(item => ({
       productId: String(item.id),
+      variantId: item.variantId || null,
       quantity: item.quantity || 1,
     }))
 
-    const response = await apiClient.post('/cart/sync', { items: formattedItems })
+    const response = await apiClient.post('/cart/sync', { items: formattedItems, mode })
     return { success: response.success ?? true }
   } catch (error) {
     logError('Error syncing cart', error)

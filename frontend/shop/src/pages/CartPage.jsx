@@ -49,20 +49,24 @@ function CartPage() {
         
         await Promise.all(
           items.map(async item => {
+            const itemKey = item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
             try {
               const result = await getProductById(item.id)
               if (result.success && result.product) {
-                stockMap[item.id] = result.product.stock || 0
-                validItems.push(item) // Product exists, keep it
+                if (item.variantId && result.product.variants) {
+                  const variant = result.product.variants.find(v => v.id === item.variantId)
+                  stockMap[itemKey] = variant ? Number(variant.stock) : 0
+                } else {
+                  stockMap[itemKey] = result.product.stock || 0
+                }
+                validItems.push(item)
               } else {
-                // Product not found, remove from cart
                 logInfo(`Product ${item.id} not found, removing from cart`)
-                removeItem(item.id)
+                removeItem(itemKey)
               }
             } catch (error) {
               logError(`Error fetching stock for product ${item.id}`, error)
-              // If product fetch fails (404 or other error), remove from cart
-              removeItem(item.id)
+              removeItem(itemKey)
             }
           })
         )
@@ -70,13 +74,12 @@ function CartPage() {
         
         // Auto-adjust quantities that exceed stock
         validItems.forEach(item => {
-          const currentStock = stockMap[item.id] !== undefined 
-            ? stockMap[item.id] 
+          const itemKey = item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
+          const currentStock = stockMap[itemKey] !== undefined 
+            ? stockMap[itemKey] 
             : (item.stock || 0)
           if (item.quantity > currentStock && currentStock > 0) {
-            updateQuantity(item.id, currentStock)
-          } else if (currentStock === 0 && item.quantity > 0) {
-            // Don't auto-remove, just let user see the out of stock message
+            updateQuantity(itemKey, currentStock)
           }
         })
       } catch (error) {
@@ -136,8 +139,9 @@ function CartPage() {
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
             {items.map(item => {
-              const currentStock = productStocks[item.id] !== undefined 
-                ? productStocks[item.id] 
+              const itemKey = item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
+              const currentStock = productStocks[itemKey] !== undefined 
+                ? productStocks[itemKey] 
                 : (item.stock || 0)
               const isOutOfStock = currentStock === 0
               const isQuantityExceeded = item.quantity > currentStock
@@ -145,13 +149,13 @@ function CartPage() {
 
               return (
                 <div
-                  key={item.id}
+                  key={itemKey}
                   className="bg-white border-b border-gray-200 pb-4 flex gap-4"
                 >
                   {/* Product Image */}
                   <Link
                     to={`/shop/product/${item.id}`}
-                    className="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 overflow-hidden bg-gray-50"
+                    className="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 overflow-hidden bg-gray-50 rounded"
                   >
                     <img
                       src={item.image || '/placeholder.jpg'}
@@ -166,16 +170,23 @@ function CartPage() {
 
                   {/* Product Info */}
                   <div className="flex-1 flex flex-col">
-                    <Link
-                      to={`/shop/product/${item.id}`}
-                      className="mb-1.5 hover:text-gray-600 transition-colors"
-                    >
-                      <h3 className="text-sm font-heading font-medium text-gray-900">
-                        {item.name}
-                      </h3>
-                    </Link>
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <Link
+                        to={`/shop/product/${item.id}`}
+                        className="hover:text-primary-600 transition-colors"
+                      >
+                        <h3 className="text-sm font-heading font-medium text-gray-900">
+                          {item.name}
+                        </h3>
+                      </Link>
+                      {item.variantName && (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200 shrink-0">
+                          {item.variantName}
+                        </span>
+                      )}
+                    </div>
                     
-                    <p className="text-sm font-heading font-medium text-gray-900 mb-2">
+                    <p className="text-sm font-heading font-bold text-gray-900 mb-2">
                       {formatCurrency(Number(item.price))}
                     </p>
 
@@ -200,25 +211,25 @@ function CartPage() {
                       {/* Quantity Controls */}
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          onClick={() => updateQuantity(itemKey, item.quantity - 1)}
                           disabled={isOutOfStock || item.quantity <= 1}
-                          className="w-7 h-7 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="w-7 h-7 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors rounded"
                         >
                           <Icon name="ChevronDown" size={14} className="rotate-90" />
                         </button>
                         <span className={`w-10 text-center text-xs font-body font-medium ${
-                          isQuantityExceeded ? 'text-red-600' : ''
+                          isQuantityExceeded ? 'text-red-600 font-bold' : ''
                         }`}>
                           {item.quantity}
                         </span>
                         <button
                           onClick={() => {
                             if (item.quantity < maxQuantity) {
-                              updateQuantity(item.id, item.quantity + 1)
+                              updateQuantity(itemKey, item.quantity + 1)
                             }
                           }}
                           disabled={isOutOfStock || item.quantity >= maxQuantity}
-                          className="w-7 h-7 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="w-7 h-7 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors rounded"
                         >
                           <Icon name="ChevronDown" size={14} className="-rotate-90" />
                         </button>
@@ -226,10 +237,10 @@ function CartPage() {
 
                       {/* Remove Button */}
                       <button
-                        onClick={() => removeItem(item.id)}
-                        className="text-xs font-body text-gray-500 hover:text-gray-900 uppercase tracking-wider transition-colors"
+                        onClick={() => removeItem(itemKey)}
+                        className="text-xs font-body text-red-500 hover:text-red-700 uppercase tracking-wider transition-colors font-medium"
                       >
-                        Remove
+                        Hapus
                       </button>
                     </div>
                   </div>

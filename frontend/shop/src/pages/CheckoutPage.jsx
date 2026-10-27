@@ -1758,16 +1758,26 @@ function CheckoutPage() {
               <h2 className="text-xl font-heading font-medium text-gray-900 mb-6">Order Summary</h2>
 
               <div className="space-y-4 mb-8 pb-8 border-b border-gray-200">
-                {items.map(item => (
-                  <div key={item.id} className="flex justify-between text-sm">
-                    <span className="text-gray-600">
-                      {item.name} x{item.quantity}
-                    </span>
-                    <span className="font-medium text-gray-900">
-                      {formatCurrency(Number(item.price) * item.quantity)}
-                    </span>
-                  </div>
-                ))}
+                {items.map(item => {
+                  const itemKey = item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
+                  return (
+                    <div key={itemKey} className="flex justify-between items-start text-sm py-1">
+                      <div className="flex flex-col pr-2">
+                        <span className="text-gray-800 font-medium leading-snug">
+                          {item.name} <span className="text-gray-500 font-normal">x{item.quantity}</span>
+                        </span>
+                        {item.variantName && (
+                          <span className="text-[11px] text-primary-700 font-semibold mt-0.5">
+                            Varian: {item.variantName}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-semibold text-gray-900 shrink-0">
+                        {formatCurrency(Number(item.price) * item.quantity)}
+                      </span>
+                    </div>
+                  )
+                })}
 
                 <div className="pt-4 space-y-3">
                   <div className="flex justify-between text-sm font-body text-gray-600">

@@ -14,7 +14,6 @@ import {
   Calendar,
   DollarSign,
 } from 'lucide-react'
-import { getAllOrders, updateOrderStatus } from '../services/orders'
 import ErrorMessage from '../components/common/ErrorMessage'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import { OrderCardSkeleton, Skeleton } from '../components/common/Skeleton'
@@ -31,11 +30,9 @@ import Pagination from '../components/common/Pagination'
 import SearchBar from '../components/common/SearchBar'
 import FilterSelect from '../components/common/FilterSelect'
 import { usePagination, useSearchFilter, useConfirmDialog, useOrders } from '../hooks'
-import { createErrorHandler } from '../utils/apiHelpers'
-import { logError } from '../utils/logger'
 
 export default function OrdersPage() {
-  const { orders, loading, error, refresh, updateStatus } = useOrders()
+  const { orders, loading, error, setError, updateStatus } = useOrders()
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [updatingStatus, setUpdatingStatus] = useState(null)
   const [itemsPerPage] = useState(10)
@@ -560,7 +557,12 @@ function OrderDetailModal({ order, onClose, onStatusUpdate }) {
                   )}
                   <div className="flex-1">
                     <p className="font-medium text-gray-900">{item.product?.name}</p>
-                    <p className="text-sm text-gray-600">
+                    {item.variantName && (
+                      <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 mt-0.5">
+                        Varian: {item.variantName}
+                      </span>
+                    )}
+                    <p className="text-sm text-gray-600 mt-1">
                       {item.quantity} x {formatCurrency(Number(item.price))}
                     </p>
                   </div>

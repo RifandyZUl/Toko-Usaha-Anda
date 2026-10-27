@@ -5,7 +5,7 @@
 
 import { apiClient, ApiError } from '../config/api.js'
 import { handleApiError } from '../utils/errorHandler.js'
-import { logError, logInfo, logDebug } from '../utils/logger.js'
+import { logError, logDebug } from '../utils/logger.js'
 
 /**
  * Get all products with optional filters

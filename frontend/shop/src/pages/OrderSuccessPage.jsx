@@ -276,7 +276,7 @@ function OrderSuccessPage() {
       setError(result.error || 'Order tidak ditemukan')
     }
     setLoading(false)
-  }, [orderId])
+  }, [orderId, user])
 
   useEffect(() => {
     fetchOrder()

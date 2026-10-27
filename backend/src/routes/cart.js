@@ -23,6 +23,7 @@ router.use(authenticate)
 const validateCartItem = [
   body('productId').isUUID().withMessage('Invalid product ID'),
   body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
+  body('variantId').optional({ nullable: true }).isUUID().withMessage('Invalid variant ID'),
   handleValidationErrors
 ]
 

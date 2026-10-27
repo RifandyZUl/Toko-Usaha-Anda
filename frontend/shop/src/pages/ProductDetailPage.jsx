@@ -21,6 +21,8 @@ function ProductDetailPage() {
   const { addItem } = useCartStore()
   const { isAuthenticated } = useAuthStore()
   const [quantity, setQuantity] = useState(1)
+  const [selectedVariant, setSelectedVariant] = useState(null)
+  const [variantError, setVariantError] = useState(null)
   const [expandedSections, setExpandedSections] = useState({
     delivery: false,
     reviews: false,
@@ -47,6 +49,7 @@ function ProductDetailPage() {
     autoFetch: true,
     onSuccess: () => {
       setQuantity(1)
+      setVariantError(null)
     },
   })
 
@@ -56,26 +59,61 @@ function ProductDetailPage() {
     return productData.product || productData
   }, [productData])
 
+  // Select initial in-stock variant when product loads
+  useEffect(() => {
+    if (product?.variants && product.variants.length > 0) {
+      const inStock = product.variants.find(v => Number(v.stock) > 0) || product.variants[0]
+      setSelectedVariant(inStock)
+      setVariantError(null)
+    } else {
+      setSelectedVariant(null)
+    }
+  }, [product])
+
+  // Effective price and stock based on variant selection
+  const effectivePrice = useMemo(() => {
+    if (selectedVariant) return Number(selectedVariant.price)
+    return Number(product?.price || 0)
+  }, [selectedVariant, product?.price])
+
+  const effectiveStock = useMemo(() => {
+    if (selectedVariant) return Number(selectedVariant.stock)
+    return Number(product?.stock || 0)
+  }, [selectedVariant, product?.stock])
+
   // Prepare cart product data
   const cartProduct = useMemo(() => {
     if (!product) return null
     return {
       id: product.id,
       name: product.name,
-      price: product.price,
-      image: product.imageUrl || product.image || '/placeholder.jpg',
-      stock: product.stock || 0,
+      price: effectivePrice,
+      image: selectedVariant?.image || product.imageUrl || product.image || '/placeholder.jpg',
+      stock: effectiveStock,
+      variantId: selectedVariant ? selectedVariant.id : null,
+      variantName: selectedVariant ? selectedVariant.name : null,
     }
-  }, [product])
+  }, [product, selectedVariant, effectivePrice, effectiveStock])
 
   const handleAddToCart = useCallback(() => {
-    if (!cartProduct) return
+    if (!product) return
+    if (product.variants && product.variants.length > 0 && !selectedVariant) {
+      setVariantError('Silakan pilih salah satu varian produk terlebih dahulu')
+      return
+    }
+    if (!cartProduct || effectiveStock <= 0) return
+
     addItem(cartProduct, quantity)
     navigate('/shop/cart')
-  }, [cartProduct, quantity, addItem, navigate])
+  }, [product, selectedVariant, cartProduct, effectiveStock, quantity, addItem, navigate])
 
   const handleBuyNow = useCallback(() => {
-    if (!cartProduct) return
+    if (!product) return
+    if (product.variants && product.variants.length > 0 && !selectedVariant) {
+      setVariantError('Silakan pilih salah satu varian produk terlebih dahulu')
+      return
+    }
+    if (!cartProduct || effectiveStock <= 0) return
 
     // Check if user is authenticated
     if (!isAuthenticated()) {
@@ -88,14 +126,13 @@ function ProductDetailPage() {
     // Add to cart and go to checkout
     addItem(cartProduct, quantity)
     navigate('/shop/checkout')
-  }, [cartProduct, quantity, addItem, navigate, isAuthenticated, product?.id])
+  }, [product, selectedVariant, cartProduct, effectiveStock, quantity, addItem, navigate, isAuthenticated])
 
   const handleQuantityChange = useCallback(
     delta => {
-      if (!product) return
-      setQuantity(prev => Math.max(1, Math.min(product.stock || 0, prev + delta)))
+      setQuantity(prev => Math.max(1, Math.min(effectiveStock || 1, prev + delta)))
     },
-    [product]
+    [effectiveStock]
   )
 
   const toggleSection = useCallback(section => {
@@ -197,10 +234,74 @@ function ProductDetailPage() {
                   {product?.name || 'Product Name'}
                 </h1>
 
-                {/* Price - Clear & Readable */}
-                <p className="text-lg font-heading font-medium text-gray-900 mb-4">
-                  {formatCurrency(Number(product?.price || 0))}
-                </p>
+                {/* Price - Dynamic based on selected variant */}
+                <div className="flex items-baseline gap-3 mb-4">
+                  <span className="text-2xl md:text-3xl font-heading font-bold text-gray-950">
+                    {formatCurrency(effectivePrice)}
+                  </span>
+                  {selectedVariant && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary-50 text-primary-700 border border-primary-200">
+                      {selectedVariant.name}
+                    </span>
+                  )}
+                </div>
+
+                {/* SHOPEE / TOKOPEDIA STYLE: Pilihan Varian Produk */}
+                {product?.variants && product.variants.length > 0 && (
+                  <div className="mb-5 p-4 rounded-xl bg-gray-50/80 border border-gray-200/80">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-xs font-heading font-bold text-gray-900 uppercase tracking-wider">
+                        Pilihan Varian / Ukuran:
+                      </span>
+                      {selectedVariant && (
+                        <span className="text-xs text-primary-600 font-medium">
+                          Dipilih: <strong>{selectedVariant.name}</strong>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2.5">
+                      {product.variants.map(variant => {
+                        const isSelected = selectedVariant?.id === variant.id
+                        const isOutOfStock = Number(variant.stock) <= 0
+
+                        return (
+                          <button
+                            key={variant.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedVariant(variant)
+                              setVariantError(null)
+                              setQuantity(1)
+                            }}
+                            disabled={isOutOfStock}
+                            className={`group relative px-4 py-2 rounded-lg text-xs font-medium transition-all duration-150 border flex flex-col items-center min-w-[76px] ${
+                              isSelected
+                                ? 'border-primary-600 bg-white text-primary-900 shadow-sm ring-2 ring-primary-500/30'
+                                : isOutOfStock
+                                ? 'border-gray-200 bg-gray-100/70 text-gray-400 cursor-not-allowed line-through'
+                                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span className="font-semibold text-gray-900">{variant.name}</span>
+                            <span className={`text-[11px] mt-0.5 ${isSelected ? 'text-primary-700 font-bold' : 'text-gray-500'}`}>
+                              {formatCurrency(Number(variant.price))}
+                            </span>
+                            {isSelected && (
+                              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-primary-600 rounded-full ring-2 ring-white" />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {variantError && (
+                      <p className="mt-2.5 text-xs text-red-600 font-medium bg-red-50 p-2 rounded-lg border border-red-200">
+                        ⚠️ {variantError}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Product Specifications */}
                 <div className="mb-4 pb-4 border-b border-gray-200">
@@ -211,7 +312,8 @@ function ProductDetailPage() {
                       </li>
                     )}
                     <li>
-                      <span className="font-medium">SKU:</span> {product?.id?.slice(0, 8).toUpperCase() || '-'}
+                      <span className="font-medium">SKU:</span>{' '}
+                      {selectedVariant?.sku || product?.id?.slice(0, 8).toUpperCase() || '-'}
                     </li>
                     <li>
                       <span className="font-medium">Asal:</span> Indonesia
@@ -222,20 +324,24 @@ function ProductDetailPage() {
                 {/* Stock Info */}
                 <div className="mb-4">
                   <p className="text-xs font-body text-gray-600">
-                    {(product?.stock || 0) > 0 ? (
+                    {effectiveStock > 0 ? (
                       <span className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 bg-primary-500 rounded-full"></span>
                         <span className="text-primary-600 font-medium">Tersedia</span>
-                        <span className="text-gray-500 ml-1.5">({product.stock} stok tersedia)</span>
+                        <span className="text-gray-500 ml-1.5">
+                          ({effectiveStock} stok {selectedVariant ? 'varian ini' : 'tersedia'})
+                        </span>
                       </span>
                     ) : (
-                      <span className="text-red-500">Stok Habis</span>
+                      <span className="text-red-500 font-medium">
+                        {selectedVariant ? `Stok Varian "${selectedVariant.name}" Habis` : 'Stok Habis'}
+                      </span>
                     )}
                   </p>
                 </div>
 
                 {/* Quantity Selector */}
-                {(product?.stock || 0) > 0 && (
+                {effectiveStock > 0 && (
                   <div className="mb-4">
                     <label className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider">
                       Quantity
@@ -244,7 +350,7 @@ function ProductDetailPage() {
                       <button
                         onClick={() => handleQuantityChange(-1)}
                         disabled={quantity <= 1}
-                        className="w-8 h-8 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="w-8 h-8 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors rounded"
                       >
                         <Icon name="ChevronDown" size={14} className="rotate-90" />
                       </button>
@@ -253,8 +359,8 @@ function ProductDetailPage() {
                       </span>
                       <button
                         onClick={() => handleQuantityChange(1)}
-                        disabled={quantity >= (product?.stock || 0)}
-                        className="w-8 h-8 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        disabled={quantity >= effectiveStock}
+                        className="w-8 h-8 border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors rounded"
                       >
                         <Icon name="ChevronDown" size={14} className="-rotate-90" />
                       </button>
@@ -270,10 +376,10 @@ function ProductDetailPage() {
                       size="sm"
                       fullWidth={false}
                       onClick={handleAddToCart}
-                      disabled={!(product?.stock) || product.stock === 0}
+                      disabled={effectiveStock <= 0}
                       className="uppercase tracking-wider text-sm py-2 px-6"
                     >
-                      {(product?.stock || 0) > 0 ? 'Tambah ke Keranjang' : 'Stok Habis'}
+                      {effectiveStock > 0 ? 'Tambah ke Keranjang' : 'Stok Habis'}
                     </Button>
                     
                     <Button
@@ -281,10 +387,10 @@ function ProductDetailPage() {
                       size="sm"
                       fullWidth={false}
                       onClick={handleBuyNow}
-                      disabled={!(product?.stock) || product.stock === 0}
+                      disabled={effectiveStock <= 0}
                       className="uppercase tracking-wider text-sm py-2 px-6"
                     >
-                      {(product?.stock || 0) > 0 ? 'Beli Sekarang' : 'Stok Habis'}
+                      {effectiveStock > 0 ? 'Beli Sekarang' : 'Stok Habis'}
                     </Button>
                   </div>
                   

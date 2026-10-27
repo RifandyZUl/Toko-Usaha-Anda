@@ -47,6 +47,10 @@ class ProductService {
           category: {
             select: { id: true, name: true, slug: true },
           },
+          variants: {
+            where: isAdmin ? undefined : { isActive: true },
+            orderBy: { price: 'asc' },
+          },
         },
         skip,
         take: limitNum,
@@ -80,6 +84,10 @@ class ProductService {
         category: {
           select: { id: true, name: true, slug: true },
         },
+        variants: {
+          where: { isActive: true },
+          orderBy: { price: 'asc' },
+        },
         _count: {
           select: { orderItems: true },
         },
@@ -109,7 +117,13 @@ class ProductService {
   async getProductById(id) {
     const product = await prisma.product.findUnique({
       where: { id },
-      include: { category: true },
+      include: {
+        category: true,
+        variants: {
+          where: { isActive: true },
+          orderBy: { price: 'asc' },
+        },
+      },
     })
 
     if (!product) {
@@ -120,48 +134,164 @@ class ProductService {
   }
 
   /**
-   * Create new product
+   * Create new product (with optional variants)
    */
   async createProduct(data) {
-    if (!data.slug && data.name) {
-      data.slug = data.name
+    const { variants, ...productData } = data
+
+    if (!productData.slug && productData.name) {
+      productData.slug = productData.name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)+/g, '')
     }
 
-    if (data.slug) {
-      const existing = await prisma.product.findUnique({ where: { slug: data.slug } })
+    if (productData.slug) {
+      const existing = await prisma.product.findUnique({ where: { slug: productData.slug } })
       if (existing) throw new ConflictError(ERROR_MESSAGES.PRODUCT_SLUG_EXISTS)
     }
 
+    let parsedVariants = []
+    if (Array.isArray(variants) && variants.length > 0) {
+      parsedVariants = variants
+        .filter(v => v && v.name && String(v.name).trim() !== '')
+        .map(v => ({
+          name: String(v.name).trim(),
+          sku: v.sku?.trim() || null,
+          price: parseFloat(v.price) || 0,
+          stock: isNaN(parseInt(v.stock, 10)) ? 0 : parseInt(v.stock, 10),
+          weight: v.weight ? parseInt(v.weight, 10) : null,
+          image: v.image || null,
+          attributes: v.attributes || null,
+          isActive: v.isActive !== false,
+        }))
+
+      if (parsedVariants.length > 0) {
+        // Auto-calculate total stock and base minimum price
+        productData.stock = parsedVariants.reduce((sum, v) => sum + v.stock, 0)
+        if (productData.price === undefined || productData.price === null || isNaN(productData.price) || Number(productData.price) === 0) {
+          productData.price = Math.min(...parsedVariants.map(v => v.price))
+        }
+      }
+    }
+
     const product = await prisma.product.create({
-      data,
-      include: { category: true },
+      data: {
+        ...productData,
+        ...(parsedVariants.length > 0 && {
+          variants: {
+            create: parsedVariants,
+          },
+        }),
+      },
+      include: {
+        category: true,
+        variants: {
+          orderBy: { price: 'asc' },
+        },
+      },
     })
 
     return transformProduct(product)
   }
 
   /**
-   * Update existing product
+   * Update existing product (with variant sync)
    */
   async updateProduct(id, data) {
-    const existing = await prisma.product.findUnique({ where: { id } })
+    const existing = await prisma.product.findUnique({
+      where: { id },
+      include: { variants: true },
+    })
     if (!existing) throw new NotFoundError(ERROR_MESSAGES.PRODUCT_NOT_FOUND)
 
-    if (data.slug && data.slug !== existing.slug) {
-      const slugExists = await prisma.product.findUnique({ where: { slug: data.slug } })
+    const { variants, ...productData } = data
+
+    if (productData.slug && productData.slug !== existing.slug) {
+      const slugExists = await prisma.product.findUnique({ where: { slug: productData.slug } })
       if (slugExists) throw new ConflictError(ERROR_MESSAGES.PRODUCT_SLUG_EXISTS)
     }
 
-    const product = await prisma.product.update({
-      where: { id },
-      data,
-      include: { category: true },
+    const updated = await prisma.$transaction(async (tx) => {
+      if (Array.isArray(variants)) {
+        const parsedVariants = variants
+          .filter(v => v && v.name && String(v.name).trim() !== '')
+          .map(v => ({
+            id: v.id || undefined,
+            name: String(v.name).trim(),
+            sku: v.sku?.trim() || null,
+            price: parseFloat(v.price) || 0,
+            stock: isNaN(parseInt(v.stock, 10)) ? 0 : parseInt(v.stock, 10),
+            weight: v.weight ? parseInt(v.weight, 10) : null,
+            image: v.image || null,
+            attributes: v.attributes || null,
+            isActive: v.isActive !== false,
+          }))
+
+        if (parsedVariants.length > 0) {
+          productData.stock = parsedVariants.reduce((sum, v) => sum + v.stock, 0)
+          if (productData.price === undefined || productData.price === null || isNaN(productData.price) || Number(productData.price) === 0) {
+            productData.price = Math.min(...parsedVariants.map(v => v.price))
+          }
+        }
+
+        const incomingIds = parsedVariants.filter(v => v.id).map(v => v.id)
+
+        // Remove variants that were deleted in UI
+        await tx.productVariant.deleteMany({
+          where: {
+            productId: id,
+            id: { notIn: incomingIds },
+          },
+        })
+
+        // Upsert active variants
+        for (const v of parsedVariants) {
+          if (v.id) {
+            await tx.productVariant.update({
+              where: { id: v.id },
+              data: {
+                name: v.name,
+                sku: v.sku,
+                price: v.price,
+                stock: v.stock,
+                weight: v.weight,
+                image: v.image,
+                attributes: v.attributes,
+                isActive: v.isActive,
+              },
+            })
+          } else {
+            await tx.productVariant.create({
+              data: {
+                productId: id,
+                name: v.name,
+                sku: v.sku,
+                price: v.price,
+                stock: v.stock,
+                weight: v.weight,
+                image: v.image,
+                attributes: v.attributes,
+                isActive: v.isActive,
+              },
+            })
+          }
+        }
+      }
+
+      return tx.product.update({
+        where: { id },
+        data: productData,
+        include: {
+          category: true,
+          variants: {
+            orderBy: { price: 'asc' },
+          },
+        },
+      })
     })
 
-    return transformProduct(product)
+    return transformProduct(updated)
   }
 
   /**
