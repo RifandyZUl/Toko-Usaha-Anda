@@ -24,19 +24,19 @@ async function main() {
   // Create categories
   const categories = [
     {
-      name: 'Peralatan Rumah Tangga',
+      name: 'Kebutuhan Rumah Tangga',
       slug: 'household',
-      description: 'Peralatan rumah tangga lengkap dan berkualitas',
+      description: 'Perlengkapan kebersihan dan kebutuhan harian rumah tangga berkualitas',
     },
     {
-      name: 'Perkakas',
+      name: 'Perkakas Tukang',
       slug: 'tools',
-      description: 'Perkakas tukang dan alat konstruksi',
+      description: 'Peralatan pertukangan, kunci, palu, dan perkakas teknik lengkap',
     },
     {
-      name: 'Alat Motor',
+      name: 'Alat Alat Motor',
       slug: 'motorcycle',
-      description: 'Spare part dan aksesoris motor',
+      description: 'Aksesoris motor, gembok cakram, tali bagasi, dan perlengkapan motor pilihan',
     },
   ]
 

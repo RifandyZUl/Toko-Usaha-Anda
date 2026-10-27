@@ -256,10 +256,10 @@ function ShopPage() {
         <div className="container-custom relative z-10">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-heading font-light text-gray-900 mb-4 tracking-tight">
-              Solusi Lengkap untuk Peralatan Rumah Tangga
+              Solusi Lengkap untuk Kebutuhan Rumah Tangga
             </h1>
             <p className="text-sm md:text-base font-body text-gray-600 max-w-2xl mx-auto leading-relaxed mb-6">
-              Peralatan rumah tangga, perkakas tukang, dan aksesoris motor berkualitas dengan harga
+              Kebutuhan rumah tangga, perkakas tukang, dan alat motor berkualitas dengan harga
               terjangkau.
               <span className="block mt-1.5 text-gray-700 font-medium text-xs">
                 Kualitas Terjamin • Harga Terjangkau • Layanan Ramah
@@ -303,10 +303,10 @@ function ShopPage() {
       {/* Featured Section - Nike Style Split Screen */}
       <section className="bg-white">
         <div className="flex flex-col md:flex-row h-[600px] md:h-[700px]">
-          {/* Left Section - Peralatan Rumah Tangga */}
+          {/* Left Section - Kebutuhan Rumah Tangga */}
           <Link
             to="/shop"
-            onClick={e => handleFeaturedClick(e, ['rumah tangga', 'household', 'peralatan rumah'])}
+            onClick={e => handleFeaturedClick(e, ['kebutuhan rumah', 'rumah tangga', 'household'])}
             className="relative flex-1 h-[300px] md:h-full overflow-hidden group cursor-pointer bg-gray-100"
             style={{
               backgroundImage: `url('https://images.unsplash.com/photo-1556911220-bff31c812dba?w=1200&h=800&fit=crop')`,
@@ -317,7 +317,7 @@ function ShopPage() {
           >
             <img
               src="https://images.unsplash.com/photo-1556911220-bff31c812dba?w=1200&h=800&fit=crop"
-              alt="Peralatan Rumah Tangga"
+              alt="Kebutuhan Rumah Tangga"
               className="w-full h-full object-cover opacity-0"
               loading="lazy"
               onError={e =>
@@ -331,7 +331,7 @@ function ShopPage() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent"></div>
             <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
               <h3 className="text-2xl md:text-3xl font-heading font-semibold text-white mb-2 drop-shadow-lg">
-                Peralatan Rumah Tangga
+                Kebutuhan Rumah Tangga
               </h3>
               <p className="text-sm md:text-base font-body text-white/95 mb-4 drop-shadow-md">
                 Kebutuhan rumah tangga lengkap dan berkualitas
@@ -427,20 +427,20 @@ function ShopPage() {
 
       {/* Main Content */}
       <main className="container-custom py-8 products-section">
-        {/* Category Filter - Clean & Minimal */}
+        {/* Category Filter - Modern & Clean Pill Tabs */}
         {categories.length > 0 && (
-          <div className="mb-6 pb-4 border-b border-gray-300">
-            <div className="flex flex-wrap gap-3 justify-center">
+          <div className="mb-8 pb-4">
+            <div className="flex flex-wrap gap-2.5 justify-center items-center">
               {categories.map(category => {
                 const isActive = selectedCategory === (category.id || category.slug)
                 return (
                   <button
                     key={category.id || category.slug}
                     onClick={() => handleCategorySelect(category.id || category.slug)}
-                    className={`text-xs font-body uppercase tracking-wider transition-colors ${
+                    className={`px-4 py-2 rounded-full text-xs font-body tracking-wider uppercase transition-all duration-200 font-medium ${
                       isActive
-                        ? 'text-primary-600 font-medium border-b-2 border-primary-600 pb-1'
-                        : 'text-gray-500 hover:text-primary-600'
+                        ? 'bg-gray-900 text-white shadow-md ring-2 ring-gray-900/10'
+                        : 'bg-white text-gray-600 border border-gray-200/90 hover:border-gray-400 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                   >
                     {category.name}
@@ -498,7 +498,7 @@ function ShopPage() {
                 TOKO USAHA ANDA
               </h3>
               <p className="text-sm font-body text-gray-600 leading-relaxed max-w-md">
-                Solusi lengkap untuk peralatan rumah tangga Anda. Peralatan rumah tangga, perkakas
+                Solusi lengkap untuk kebutuhan rumah tangga Anda. Kebutuhan rumah tangga, perkakas
                 tukang, dan aksesoris motor berkualitas dengan harga terjangkau.
               </p>
             </div>

@@ -22,7 +22,7 @@ function Products() {
     },
     {
       id: 3,
-      title: 'Aksesoris Motor',
+      title: 'Alat Alat Motor',
       description: 'Suku cadang, perkakas servis & aksesoris kendaraan roda dua',
       icon: Settings,
       slug: 'motorcycle',

@@ -214,28 +214,28 @@ function ShopNavigation() {
           </Link>
 
           {/* Category Navigation - Center */}
-          <div className="hidden md:flex items-center gap-6 absolute left-1/2 transform -translate-x-1/2">
+          <div className="hidden lg:flex items-center gap-4 xl:gap-6 justify-center flex-1 max-w-xl mx-auto px-2">
             <Link
               to="/shop"
               onClick={e => {
                 e.preventDefault()
                 localStorage.setItem(
                   'pendingCategoryFilter',
-                  JSON.stringify(['rumah tangga', 'household', 'peralatan rumah'])
+                  JSON.stringify(['kebutuhan rumah', 'rumah tangga', 'household'])
                 )
                 if (location.pathname === '/shop' || location.pathname === '/shop/') {
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                   const event = new CustomEvent('filterCategory', {
-                    detail: { keywords: ['rumah tangga', 'household', 'peralatan rumah'] },
+                    detail: { keywords: ['kebutuhan rumah', 'rumah tangga', 'household'] },
                   })
                   window.dispatchEvent(event)
                 } else {
                   navigate('/shop')
                 }
               }}
-              className="text-xs font-body text-gray-600 hover:text-primary-600 uppercase tracking-wider transition-colors"
+              className="text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider transition-colors whitespace-nowrap"
             >
-              Peralatan Rumah Tangga
+              Kebutuhan Rumah Tangga
             </Link>
             <Link
               to="/shop"
@@ -255,7 +255,7 @@ function ShopNavigation() {
                   navigate('/shop')
                 }
               }}
-              className="text-xs font-body text-gray-600 hover:text-primary-600 uppercase tracking-wider transition-colors"
+              className="text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider transition-colors whitespace-nowrap"
             >
               Perkakas Tukang
             </Link>
@@ -277,23 +277,23 @@ function ShopNavigation() {
                   navigate('/shop')
                 }
               }}
-              className="text-xs font-body text-gray-600 hover:text-primary-600 uppercase tracking-wider transition-colors"
+              className="text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider transition-colors whitespace-nowrap"
             >
               Alat Alat Motor
             </Link>
           </div>
 
           {/* Right Side: Search, Cart, Login */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
             {/* Search Bar - Desktop Trigger */}
             <div
               onClick={() => setIsSearchModalOpen(true)}
-              className="hidden md:flex items-center gap-2 relative cursor-pointer"
+              className="hidden sm:flex items-center gap-2 relative cursor-pointer"
             >
               <div className="absolute left-3 text-gray-400">
                 <Icon name="Search" size={16} />
               </div>
-              <div className="w-32 pl-9 pr-3 py-1.5 text-xs text-gray-400 border border-gray-300 rounded-full bg-gray-50 hover:bg-gray-100 hover:border-gray-400 transition-all select-none">
+              <div className="w-28 xl:w-36 pl-9 pr-3 py-1.5 text-xs text-gray-400 border border-gray-300 rounded-full bg-gray-50 hover:bg-gray-100 hover:border-gray-400 transition-all select-none">
                 Search
               </div>
             </div>
@@ -301,7 +301,7 @@ function ShopNavigation() {
             {/* Search Icon - Mobile Trigger */}
             <button
               onClick={() => setIsSearchModalOpen(true)}
-              className="md:hidden p-1.5 text-gray-600 hover:text-primary-600 transition-colors"
+              className="sm:hidden p-1.5 text-gray-600 hover:text-primary-600 transition-colors"
               aria-label="Search"
             >
               <Icon name="Search" size={20} />
@@ -400,11 +400,11 @@ function ShopNavigation() {
               setIsMobileMenuOpen(false)
               localStorage.setItem(
                 'pendingCategoryFilter',
-                JSON.stringify(['rumah tangga', 'household', 'peralatan rumah'])
+                JSON.stringify(['kebutuhan rumah', 'rumah tangga', 'household'])
               )
               if (location.pathname === '/shop') {
                 const event = new CustomEvent('filterCategory', {
-                  detail: { keywords: ['rumah tangga', 'household', 'peralatan rumah'] },
+                  detail: { keywords: ['kebutuhan rumah', 'rumah tangga', 'household'] },
                 })
                 window.dispatchEvent(event)
               } else {
@@ -413,7 +413,7 @@ function ShopNavigation() {
             }}
             className="block text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider"
           >
-            Peralatan Rumah Tangga
+            Kebutuhan Rumah Tangga
           </Link>
           <Link
             to="/shop"

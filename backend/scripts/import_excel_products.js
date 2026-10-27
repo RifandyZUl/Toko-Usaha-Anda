@@ -14,8 +14,8 @@ function toSlug(text) {
 const productCatalog = [
   // --- KATEGORI: ALAT PEL ---
   {
-    category: 'Alat Pel',
-    categorySlug: 'alat-pel',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Alat Pel Lantai Katun Dragon',
     slug: 'alat-pel-lantai-katun-dragon',
     description: 'Alat pel lantai berkualitas dari merek Dragon dengan sumbu benang katun pilihan berdaya serap air tinggi. Gagang kokoh dan nyaman digenggam, efektif membersihkan kotoran dan noda di segala permukaan lantai.',
@@ -28,8 +28,8 @@ const productCatalog = [
     ]
   },
   {
-    category: 'Alat Pel',
-    categorySlug: 'alat-pel',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Alat Pel Lantai Sumbu Bom Bom',
     slug: 'alat-pel-lantai-sumbu-bom-bom',
     description: 'Alat pel lantai ekonomis merek Bom Bom dengan kepala pel serat sumbu tebal dan daya serap optimal. Ringan digunakan untuk kebutuhan pembersihan rumah tangga sehari-hari.',
@@ -43,8 +43,8 @@ const productCatalog = [
 
   // --- KATEGORI: SAPU ---
   {
-    category: 'Sapu',
-    categorySlug: 'sapu',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Sapu Ijuk Dragon Asli',
     slug: 'sapu-ijuk-dragon-asli',
     description: 'Sapu ijuk asli merek Dragon terkenal awet, tidak mudah rontok, dan memiliki anyaman ijuk rapat berkualitas tinggi. Gagang dilapisi seal rapi dan ergonomis.',
@@ -55,8 +55,8 @@ const productCatalog = [
     ]
   },
   {
-    category: 'Sapu',
-    categorySlug: 'sapu',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Sapu Nilon Dragon Warna',
     slug: 'sapu-nilon-dragon-warna',
     description: 'Sapu nilon sintetis Dragon dengan bulu nilon halus dan rapat yang efektif menyapu debu mikro dan rambut tanpa meninggalkan goresan pada lantai granit/keramik.',
@@ -67,8 +67,8 @@ const productCatalog = [
     ]
   },
   {
-    category: 'Sapu',
-    categorySlug: 'sapu',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Sapu Ijuk Bom Bom Ekonomis',
     slug: 'sapu-ijuk-bom-bom-ekonomis',
     description: 'Sapu ijuk tipe ekonomis merek Bom Bom yang cocok untuk menyapu halaman maupun dalam rumah. Serat ijuk alami dengan harga ramah kantong.',
@@ -79,8 +79,8 @@ const productCatalog = [
     ]
   },
   {
-    category: 'Sapu',
-    categorySlug: 'sapu',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Sapu Nilon Panda Warna Cerah',
     slug: 'sapu-nilon-panda-warna-cerah',
     description: 'Sapu nilon merek Panda dengan kombinasi warna cerah menarik. Bulu sapu fleksibel, kuat, tidak mudah rontok, dan mudah dibersihkan setelah digunakan.',
@@ -91,8 +91,8 @@ const productCatalog = [
     ]
   },
   {
-    category: 'Sapu',
-    categorySlug: 'sapu',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Sapu Ijuk Cap 2 Udang Tradisional',
     slug: 'sapu-ijuk-cap-2-udang-tradisional',
     description: 'Sapu ijuk cap 2 Udang asli buatan pengrajin lokal dengan ikatan ijuk tradisional yang tebal dan tahan lama untuk area luar maupun dalam ruangan.',
@@ -105,8 +105,8 @@ const productCatalog = [
 
   // --- KATEGORI: PEMBERSIH LANTAI LAINNYA ---
   {
-    category: 'Pembersih Lantai',
-    categorySlug: 'pembersih-lantai',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Dorongan Air Karet Lantai (Floor Wiper)',
     slug: 'dorongan-air-karet-lantai-floor-wiper',
     description: 'Alat serokan pendorong air lantai berbahan karet elastis tebal dengan gagang panjang anti karat. Sangat efektif mengeringkan genangan air di lantai teras, kamar mandi, atau garasi seketika.',
@@ -117,8 +117,8 @@ const productCatalog = [
     ]
   },
   {
-    category: 'Pembersih Lantai',
-    categorySlug: 'pembersih-lantai',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Sikat Lantai Gagang Panjang Dragon',
     slug: 'sikat-lantai-gagang-panjang-dragon',
     description: 'Sikat lantai kamar mandi gagang panjang merek Dragon dengan bulu nilon kaku dan kuat untuk menyikat noda membandel dan lumut tanpa perlu membungkuk.',
@@ -131,8 +131,8 @@ const productCatalog = [
 
   // --- KATEGORI: TOPLES & WADAH MAKANAN ---
   {
-    category: 'Toples & Wadah Makanan',
-    categorySlug: 'toples-wadah-makanan',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Toples Kerupuk Plastik Polos Bening',
     slug: 'toples-kerupuk-plastik-polos-bening',
     description: 'Toples kerupuk dan wadah makanan serbaguna berbahan plastik tebal food-grade, kedap udara dengan tutup putar rapat yang menjaga kerenyahan makanan tahan lama.',
@@ -147,8 +147,8 @@ const productCatalog = [
 
   // --- KATEGORI: TALI TAMBANG ---
   {
-    category: 'Tali Tambang',
-    categorySlug: 'tali-tambang',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Tali Tambang Nilon Plastik PE Rol',
     slug: 'tali-tambang-nilon-plastik-pe-rol',
     description: 'Tali tambang PE (Polyethylene) berkualitas tinggi, ulet, kuat, tahan air dan cuaca. Sangat cocok untuk mengikat barang muatan, konstruksi, tenda, tambak, jemuran, dan tali-temali serbaguna.',
@@ -164,8 +164,8 @@ const productCatalog = [
 
   // --- KATEGORI: GANTUNGAN JEMURAN ---
   {
-    category: 'Gantungan Jemuran',
-    categorySlug: 'gantungan-jemuran',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Gantungan Baju Bulat Putar Lion Star Folding Hanger',
     slug: 'gantungan-baju-bulat-putar-lion-star',
     description: 'Folding hanger bulat merek Lion Star terkenal tebal, kokoh, dan tahan panas matahari tanpa mudah getas. Dilengkapi jepitan kuat dan gantungan putar 360 derajat untuk menjemur pakaian bayi, kaos kaki, dan pakaian dalam.',
@@ -178,8 +178,8 @@ const productCatalog = [
     ]
   },
   {
-    category: 'Gantungan Jemuran',
-    categorySlug: 'gantungan-jemuran',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Gantungan Baju Bulat Folding Hanger Standar',
     slug: 'gantungan-baju-bulat-folding-hanger-standar',
     description: 'Gantungan baju jemuran model bulat lipat tipe standar ekonomis. Praktis disimpan saat tidak digunakan dan hemat tempat saat menjemur.',
@@ -194,8 +194,8 @@ const productCatalog = [
 
   // --- KATEGORI: BOTOL SEMPROT ---
   {
-    category: 'Botol Semprot',
-    categorySlug: 'botol-semprot',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Botol Semprotan Spray Serbaguna Trigger',
     slug: 'botol-semprotan-spray-serbaguna-trigger',
     description: 'Botol spray dengan kepala trigger semprotan adjustable (bisa kabut halus / stream lurus). Cocok untuk semprotan tanaman hias, disinfektan, memandikan burung, atau setrika pakaian.',
@@ -209,8 +209,8 @@ const productCatalog = [
 
   // --- KATEGORI: KERANJANG PAKAIAN ---
   {
-    category: 'Keranjang Pakaian',
-    categorySlug: 'keranjang-pakaian',
+    category: 'Kebutuhan Rumah Tangga',
+    categorySlug: 'household',
     name: 'Keranjang Pakaian Plastik Laundry Serbaguna',
     slug: 'keranjang-pakaian-plastik-laundry-serbaguna',
     description: 'Keranjang pakaian kotor dan bersih berbahan plastik lentur tidak mudah pecah dengan lubang sirkulasi udara agar pakaian tidak lembap dan berbau.',
@@ -224,8 +224,8 @@ const productCatalog = [
 
   // --- KATEGORI: AKSESORIS MOTOR ---
   {
-    category: 'Aksesoris Motor',
-    categorySlug: 'aksesoris-motor',
+    category: 'Alat Alat Motor',
+    categorySlug: 'motorcycle',
     name: 'Dudukan Plat Nomor Motor Standar Universal',
     slug: 'dudukan-plat-nomor-motor-standar-universal',
     description: 'Frame wadah pelindung plat nomor motor standar Indonesia (1 set depan & belakang) lengkap dengan baut dan mur pengikat. Bahan plastik ABS tebal tahan getaran dan rapi.',
@@ -236,8 +236,8 @@ const productCatalog = [
     ]
   },
   {
-    category: 'Aksesoris Motor',
-    categorySlug: 'aksesoris-motor',
+    category: 'Alat Alat Motor',
+    categorySlug: 'motorcycle',
     name: 'Busa Handle Rem Motor Universal',
     slug: 'busa-handle-rem-motor-universal',
     description: 'Sarung busa spons pelindung tuas handle rem dan kopling motor. Nyaman digenggam, empuk, mengurangi pegal pada jari saat perjalanan jauh, dan anti selip saat hujan.',
@@ -248,8 +248,8 @@ const productCatalog = [
     ]
   },
   {
-    category: 'Aksesoris Motor',
-    categorySlug: 'aksesoris-motor',
+    category: 'Alat Alat Motor',
+    categorySlug: 'motorcycle',
     name: 'Gantungan Barang Motor (Hook Stang & Bodi)',
     slug: 'gantungan-barang-motor-hook-stang-bodi',
     description: 'Gantungan cantolan barang belanjaan motor kokoh, memudahkan membawa tas belanja di motor matic maupun bebek tanpa takut jatuh.',
@@ -264,8 +264,8 @@ const productCatalog = [
 
   // --- KATEGORI: GEMBOK CAKRAM ---
   {
-    category: 'Aksesoris Motor',
-    categorySlug: 'aksesoris-motor',
+    category: 'Alat Alat Motor',
+    categorySlug: 'motorcycle',
     name: 'Gembok Cakram Motor Anti Maling (Disc Lock)',
     slug: 'gembok-cakram-motor-anti-maling-disc-lock',
     description: 'Kunci gembok pengaman piringan cakram rem motor terbuat dari baja hardened steel tahan potong dan congkel. Memberikan proteksi maksimal untuk motor kesayangan Anda di tempat parkir.',
@@ -280,8 +280,8 @@ const productCatalog = [
 
   // --- KATEGORI: TALI BAGASI MOTOR ---
   {
-    category: 'Aksesoris Motor',
-    categorySlug: 'aksesoris-motor',
+    category: 'Alat Alat Motor',
+    categorySlug: 'motorcycle',
     name: 'Tali Bagasi Motor Pengikat Barang (Bungee Cord)',
     slug: 'tali-bagasi-motor-pengikat-barang-bungee-cord',
     description: 'Tali pengikat barang jok bagasi motor elastis kuat dengan kait kawat baja berlapis plastik agar tidak menggores bodi motor. Daya tarik lentur dan tidak mudah kendur.',
@@ -360,7 +360,7 @@ async function main() {
       if (existing) {
         await prisma.productVariant.update({
           where: { id: existing.id },
-          update: {
+          data: {
             sku: v.sku,
             price: v.price,
             stock: v.stock,

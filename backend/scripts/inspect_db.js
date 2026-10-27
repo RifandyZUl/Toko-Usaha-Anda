@@ -3,23 +3,19 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-  const categories = await prisma.category.findMany()
-  const products = await prisma.product.findMany({
-    include: { variants: true }
+  const categories = await prisma.category.findMany({
+    include: {
+      products: {
+        select: { id: true, name: true, slug: true }
+      }
+    }
   })
-  const sample = await prisma.product.findFirst({
-    where: { slug: 'alat-pel-lantai-katun-dragon' },
-    include: { variants: true, category: true }
-  })
-  console.log('\n--- Sample Product Detail ---')
-  console.log({
-    name: sample.name,
-    category: sample.category.name,
-    price: sample.price.toString(),
-    stock: sample.stock,
-    image: sample.image,
-    variants: sample.variants.map(v => ({ name: v.name, sku: v.sku, price: v.price.toString(), stock: v.stock, weight: v.weight }))
-  })
+
+  console.log('=== KATEGORI DAN PRODUK DI DATABASE ===')
+  for (const cat of categories) {
+    console.log(`\n📁 Kategori: ${cat.name} (slug: ${cat.slug}) [${cat.products.length} produk]`)
+    cat.products.forEach(p => console.log(`   - ${p.name}`))
+  }
 }
 
 main()
