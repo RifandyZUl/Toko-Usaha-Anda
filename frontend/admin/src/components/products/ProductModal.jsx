@@ -364,27 +364,36 @@ export default function ProductModal({
             {formErrors.slug && <p className="mt-1 text-sm text-red-600">{formErrors.slug}</p>}
           </div>
 
-          {/* Kategori */}
+          {/* Kategori Resmi Toko */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Kategori *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Kategori Produk *
+            </label>
             <select
               value={formData.categoryId}
               onChange={e => {
                 setFormData({ ...formData, categoryId: e.target.value })
                 if (formErrors.categoryId) setFormErrors({ ...formErrors, categoryId: '' })
               }}
-              className={`input ${formErrors.categoryId ? 'border-red-500' : ''}`}
+              className={`input font-medium text-gray-900 ${formErrors.categoryId ? 'border-red-500 ring-1 ring-red-500' : ''}`}
               required
             >
-              <option value="">Pilih Kategori</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
+              <option value="">-- Pilih Salah Satu Kategori Resmi --</option>
+              {categories.map(cat => {
+                const icon = cat.slug === 'household' ? '🏠 ' : cat.slug === 'tools' ? '🛠️ ' : cat.slug === 'motorcycle' ? '🏍️ ' : '📦 '
+                return (
+                  <option key={cat.id} value={cat.id}>
+                    {icon} {cat.name}
+                  </option>
+                )
+              })}
             </select>
+            <p className="mt-1.5 text-xs text-gray-500 flex items-center gap-1">
+              <span>ℹ️</span>
+              <span>Wajib memilih salah satu dari 3 kategori resmi toko agar katalog di etalase pembeli tetap terstruktur dan konsisten.</span>
+            </p>
             {formErrors.categoryId && (
-              <p className="mt-1 text-sm text-red-600">{formErrors.categoryId}</p>
+              <p className="mt-1 text-sm text-red-600 font-medium">{formErrors.categoryId}</p>
             )}
           </div>
 

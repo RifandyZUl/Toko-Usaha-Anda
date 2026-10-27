@@ -93,7 +93,7 @@ export const validateProduct = (data) => {
   }
 
   if (!isRequired(data.categoryId)) {
-    errors.categoryId = 'Kategori harus dipilih'
+    errors.categoryId = 'Kategori wajib dipilih (pilih Kebutuhan Rumah Tangga, Perkakas Tukang, atau Alat Alat Motor)'
   }
 
   return {

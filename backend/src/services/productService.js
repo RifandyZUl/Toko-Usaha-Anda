@@ -6,9 +6,29 @@
 import prisma from '../config/database.js'
 import { transformProduct, transformProducts } from '../utils/productUtils.js'
 import { PAGINATION, ERROR_MESSAGES } from '../constants/index.js'
-import { NotFoundError, ConflictError } from '../utils/errors.js'
+import { NotFoundError, ConflictError, BadRequestError } from '../utils/errors.js'
+
+const CANONICAL_CATEGORY_SLUGS = ['household', 'tools', 'motorcycle']
 
 class ProductService {
+  /**
+   * Validate that the category exists and belongs to the 3 canonical categories
+   */
+  async validateCanonicalCategory(categoryId) {
+    if (!categoryId) {
+      throw new BadRequestError('Kategori wajib dipilih.')
+    }
+    const category = await prisma.category.findUnique({
+      where: { id: categoryId },
+    })
+    if (!category || !CANONICAL_CATEGORY_SLUGS.includes(category.slug)) {
+      throw new BadRequestError(
+        'Kategori tidak valid. Produk wajib memilih salah satu dari 3 kategori resmi: Kebutuhan Rumah Tangga, Perkakas Tukang, atau Alat Alat Motor.'
+      )
+    }
+    return category
+  }
+
   /**
    * Get all products with filters and pagination
    */
@@ -146,6 +166,9 @@ class ProductService {
         .replace(/(^-|-$)+/g, '')
     }
 
+    // Enforce that category belongs to the 3 canonical categories
+    await this.validateCanonicalCategory(productData.categoryId)
+
     if (productData.slug) {
       const existing = await prisma.product.findUnique({ where: { slug: productData.slug } })
       if (existing) throw new ConflictError(ERROR_MESSAGES.PRODUCT_SLUG_EXISTS)
@@ -206,6 +229,10 @@ class ProductService {
     if (!existing) throw new NotFoundError(ERROR_MESSAGES.PRODUCT_NOT_FOUND)
 
     const { variants, ...productData } = data
+
+    if (productData.categoryId) {
+      await this.validateCanonicalCategory(productData.categoryId)
+    }
 
     if (productData.slug && productData.slug !== existing.slug) {
       const slugExists = await prisma.product.findUnique({ where: { slug: productData.slug } })
@@ -313,10 +340,13 @@ class ProductService {
   }
 
   /**
-   * Get all categories
+   * Get all categories (Locked strictly to the 3 canonical categories)
    */
   async getAllCategories() {
     return prisma.category.findMany({
+      where: {
+        slug: { in: CANONICAL_CATEGORY_SLUGS },
+      },
       orderBy: { name: 'asc' },
     })
   }
