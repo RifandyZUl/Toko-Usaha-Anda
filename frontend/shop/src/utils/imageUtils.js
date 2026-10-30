@@ -58,7 +58,17 @@ export const fixSupabaseImageUrl = (originalSrc) => {
  * @returns {string} Image URL
  */
 export const getProductImageUrl = (product) => {
-  return product?.imageUrl || product?.image || '/placeholder.jpg'
+  const url = product?.imageUrl || product?.image
+  if (!url) return '/placeholder.jpg'
+
+  // Prepend backend host if URL is a local relative upload path
+  if (typeof url === 'string' && url.startsWith('/uploads')) {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+    const backendHost = apiBase.replace(/\/api\/?$/, '')
+    return `${backendHost}${url}`
+  }
+
+  return url
 }
 
 /**

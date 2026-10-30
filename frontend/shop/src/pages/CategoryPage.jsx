@@ -133,7 +133,7 @@ function CategoryPage() {
           <div className="flex flex-wrap gap-2 pt-6 mt-6 border-t border-gray-100">
             <Link
               to="/shop/all"
-              className="px-3.5 py-1.5 rounded-full text-xs font-body font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+              className="px-3.5 py-1.5 rounded-full text-xs font-body font-medium bg-white text-gray-700 hover:bg-gray-100 border border-gray-200/90 transition-colors"
             >
               Semua Produk
             </Link>
@@ -143,10 +143,11 @@ function CategoryPage() {
                 <Link
                   key={cat.id || cat.slug}
                   to={`/shop/category/${cat.slug}`}
+                  style={isActive ? { color: '#ffffff', backgroundColor: '#111827' } : undefined}
                   className={`px-3.5 py-1.5 rounded-full text-xs font-body font-medium transition-colors ${
                     isActive
-                      ? 'bg-gray-900 text-white shadow-xs'
-                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-gray-200/70'
+                      ? 'bg-gray-900 !text-white shadow-xs'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 hover:text-gray-900 border border-gray-200/90'
                   }`}
                 >
                   {cat.name}
