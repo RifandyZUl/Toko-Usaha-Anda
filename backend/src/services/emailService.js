@@ -36,7 +36,7 @@ const buildOtpEmailHtml = (otp) => {
           <span style="font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #111827; font-family: monospace;">${otp}</span>
         </div>
         <p style="font-size: 13px; color: #4b5563; margin: 0 0 8px 0;">
-          Kode ini berlaku selama <strong>5 menit</strong>.
+          Kode ini berlaku selama <strong>1 menit</strong>.
         </p>
         <p style="font-size: 12px; color: #ef4444; margin: 0; font-weight: 500;">
           Penting: Jangan pernah membagikan kode OTP ini kepada siapa pun, termasuk pihak toko.
@@ -65,7 +65,7 @@ export const sendEmailOtp = async (email, otp) => {
         to: email,
         subject: `${otp} adalah Kode Verifikasi Pendaftaran Toko Usaha Anda`,
         html: buildOtpEmailHtml(otp),
-        text: `Kode verifikasi Toko Usaha Anda: ${otp}. Berlaku selama 5 menit. Jangan bagikan kode ini kepada siapa pun.`,
+        text: `Kode verifikasi Toko Usaha Anda: ${otp}. Berlaku selama 1 menit. Jangan bagikan kode ini kepada siapa pun.`,
       })
 
       logInfo(`Email OTP successfully sent to: ${email}`)
@@ -85,7 +85,7 @@ export const sendEmailOtp = async (email, otp) => {
   console.log(`[SIMULASI EMAIL OTP GMAIL]`)
   console.log(`Email Tujuan : ${email}`)
   console.log(`Kode OTP     : ${otp}`)
-  console.log(`Masa Berlaku : 5 Menit`)
+  console.log(`Masa Berlaku : 1 Menit`)
   console.log(`Perhatian    : Pasang SMTP_USER dan SMTP_PASS di .env untuk kirim nyata`)
   console.log(`======================================================\n`)
 

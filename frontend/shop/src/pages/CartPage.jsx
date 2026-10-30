@@ -380,7 +380,7 @@ function CartPage() {
                 </div>
                 <div className="flex items-center gap-2.5 text-[11px] text-gray-500 font-body">
                   <span className="text-primary-600">🔒</span>
-                  <span>Pembayaran Aman (QRIS, VA & COD)</span>
+                  <span>Pembayaran Aman (QRIS, VA & Transfer Bank)</span>
                 </div>
               </div>
             </div>

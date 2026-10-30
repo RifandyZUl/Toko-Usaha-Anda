@@ -212,5 +212,24 @@ export const verifyEmailOtp = async (email, otp) => {
   }
 }
 
+/**
+ * Send OTP via WhatsApp for Registration fallback
+ */
+export const sendRegisterWaOtp = async (email, phone) => {
+  try {
+    const response = await apiClient.post('/auth/send-register-wa-otp', { email, phone })
+    return {
+      success: true,
+      ...response,
+    }
+  } catch (error) {
+    logError('Error sending register WA OTP', error)
+    return {
+      success: false,
+      error: error.message || 'Gagal mengirim kode OTP ke WhatsApp.',
+    }
+  }
+}
+
 
 

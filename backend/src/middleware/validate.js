@@ -212,7 +212,6 @@ export const validateCreateOrder = [
     .isIn([
       'CASH',
       'TRANSFER',
-      'COD',
       'MIDTRANS',
       'QRIS',
       'TRANSFER_BCA',

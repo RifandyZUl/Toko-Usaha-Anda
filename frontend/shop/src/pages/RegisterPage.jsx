@@ -3,11 +3,11 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
 import { useAuthStore } from '../stores/authStore'
-import { sendEmailOtp } from '../services/auth'
+import { sendEmailOtp, sendRegisterWaOtp } from '../services/auth'
 import Loading from '../components/Loading'
 
 /**
- * Register Page with Email OTP Verification & Validity Timer
+ * Register Page with Email & WhatsApp OTP Verification (1-minute validity)
  */
 function RegisterPage() {
   const navigate = useNavigate()
@@ -28,8 +28,12 @@ function RegisterPage() {
   const [step, setStep] = useState('FORM') // 'FORM' | 'OTP'
   const [otpCode, setOtpCode] = useState('')
   const [isSendingOtp, setIsSendingOtp] = useState(false)
+  const [isSendingWaOtp, setIsSendingWaOtp] = useState(false)
+  const [activeOtpChannel, setActiveOtpChannel] = useState('EMAIL') // 'EMAIL' | 'WHATSAPP'
+  const [showWaInput, setShowWaInput] = useState(false)
+  const [waPhoneInput, setWaPhoneInput] = useState('')
   const [cooldown, setCooldown] = useState(0) // Resend cooldown in seconds (60s)
-  const [validityTime, setValidityTime] = useState(0) // OTP validity countdown in seconds (300s = 5m)
+  const [validityTime, setValidityTime] = useState(0) // OTP validity countdown in seconds (60s = 1m)
   const [devOtp, setDevOtp] = useState(null)
   const [formError, setFormError] = useState('')
   const [successInfo, setSuccessInfo] = useState('')
@@ -125,8 +129,9 @@ function RegisterPage() {
       const res = await sendEmailOtp(formData.email.trim())
       if (res && res.success) {
         setStep('OTP')
+        setActiveOtpChannel('EMAIL')
         setCooldown(res.cooldownSeconds || 60)
-        setValidityTime(res.expiresInSeconds || 300)
+        setValidityTime(res.expiresInSeconds || 60) // 1 menit
         setSuccessInfo(res.message || 'Kode verifikasi OTP telah dikirim ke email Anda.')
         if (res.devOtp) {
           setDevOtp(res.devOtp)
@@ -138,6 +143,42 @@ function RegisterPage() {
       setFormError(err.message || 'Terjadi kesalahan jaringan saat mengirim kode OTP.')
     } finally {
       setIsSendingOtp(false)
+    }
+  }
+
+  // Fallback: Send OTP via WhatsApp
+  const handleSendWaOtp = async phoneToUse => {
+    setFormError('')
+    const targetPhone = (phoneToUse || formData.phone || waPhoneInput || '').trim()
+    const cleanPhone = targetPhone.replace(/[-\s()]/g, '')
+
+    if (!cleanPhone || cleanPhone.length < 9) {
+      setFormError('Nomor WhatsApp tidak valid (minimal 10 digit).')
+      setShowWaInput(true)
+      return
+    }
+
+    setIsSendingWaOtp(true)
+    try {
+      const res = await sendRegisterWaOtp(formData.email.trim(), cleanPhone)
+      if (res && res.success) {
+        setValidityTime(res.expiresInSeconds || 60) // 1 menit
+        setCooldown(res.cooldownSeconds || 60)
+        setFormData(prev => ({ ...prev, phone: targetPhone }))
+        setActiveOtpChannel('WHATSAPP')
+        setShowWaInput(false)
+        setSuccessInfo(res.message || `Kode OTP berhasil dikirim ke nomor WhatsApp (${cleanPhone}).`)
+        if (res.devOtp) {
+          setDevOtp(res.devOtp)
+        }
+        otpInputRef.current?.focus()
+      } else {
+        setFormError(res?.error || 'Gagal mengirim kode OTP ke WhatsApp. Silakan coba lagi.')
+      }
+    } catch (err) {
+      setFormError(err.message || 'Terjadi kesalahan jaringan saat mengirim OTP ke WhatsApp.')
+    } finally {
+      setIsSendingWaOtp(false)
     }
   }
 
@@ -198,11 +239,17 @@ function RegisterPage() {
               </h1>
             </Link>
             <h2 className="text-2xl font-heading font-medium text-gray-900 mb-1">
-              {step === 'FORM' ? 'Buat Akun Baru' : 'Verifikasi Email'}
+              {step === 'FORM'
+                ? 'Buat Akun Baru'
+                : activeOtpChannel === 'WHATSAPP'
+                ? 'Verifikasi WhatsApp'
+                : 'Verifikasi Email'}
             </h2>
             <p className="text-sm font-body text-gray-600">
               {step === 'FORM'
                 ? 'Daftar dengan email aktif untuk verifikasi akun'
+                : activeOtpChannel === 'WHATSAPP'
+                ? `Masukkan kode OTP yang dikirim ke nomor WhatsApp ${formData.phone}`
                 : `Masukkan kode OTP yang dikirim ke ${formData.email}`}
             </p>
           </div>
@@ -213,7 +260,10 @@ function RegisterPage() {
               <div className="flex items-start gap-2.5 text-red-600">
                 <Icon name="AlertCircle" size={18} className="shrink-0 mt-0.5" />
                 <p className="text-xs font-medium leading-relaxed">
-                  {formError || (typeof authError === 'string' ? authError : authError?.message || 'Terjadi kesalahan')}
+                  {formError ||
+                    (typeof authError === 'string'
+                      ? authError
+                      : authError?.message || 'Terjadi kesalahan')}
                 </p>
               </div>
             </div>
@@ -253,7 +303,10 @@ function RegisterPage() {
           {step === 'FORM' ? (
             <form onSubmit={handleRequestOtp} className="space-y-4">
               <div>
-                <label htmlFor="name" className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider">
+                <label
+                  htmlFor="name"
+                  className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider"
+                >
                   Nama Lengkap
                 </label>
                 <input
@@ -270,8 +323,11 @@ function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider">
-                  Alamat Email (Gmail / Aktif)
+                <label
+                  htmlFor="email"
+                  className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider"
+                >
+                  Alamat Email
                 </label>
                 <input
                   type="email"
@@ -290,8 +346,11 @@ function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="phone" className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider">
-                  Nomor Telepon / WhatsApp <span className="normal-case font-normal text-gray-500">(Opsional)</span>
+                <label
+                  htmlFor="phone"
+                  className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider"
+                >
+                  Nomor Telepon / WhatsApp
                 </label>
                 <input
                   type="tel"
@@ -306,7 +365,10 @@ function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider">
+                <label
+                  htmlFor="password"
+                  className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider"
+                >
                   Kata Sandi
                 </label>
                 <input
@@ -323,7 +385,10 @@ function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider">
+                <label
+                  htmlFor="confirmPassword"
+                  className="block text-xs font-body font-medium text-gray-900 mb-1.5 uppercase tracking-wider"
+                >
                   Konfirmasi Kata Sandi
                 </label>
                 <input
@@ -353,28 +418,35 @@ function RegisterPage() {
                     Mengirim Kode OTP...
                   </>
                 ) : (
-                  'Lanjutkan & Kirim OTP'
+                  'Lanjutkan'
                 )}
               </Button>
             </form>
           ) : (
-            /* STEP 2: Email OTP Verification Form */
+            /* STEP 2: OTP Verification Form */
             <form onSubmit={handleVerifyAndRegister} className="space-y-5">
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
                 <div className="flex items-center justify-center gap-1.5 text-xs text-gray-600 mb-2">
-                  <Icon name="Mail" size={16} className="text-gray-700" />
-                  <span>Kode verifikasi dikirim ke:</span>
+                  <Icon
+                    name={activeOtpChannel === 'WHATSAPP' ? 'MessageSquare' : 'Mail'}
+                    size={16}
+                    className={activeOtpChannel === 'WHATSAPP' ? 'text-emerald-700' : 'text-gray-700'}
+                  />
+                  <span>
+                    Kode dikirim ke {activeOtpChannel === 'WHATSAPP' ? 'WhatsApp:' : 'Email:'}
+                  </span>
                 </div>
                 <p className="text-sm font-semibold text-gray-900 font-mono break-all">
-                  {formData.email}
+                  {activeOtpChannel === 'WHATSAPP' ? formData.phone : formData.email}
                 </p>
 
-                {/* Validity Timer Display */}
+                {/* Validity Timer Display (1 Minute) */}
                 <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border bg-white shadow-xs">
                   {validityTime > 0 ? (
                     <span className="text-emerald-700 flex items-center gap-1">
                       <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      Masa berlaku kode: <strong className="font-mono">{formatMinutes(validityTime)}</strong>
+                      Masa berlaku kode:{' '}
+                      <strong className="font-mono">{formatMinutes(validityTime)}</strong>
                     </span>
                   ) : (
                     <span className="text-red-600 font-semibold">
@@ -385,7 +457,10 @@ function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="otpCode" className="block text-xs font-body font-medium text-gray-900 mb-2 text-center uppercase tracking-wider">
+                <label
+                  htmlFor="otpCode"
+                  className="block text-xs font-body font-medium text-gray-900 mb-2 text-center uppercase tracking-wider"
+                >
                   Masukkan 6 Digit Kode OTP
                 </label>
                 <div className="flex justify-center">
@@ -425,15 +500,105 @@ function RegisterPage() {
                 )}
               </Button>
 
-              {/* Resend and Edit Email Actions */}
+              {/* Opsi Aktivitas: Kirim Kode ke WhatsApp jika belum terima email */}
+              <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-lg">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-1.5 bg-emerald-100 text-emerald-800 rounded-md shrink-0 mt-0.5">
+                    <Icon name="MessageSquare" size={16} />
+                  </div>
+                  <div className="flex-1 text-xs">
+                    <p className="font-semibold text-emerald-950 mb-0.5">
+                      {activeOtpChannel === 'WHATSAPP'
+                        ? 'Kirim Ulang ke WhatsApp?'
+                        : 'Tidak menerima kode di email?'}
+                    </p>
+                    <p className="text-emerald-800/90 leading-relaxed mb-2.5">
+                      {activeOtpChannel === 'WHATSAPP'
+                        ? 'Anda dapat meminta kode baru dikirimkan kembali ke nomor WhatsApp Anda.'
+                        : 'Kirimkan kode OTP verifikasi 6 digit langsung ke nomor WhatsApp Anda.'}
+                    </p>
+
+                    {formData.phone && !showWaInput ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isSendingWaOtp || cooldown > 0}
+                          onClick={() => handleSendWaOtp(formData.phone)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium rounded text-xs transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                        >
+                          {isSendingWaOtp ? (
+                            <>
+                              <Icon name="Loader2" size={13} className="animate-spin" />
+                              Mengirim ke WhatsApp...
+                            </>
+                          ) : (
+                            <>
+                              <Icon name="Send" size={13} />
+                              Kirim Kode ke WA ({formData.phone})
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWaPhoneInput(formData.phone)
+                            setShowWaInput(true)
+                          }}
+                          className="text-[11px] text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                        >
+                          Ganti Nomor WA
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex gap-1.5">
+                          <input
+                            type="tel"
+                            value={waPhoneInput}
+                            onChange={e => setWaPhoneInput(e.target.value)}
+                            placeholder="Nomor WA (contoh: 081234567890)"
+                            className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded focus:outline-none focus:ring-1 focus:ring-emerald-600 font-mono"
+                          />
+                          <button
+                            type="button"
+                            disabled={isSendingWaOtp || !waPhoneInput.trim()}
+                            onClick={() => handleSendWaOtp(waPhoneInput)}
+                            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium rounded text-xs cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+                          >
+                            {isSendingWaOtp ? (
+                              <>
+                                <Icon name="Loader2" size={12} className="animate-spin" />
+                                Mengirim...
+                              </>
+                            ) : (
+                              'Kirim ke WA'
+                            )}
+                          </button>
+                        </div>
+                        {formData.phone && (
+                          <button
+                            type="button"
+                            onClick={() => setShowWaInput(false)}
+                            className="text-[11px] text-gray-500 hover:text-gray-700 underline"
+                          >
+                            Batal ganti nomor
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Resend and Edit Actions */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs">
                 <button
                   type="button"
-                  disabled={cooldown > 0 || isSendingOtp}
+                  disabled={cooldown > 0 || isSendingOtp || isSendingWaOtp}
                   onClick={handleRequestOtp}
                   className="text-gray-700 hover:text-gray-900 underline font-medium disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  {cooldown > 0 ? `Kirim ulang kode (${cooldown}s)` : 'Kirim Ulang Kode OTP'}
+                  {cooldown > 0 ? `Kirim ulang via email (${cooldown}s)` : 'Kirim Ulang via Email'}
                 </button>
 
                 <button

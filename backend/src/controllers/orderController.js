@@ -110,45 +110,13 @@ export const createOrder = async (req, res, next) => {
       })
     }
 
-    // Validate COD payment method with Phone Verification and COD Guard rules
+    // Reject COD payment method (disabled for security)
     if (paymentMethod && paymentMethod.toLowerCase() === 'cod') {
-      let isVerified = isPhoneNumberVerified(shippingPhone)
-
-      // Fallback: If user has saved verified phone in database matching shippingPhone
-      if (!isVerified && req.userId && shippingPhone) {
-        const userRecord = await prisma.user.findUnique({
-          where: { id: req.userId },
-          select: { phone: true },
-        })
-        if (
-          userRecord?.phone &&
-          normalizePhoneNumber(userRecord.phone) === normalizePhoneNumber(shippingPhone)
-        ) {
-          isVerified = true
-        }
-      }
-
-      if (!isVerified) {
-        return res.status(400).json({
-          error:
-            'Nomor WhatsApp penerima belum diverifikasi. Silakan lakukan verifikasi OTP WhatsApp terlebih dahulu untuk memilih metode pembayaran COD.',
-          code: 'PHONE_NOT_VERIFIED',
-        })
-      }
-
-      const totalWithShipping = totalAmount + verifiedShippingFee
-      const codCheck = await validateCodEligibility({
-        userId: req.userId,
-        shippingPhone,
-        totalAmount: totalWithShipping,
+      return res.status(400).json({
+        error:
+          'Metode pembayaran COD (Bayar di Tempat) telah dinonaktifkan demi keamanan transaksi. Silakan pilih metode pembayaran Transfer Bank, Virtual Account, atau QRIS.',
+        code: 'COD_DISABLED',
       })
-
-      if (!codCheck.eligible) {
-        return res.status(400).json({
-          error: codCheck.message,
-          code: codCheck.reason,
-        })
-      }
     }
 
     // Create order with items (transaction)

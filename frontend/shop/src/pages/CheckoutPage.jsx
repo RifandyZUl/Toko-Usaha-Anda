@@ -170,7 +170,7 @@ function CheckoutPage() {
       longitude: parsedAddress.longitude || '',
       shippingCourier: 'JNE',
       shippingFee: 15000,
-      paymentMethod: 'cod',
+      paymentMethod: 'transfer',
       selectedBank: 'bca',
     }
   }, [user])
@@ -198,30 +198,6 @@ function CheckoutPage() {
           setIsProcessing(false)
           scrollToError()
           return
-        }
-
-        // Validate COD requirements
-        if (values.paymentMethod === 'cod') {
-          if (!codEligibilityState.eligible) {
-            setOrderError(codEligibilityState.message || 'Metode COD tidak memenuhi syarat.')
-            setIsProcessing(false)
-            scrollToError()
-            return
-          }
-
-          if (!isSamePhoneNumber(values.shippingPhone, verifiedPhone)) {
-            setOrderError('Nomor WhatsApp belum diverifikasi atau telah diganti. Silakan verifikasi nomor Anda dengan tombol "Kirim OTP via WhatsApp" pada panel di bawah.')
-            setIsProcessing(false)
-            const el = document.getElementById('cod-verification-panel')
-            if (el) {
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              el.classList.add('ring-2', 'ring-emerald-500')
-              setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-500'), 2500)
-            } else {
-              scrollToError()
-            }
-            return
-          }
         }
 
         // 1. Sync local cart to backend
@@ -1547,7 +1523,7 @@ function CheckoutPage() {
                   <label className="block text-xs font-heading font-semibold text-gray-900 mb-4 uppercase tracking-wider">
                     Metode Pembayaran
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Bank Transfer (Virtual Account) */}
                     <label
                       className={`flex flex-col p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
@@ -1603,50 +1579,7 @@ function CheckoutPage() {
                         dll.
                       </p>
                     </label>
-
-                    {/* Cash on Delivery (COD) */}
-                    <label
-                      className={`flex flex-col p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
-                        values.paymentMethod === 'cod'
-                          ? 'border-primary-500 bg-primary-50/20 ring-1 ring-primary-500 shadow-sm'
-                          : 'border-gray-200 hover:border-gray-400 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          value="cod"
-                          checked={values.paymentMethod === 'cod'}
-                          onChange={handleChange}
-                          className="w-4 h-4 text-primary-600 focus:ring-primary-500"
-                          disabled={isSubmitting || isProcessing}
-                        />
-                        <span className="text-sm font-heading font-semibold text-gray-900">
-                          Cash on Delivery (COD)
-                        </span>
-                      </div>
-                      <p className="text-[11px] font-body text-gray-500 pl-7 leading-relaxed">
-                        Bayar dengan uang tunai saat kurir mengantarkan barang pesanan langsung ke
-                        rumah Anda.
-                      </p>
-                    </label>
                   </div>
-
-                  {/* COD Guard & Phone Verification Panel */}
-                  {values.paymentMethod === 'cod' && (
-                    <CodVerificationSection
-                      shippingPhone={values.shippingPhone}
-                      onPhoneChange={(val) => {
-                        handleChange({ target: { name: 'shippingPhone', value: val } })
-                      }}
-                      orderTotal={totalPrice + Number(values.shippingFee || 0)}
-                      isPhoneVerified={isSamePhoneNumber(values.shippingPhone, verifiedPhone)}
-                      onPhoneVerified={(phone) => setVerifiedPhone(phone)}
-                      onResetVerification={() => setVerifiedPhone('')}
-                      onEligibilityChange={setCodEligibilityState}
-                    />
-                  )}
 
                   {/* Sub-panel for Bank Transfer Selection */}
                   {values.paymentMethod === 'transfer' && (

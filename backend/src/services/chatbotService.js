@@ -22,7 +22,7 @@ const buildMainMenuResponse = (customerName) => {
     `Ada yang bisa kami bantu hari ini? Kakak cukup balas chat ini dengan angka atau kata kunci di bawah ya:\n\n` +
     `1️⃣ *Katalog* — Lihat daftar produk & promo terbaru\n` +
     `2️⃣ *Cek Pesanan* — Cek status & resi pengiriman pesanan Kakak\n` +
-    `3️⃣ *Cara Bayar & COD* — Info pembayaran, ongkir & bayar di tempat\n` +
+    `3️⃣ *Cara Bayar & Ongkir* — Info pembayaran transfer, QRIS & ongkir\n` +
     `4️⃣ *Admin / CS* — Ngobrol langsung dengan tim admin kami\n\n` +
     `_Silakan ketik angka *1*, *2*, *3*, atau *4* ya Kak 😊_`
   )
@@ -132,9 +132,10 @@ const handleOrderCheckResponse = async (senderPhone, customOrderId = null) => {
 const handlePaymentHelpResponse = () => {
   return (
     `Belanja di *Toko Usaha Anda* gampang dan aman Kak! Ini pilihan pembayarannya:\n\n` +
-    `1. *Transfer Bank & QRIS:* Pembayaran otomatis diverifikasi langsung via Midtrans.\n` +
-    `2. *COD (Bayar di Tempat):* Bayar tunai ke kurir saat barang sampai di rumah Kakak (aman dengan verifikasi WhatsApp).\n` +
-    `3. *Ongkir:* Dihitung otomatis sesuai kota & kecamatan tujuan (didukung JNE, J&T, SiCepat, POS).\n\n` +
+    `1. *Transfer Bank & Virtual Account:* Otomatis diverifikasi (BCA, Mandiri, BRI, BNI, Permata).\n` +
+    `2. *QRIS (E-Wallet):* Scan instan pakai GoPay, OVO, Dana, ShopeePay, dll.\n` +
+    `3. *COD:* Untuk menjaga keamanan dan garansi transaksi, metode COD saat ini tidak kami layani.\n` +
+    `4. *Ongkir:* Dihitung otomatis sesuai kota & kecamatan tujuan (didukung JNE, J&T, POS).\n\n` +
     `_Ketik *Menu* untuk kembali ke pilihan utama ya Kak 😊_`
   )
 }

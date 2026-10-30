@@ -11,7 +11,7 @@ import { logInfo, logError, logWarn } from '../utils/logger.js'
 const waOtpCache = new Map()
 const verifiedPhoneCache = new Map()
 
-export const OTP_TTL_MS = 5 * 60 * 1000 // 5 minutes validity
+export const OTP_TTL_MS = 1 * 60 * 1000 // 1 minute validity (60 seconds)
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours validity
 const MAX_VERIFY_ATTEMPTS = 5
 const RESEND_COOLDOWN_MS = 60 * 1000 // 60 seconds cooldown
@@ -87,7 +87,7 @@ export async function sendOtpToWhatsApp(phone) {
         },
         body: new URLSearchParams({
           target: normalized,
-          message: `[Toko Usaha Anda] Kode verifikasi Anda adalah: *${otp}*.\n\nKode berlaku selama 5 menit. Jangan berikan kode ini kepada siapa pun demi keamanan Anda.`,
+          message: `[Toko Usaha Anda] Kode verifikasi Anda adalah: *${otp}*.\n\nKode berlaku selama 1 menit. Jangan berikan kode ini kepada siapa pun demi keamanan Anda.`,
         }),
       })
 
@@ -98,7 +98,7 @@ export async function sendOtpToWhatsApp(phone) {
           success: true,
           message: 'Kode OTP telah dikirim ke nomor WhatsApp Anda.',
           simulated: false,
-          expiresInSeconds: 300,
+          expiresInSeconds: 60,
           cooldownSeconds: 60,
         }
       }
@@ -114,7 +114,7 @@ export async function sendOtpToWhatsApp(phone) {
   console.log(`[SIMULASI OTP WHATSAPP]`)
   console.log(`Nomor Tujuan : ${normalized} (${phone})`)
   console.log(`Kode OTP     : ${otp}`)
-  console.log(`Masa Berlaku : 5 Menit`)
+  console.log(`Masa Berlaku : 1 Menit`)
   console.log(`Catatan      : Isi FONNTE_TOKEN di backend/.env untuk kirim WA asli`)
   console.log(`======================================================\n`)
 
@@ -123,7 +123,7 @@ export async function sendOtpToWhatsApp(phone) {
     message: 'Kode OTP telah dikirim (Mode Simulasi). Periksa log konsol backend atau gunakan kode tertera.',
     simulated: true,
     devOtp: otp,
-    expiresInSeconds: 300,
+    expiresInSeconds: 60,
     cooldownSeconds: 60,
   }
 }
@@ -254,8 +254,121 @@ export async function sendEmailVerificationOtp(rawEmail) {
     message: sendResult.message,
     simulated: sendResult.simulated,
     devOtp: sendResult.devOtp,
-    expiresInSeconds: 300,
+    expiresInSeconds: 60,
     cooldownSeconds: 60,
+  }
+}
+
+/**
+ * Send OTP for Registration via WhatsApp (Fallback when email OTP is not received)
+ */
+export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
+  const email = (rawEmail || '').trim().toLowerCase()
+  if (!email || !email.includes('@')) {
+    const err = new Error('Format alamat email tidak valid.')
+    err.statusCode = 400
+    throw err
+  }
+
+  const normalized = normalizePhoneNumber(rawPhone)
+  if (!normalized || normalized.length < 10) {
+    const err = new Error('Nomor WhatsApp tidak valid. Masukkan minimal 10 digit angka.')
+    err.statusCode = 400
+    throw err
+  }
+
+  // Check if email already registered
+  const existingUser = await prisma.user.findUnique({ where: { email } })
+  if (existingUser) {
+    const err = new Error('Email ini sudah terdaftar. Silakan login atau gunakan email lain.')
+    err.statusCode = 409
+    throw err
+  }
+
+  // Check cooldown (60 seconds)
+  const latestOtp = await prisma.emailVerificationOtp.findFirst({
+    where: { email },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  if (latestOtp) {
+    const timeSinceLast = Date.now() - new Date(latestOtp.createdAt).getTime()
+    if (timeSinceLast < RESEND_COOLDOWN_MS) {
+      const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - timeSinceLast) / 1000)
+      const err = new Error(`Mohon tunggu ${remainingSeconds} detik sebelum meminta kode OTP baru.`)
+      err.statusCode = 429
+      throw err
+    }
+  }
+
+  // Generate 6-digit OTP code with 1 minute expiry
+  const otp = crypto.randomInt(100000, 999999).toString()
+  const otpHash = hashOtp(otp)
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS)
+
+  // Replace existing OTP in DB
+  await prisma.emailVerificationOtp.deleteMany({ where: { email } })
+  await prisma.emailVerificationOtp.create({
+    data: {
+      email,
+      otpHash,
+      expiresAt,
+    },
+  })
+
+  const fonnteToken = process.env.FONNTE_TOKEN?.trim()
+
+  if (fonnteToken && fonnteToken !== 'your_fonnte_token_here') {
+    try {
+      const response = await fetch('https://api.fonnte.com/send', {
+        method: 'POST',
+        headers: {
+          Authorization: fonnteToken,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          target: normalized,
+          message: `[Toko Usaha Anda] Kode verifikasi pendaftaran akun Anda adalah: *${otp}*.\n\nKode berlaku selama 1 menit. Jangan berikan kode ini kepada siapa pun demi keamanan Anda.`,
+        }),
+      })
+
+      const result = await response.json()
+      if (result.status === true) {
+        logInfo(`Real WhatsApp Registration OTP sent successfully to ${normalized}`)
+        return {
+          success: true,
+          message: `Kode verifikasi OTP telah dikirim ke nomor WhatsApp Anda (${normalized}).`,
+          simulated: false,
+          expiresInSeconds: 60,
+          cooldownSeconds: 60,
+          phone: normalized,
+        }
+      }
+
+      logWarn('Fonnte API responded with error status:', result)
+    } catch (err) {
+      logError('Fonnte WhatsApp gateway error for registration OTP:', err)
+    }
+  }
+
+  // Fallback Simulation Mode
+  console.log(`\n======================================================`)
+  console.log(`[SIMULASI OTP WHATSAPP PENDAFTARAN]`)
+  console.log(`Email User   : ${email}`)
+  console.log(`Nomor Tujuan : ${normalized} (${rawPhone})`)
+  console.log(`Kode OTP     : ${otp}`)
+  console.log(`Masa Berlaku : 1 Menit`)
+  console.log(`Catatan      : Isi FONNTE_TOKEN di backend/.env untuk kirim WA asli`)
+  console.log(`======================================================\n`)
+
+  return {
+    success: true,
+    message: `Kode OTP verifikasi telah dikirim ke nomor WhatsApp (${normalized}) [Mode Simulasi]. Gunakan kode tertera.`,
+    simulated: true,
+    devOtp: otp,
+    expiresInSeconds: 60,
+    cooldownSeconds: 60,
+    phone: normalized,
   }
 }
 
@@ -289,7 +402,7 @@ export async function verifyEmailVerificationOtp(rawEmail, submittedCode) {
     await prisma.emailVerificationOtp.deleteMany({ where: { email } })
     return {
       success: false,
-      message: 'Kode OTP telah kedaluwarsa (lebih dari 5 menit). Silakan minta kode baru.',
+      message: 'Kode OTP telah kedaluwarsa (lebih dari 1 menit). Silakan minta kode baru.',
     }
   }
 
