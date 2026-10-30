@@ -10,12 +10,14 @@ import EmptyState from '../components/EmptyState'
 import BackToTop from '../components/BackToTop'
 import { scrollToProducts } from '../utils/scrollUtils'
 import { useDataFetching } from '../hooks'
+import { logDebug } from '../utils/logger'
 
 /**
  * Shop Page - Toko Usaha Anda E-Commerce
  */
 function ShopPage() {
   const [searchParams] = useSearchParams()
+  const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
 
   // Fetch categories
@@ -99,8 +101,8 @@ function ShopPage() {
       try {
         let result
 
-        // Jika tidak ada keyword pencarian, ambil 10 produk unggulan (terlaris / most ordered)
-        if (!searchQuery.trim()) {
+        // Jika tidak ada keyword pencarian dan kategori 'all', ambil 10 produk unggulan (terlaris)
+        if (!searchQuery.trim() && selectedCategory === 'all') {
           result = await getFeaturedProducts(10)
           if (!result.success || !result.products || result.products.length === 0) {
             result = await getProducts({ page: 1, limit: 10 })
@@ -110,6 +112,7 @@ function ShopPage() {
             page: 1,
             limit: 20,
             search: searchQuery.trim(),
+            ...(selectedCategory !== 'all' ? { categoryId: selectedCategory } : {}),
           }
           result = await getProducts(params)
         }
@@ -133,7 +136,7 @@ function ShopPage() {
 
     fetchProducts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories.length, categoriesLoading, searchQuery])
+  }, [categories.length, categoriesLoading, searchQuery, selectedCategory])
 
   // Combine loading and error states
   const loading = categoriesLoading || productsLoading
