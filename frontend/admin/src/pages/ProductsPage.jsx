@@ -6,6 +6,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Plus, Edit, Trash2, Package } from 'lucide-react'
 import { uploadImage } from '../services/upload'
+import { compressImage } from '../utils/imageCompressor'
 import ErrorMessage from '../components/common/ErrorMessage'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import { TableSkeleton, Skeleton } from '../components/common/Skeleton'
@@ -155,7 +156,7 @@ export default function ProductsPage() {
   }
 
   /**
-   * Handle image files selection (supports multiple files)
+   * Handle image files selection (supports multiple files with automatic compression)
    * @param {React.ChangeEvent<HTMLInputElement>} e - File input event
    */
   const handleImageChange = async e => {
@@ -168,8 +169,8 @@ export default function ProductsPage() {
         alert(`File ${file.name} bukan gambar. Hanya file gambar yang diizinkan.`)
         continue
       }
-      if (file.size > 5 * 1024 * 1024) {
-        alert(`Ukuran file ${file.name} melebihi batas 5MB.`)
+      if (file.size > 25 * 1024 * 1024) {
+        alert(`Ukuran file ${file.name} terlalu besar (maksimal 25MB).`)
         continue
       }
       validFiles.push(file)
@@ -181,11 +182,18 @@ export default function ProductsPage() {
     const uploadedUrls = []
 
     for (const file of validFiles) {
-      const result = await uploadImage(file)
-      if (result.success && result.url) {
-        uploadedUrls.push(result.url)
-      } else {
-        alert(result.error || `Gagal mengupload ${file.name}`)
+      try {
+        // Automatically compress camera/large images on client-side to < 1MB
+        const fileToUpload = await compressImage(file)
+        const result = await uploadImage(fileToUpload)
+        if (result.success && result.url) {
+          uploadedUrls.push(result.url)
+        } else {
+          alert(result.error || `Gagal mengupload ${file.name}`)
+        }
+      } catch (err) {
+        console.error('Upload compression error:', err)
+        alert(`Gagal memproses gambar ${file.name}`)
       }
     }
 

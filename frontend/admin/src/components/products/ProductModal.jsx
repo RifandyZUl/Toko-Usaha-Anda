@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { X, Upload, Plus, Trash2, Sparkles, Layers } from 'lucide-react'
+import { X, Upload, Plus, Trash2, Sparkles, Layers, GripVertical } from 'lucide-react'
 import { createProduct, updateProduct } from '../../services/products'
 import ErrorMessage from '../common/ErrorMessage'
 import { validateProduct } from '../../utils/validation'
@@ -31,6 +31,8 @@ export default function ProductModal({
   const [localImagePreview, setLocalImagePreview] = useState(imagePreview)
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false)
   const [showMatrixGenerator, setShowMatrixGenerator] = useState(false)
+  const [draggedImageIndex, setDraggedImageIndex] = useState(null)
+  const [dragOverIndex, setDragOverIndex] = useState(null)
 
   // State for 2D Matrix Generator
   const [matrixDim1, setMatrixDim1] = useState({ name: 'Warna', values: 'Merah, Biru, Hitam' })
@@ -707,7 +709,7 @@ export default function ProductModal({
               <div>
                 <label className="block text-sm font-bold text-gray-900">Galeri Foto Produk</label>
                 <p className="text-xs text-gray-500">
-                  Unggah beberapa foto sekaligus. Foto pertama akan menjadi foto sampul/utama.
+                  Unggah beberapa foto sekaligus. <strong>Seret (drag & drop)</strong> foto untuk mengatur urutan. Foto pertama otomatis menjadi foto utama.
                 </p>
               </div>
               <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 text-gray-700">
@@ -715,63 +717,107 @@ export default function ProductModal({
               </span>
             </div>
 
-            {/* Thumbnails Grid */}
+            {/* Thumbnails Grid with Native Drag-and-Drop */}
             {((formData.images && formData.images.length > 0) || formData.image) && (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 my-3">
                 {(formData.images && formData.images.length > 0
                   ? formData.images
                   : [formData.image]
-                ).map((imgUrl, idx) => (
-                  <div
-                    key={`${imgUrl}-${idx}`}
-                    className={`relative group rounded-lg overflow-hidden border-2 bg-white shadow-sm transition-all ${
-                      idx === 0 ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-gray-200'
-                    }`}
-                  >
-                    <div className="aspect-square w-full overflow-hidden bg-gray-100 flex items-center justify-center">
-                      <img
-                        src={imgUrl}
-                        alt={`Produk ${idx + 1}`}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                        onError={e => {
-                          e.target.src = '/placeholder.jpg'
-                        }}
-                      />
-                    </div>
+                ).map((imgUrl, idx) => {
+                  const isBeingDragged = draggedImageIndex === idx
+                  const isOver = dragOverIndex === idx
 
-                    {/* Badge Utama */}
-                    {idx === 0 ? (
-                      <span className="absolute top-1.5 left-1.5 bg-primary-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
-                        Foto Utama
-                      </span>
-                    ) : (
+                  return (
+                    <div
+                      key={`${imgUrl}-${idx}`}
+                      draggable={!uploadingImage}
+                      onDragStart={e => {
+                        e.dataTransfer.effectAllowed = 'move'
+                        setDraggedImageIndex(idx)
+                      }}
+                      onDragOver={e => {
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        if (dragOverIndex !== idx) setDragOverIndex(idx)
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverIndex === idx) setDragOverIndex(null)
+                      }}
+                      onDrop={e => {
+                        e.preventDefault()
+                        if (draggedImageIndex === null || draggedImageIndex === idx) {
+                          setDragOverIndex(null)
+                          return
+                        }
+                        const list = [...(formData.images || (formData.image ? [formData.image] : []))]
+                        const [movedItem] = list.splice(draggedImageIndex, 1)
+                        list.splice(idx, 0, movedItem)
+                        setFormData({ ...formData, images: list, image: list[0] })
+                        setDraggedImageIndex(null)
+                        setDragOverIndex(null)
+                      }}
+                      onDragEnd={() => {
+                        setDraggedImageIndex(null)
+                        setDragOverIndex(null)
+                      }}
+                      className={`relative group rounded-lg overflow-hidden border-2 bg-white shadow-sm transition-all cursor-grab active:cursor-grabbing ${
+                        idx === 0 ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-gray-200'
+                      } ${isBeingDragged ? 'opacity-40 scale-95' : ''} ${
+                        isOver && !isBeingDragged ? 'border-dashed border-primary-600 scale-102 ring-2 ring-primary-400/40' : ''
+                      }`}
+                      title="Tahan & seret untuk memindahkan posisi foto"
+                    >
+                      <div className="aspect-square w-full overflow-hidden bg-gray-100 flex items-center justify-center pointer-events-none">
+                        <img
+                          src={imgUrl}
+                          alt={`Produk ${idx + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          onError={e => {
+                            e.target.src = '/placeholder.jpg'
+                          }}
+                        />
+                      </div>
+
+                      {/* Badge Utama */}
+                      {idx === 0 ? (
+                        <span className="absolute top-1.5 left-1.5 bg-primary-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow pointer-events-none">
+                          Foto Utama
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const list = [...(formData.images || [])]
+                            const [picked] = list.splice(idx, 1)
+                            const next = [picked, ...list]
+                            setFormData({ ...formData, images: next, image: next[0] })
+                          }}
+                          className="absolute top-1.5 left-1.5 bg-gray-900/80 hover:bg-primary-600 text-white text-[10px] font-medium px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Jadikan foto utama"
+                        >
+                          Set Utama
+                        </button>
+                      )}
+
+                      {/* Drag Handle Indicator */}
+                      <div className="absolute bottom-1.5 right-1.5 bg-black/50 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none flex items-center gap-0.5 text-[9px] px-1">
+                        <GripVertical className="h-3 w-3" />
+                        <span>Seret</span>
+                      </div>
+
+                      {/* Tombol Hapus */}
                       <button
                         type="button"
-                        onClick={() => {
-                          const list = [...(formData.images || [])]
-                          const [picked] = list.splice(idx, 1)
-                          const next = [picked, ...list]
-                          setFormData({ ...formData, images: next, image: next[0] })
-                        }}
-                        className="absolute top-1.5 left-1.5 bg-gray-900/80 hover:bg-primary-600 text-white text-[10px] font-medium px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Jadikan foto utama"
+                        onClick={() => onRemoveImage(idx)}
+                        className="absolute top-1.5 right-1.5 bg-red-600 text-white rounded-full p-1 shadow hover:bg-red-700 transition-colors"
+                        title="Hapus foto ini"
+                        disabled={uploadingImage}
                       >
-                        Set Utama
+                        <X className="h-3.5 w-3.5" />
                       </button>
-                    )}
-
-                    {/* Tombol Hapus */}
-                    <button
-                      type="button"
-                      onClick={() => onRemoveImage(idx)}
-                      className="absolute top-1.5 right-1.5 bg-red-600 text-white rounded-full p-1 shadow hover:bg-red-700 transition-colors"
-                      title="Hapus foto ini"
-                      disabled={uploadingImage}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
+                    </div>
+                  )
+                })}
               </div>
             )}
 

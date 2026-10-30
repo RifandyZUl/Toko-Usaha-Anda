@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { getProducts, getCategories, getFeaturedProducts } from '../services/products'
+import { apiClient } from '../config/api'
 import ShopNavigation from '../components/ShopNavigation'
 import ErrorMessage from '../components/ErrorMessage'
 import ProductCard from '../components/ProductCard'
@@ -62,19 +63,28 @@ function ShopPage() {
     setContactForm(prev => ({ ...prev, [name]: value }))
   }
 
-  const handleContactSubmit = e => {
+  const handleContactSubmit = async e => {
     e.preventDefault()
     if (!contactForm.name.trim() || !contactForm.email.trim() || !contactForm.comment.trim()) {
       return
     }
 
     setIsSubmittingContact(true)
-    setTimeout(() => {
-      setIsSubmittingContact(false)
+    setContactStatus({ sent: false, error: null })
+
+    try {
+      await apiClient.post('/contact', contactForm)
       setContactStatus({ sent: true, error: null })
       setContactForm({ name: '', email: '', phone: '', comment: '' })
       setTimeout(() => setContactStatus({ sent: false, error: null }), 7000)
-    }, 600)
+    } catch (err) {
+      setContactStatus({
+        sent: false,
+        error: err.message || 'Gagal mengirim pesan. Silakan coba kembali.',
+      })
+    } finally {
+      setIsSubmittingContact(false)
+    }
   }
 
   // Fetch products when category or categories change
@@ -482,6 +492,13 @@ function ShopPage() {
                         <strong className="block font-semibold">Pesan Anda Berhasil Terkirim!</strong>
                         <span>Terima kasih telah menghubungi Toko Usaha Anda. Tim kami akan segera merespons ke email/telepon Anda.</span>
                       </div>
+                    </div>
+                  )}
+
+                  {contactStatus.error && (
+                    <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2.5 shadow-xs">
+                      <span className="text-red-600 font-bold">⚠️</span>
+                      <span>{contactStatus.error}</span>
                     </div>
                   )}
 
