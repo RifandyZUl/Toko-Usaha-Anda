@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { login, register, getCurrentUser, logout as logoutAPI } from '../services/auth'
+import { getCart } from '../services/cart'
+import { useCartStore } from './cartStore'
 
 const authChannel =
   typeof window !== 'undefined' && 'BroadcastChannel' in window
@@ -18,6 +20,11 @@ export const useAuthStore = create(
         authChannel.onmessage = (event) => {
           if (event.data?.type === 'LOGOUT') {
             set({ user: null, error: null })
+            try {
+              useCartStore.getState().clearCart()
+            } catch (e) {
+              console.error('Failed to clear cart on sync logout:', e)
+            }
           } else if (event.data?.type === 'LOGIN') {
             get().checkAuth()
           }
@@ -31,10 +38,37 @@ export const useAuthStore = create(
         error: null,
 
         // Actions
-        setAuth: (user) => {
+        setAuth: async (user) => {
           const unwrapped = user?.user || user
           set({ user: unwrapped, error: null })
           authChannel?.postMessage({ type: 'LOGIN' })
+
+          // Sync user's cart from backend if available
+          if (unwrapped) {
+            try {
+              const cartRes = await getCart()
+              if (cartRes.success && Array.isArray(cartRes.items) && cartRes.items.length > 0) {
+                const formatted = cartRes.items.map(item => {
+                  const prod = item.product || {}
+                  const effectivePrice = item.variant ? Number(item.variant.price) : Number(prod.price || item.price || 0)
+                  const effectiveStock = item.variant ? item.variant.stock : (prod.stock || 0)
+                  return {
+                    id: prod.id || item.productId,
+                    name: prod.name || 'Produk',
+                    price: effectivePrice,
+                    image: prod.imageUrl || prod.image || '/placeholder.jpg',
+                    stock: effectiveStock,
+                    variantId: item.variantId || null,
+                    variantName: item.variantName || item.variant?.name || null,
+                    quantity: item.quantity || 1,
+                  }
+                })
+                useCartStore.getState().setItems(formatted)
+              }
+            } catch (cartErr) {
+              console.warn('Could not sync user cart from backend:', cartErr)
+            }
+          }
         },
 
       /**
@@ -43,6 +77,11 @@ export const useAuthStore = create(
        */
       clearAuth: () => {
         set({ user: null, error: null })
+        try {
+          useCartStore.getState().clearCart()
+        } catch (e) {
+          console.error('Failed to clear cart on clearAuth:', e)
+        }
       },
 
       login: async (email, password) => {
@@ -90,6 +129,11 @@ export const useAuthStore = create(
        */
       logout: async () => {
         set({ user: null, error: null })
+        try {
+          useCartStore.getState().clearCart()
+        } catch (e) {
+          console.error('Failed to clear cart on logout:', e)
+        }
         authChannel?.postMessage({ type: 'LOGOUT' })
         try {
           await logoutAPI()

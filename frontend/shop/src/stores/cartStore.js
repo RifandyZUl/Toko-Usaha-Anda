@@ -93,6 +93,20 @@ export const useCartStore = create(
 
       clearCart: () => {
         set({ items: [], selectedItemKeys: [] })
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.removeItem('toko-cart-storage')
+          }
+        } catch (e) {
+          console.error('Failed to clear cart storage:', e)
+        }
+      },
+
+      setItems: (newItems = []) => {
+        set({
+          items: newItems,
+          selectedItemKeys: newItems.map(it => getItemKey(it)),
+        })
       },
 
       // Selection actions for selective checkout
