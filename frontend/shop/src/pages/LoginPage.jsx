@@ -35,11 +35,7 @@ function LoginPage() {
 
   const validateForm = () => {
     if (!formData.email.trim()) {
-      setFormError('Email harus diisi')
-      return false
-    }
-    if (!formData.email.includes('@')) {
-      setFormError('Email tidak valid')
+      setFormError('Email atau nomor WhatsApp harus diisi')
       return false
     }
     if (!formData.password) {
@@ -112,19 +108,19 @@ function LoginPage() {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
+            {/* Email or WhatsApp Phone */}
             <div>
               <label htmlFor="email" className="block text-xs font-body font-medium text-gray-900 mb-2 uppercase tracking-wider">
-                Email
+                Email atau No. WhatsApp
               </label>
               <input
-                type="email"
+                type="text"
                 id="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 focus:border-gray-900 focus:outline-none transition-colors"
-                placeholder="your@email.com"
+                placeholder="nama@email.com atau 081234567890"
                 required
                 disabled={isLoading}
               />

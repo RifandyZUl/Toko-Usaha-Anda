@@ -27,10 +27,10 @@ function ProductDetailPage() {
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [touchStartX, setTouchStartX] = useState(null)
   const [expandedSections, setExpandedSections] = useState({
+    details: false,
     delivery: false,
     reviews: false,
   })
-  const [showProductDetailsModal, setShowProductDetailsModal] = useState(false)
 
   // Fetch product using useDataFetching hook
   const fetchProductById = useCallback(
@@ -213,16 +213,7 @@ function ProductDetailPage() {
     return total / productReviews.length
   }, [productReviews])
 
-  // Handle ESC key to close modal
-  useEffect(() => {
-    const handleEscape = e => {
-      if (e.key === 'Escape' && showProductDetailsModal) {
-        setShowProductDetailsModal(false)
-      }
-    }
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [showProductDetailsModal])
+
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -512,16 +503,55 @@ function ProductDetailPage() {
 
                 {/* Collapsible Sections */}
                 <div className="space-y-0 border-t border-gray-200 pt-4">
-                  {/* View Product Details */}
+                  {/* Detail Produk Collapsible Accordion */}
                   <div className="border-b border-gray-200">
                     <button
-                      onClick={() => setShowProductDetailsModal(true)}
-                      className="w-full flex items-center justify-between py-3 text-left hover:text-black transition-colors"
+                      type="button"
+                      onClick={() => toggleSection('details')}
+                      className="w-full flex items-center justify-between py-3 text-left hover:text-black transition-colors cursor-pointer"
                     >
-                      <span className="text-sm font-heading font-medium text-black underline">
-                        View Product Details
+                      <span className="text-sm font-heading font-medium text-black">
+                        Detail Produk
                       </span>
+                      <Icon
+                        name="ChevronDown"
+                        size={16}
+                        className={`text-gray-600 transition-transform ${
+                          expandedSections.details ? 'rotate-180' : ''
+                        }`}
+                      />
                     </button>
+                    {expandedSections.details && (
+                      <div className="pb-4 space-y-2.5 text-xs font-body text-gray-600">
+                        <div>
+                          <span className="font-medium text-gray-900">Kategori:</span>{' '}
+                          {product?.category?.name || '-'}
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-900">SKU:</span>{' '}
+                          {product?.id?.slice(0, 8).toUpperCase() || '-'}
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-900">Stok:</span>{' '}
+                          {effectiveStock} unit {selectedVariant ? `(Varian: ${selectedVariant.name})` : ''}
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-900">Berat Produk:</span>{' '}
+                          {product?.weight || 1000} gram
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-900">Asal:</span> Indonesia
+                        </div>
+                        {product?.description && (
+                          <div className="pt-2 mt-2 border-t border-gray-100">
+                            <span className="font-medium text-gray-900 block mb-1">Rincian Lengkap:</span>
+                            <p className="text-gray-600 leading-relaxed text-justify">
+                              {product.description}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Free Delivery and Returns */}
@@ -653,95 +683,7 @@ function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Product Details Modal */}
-            {showProductDetailsModal && (
-              <div
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-                onClick={() => setShowProductDetailsModal(false)}
-              >
-                <div
-                  className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-                  onClick={e => e.stopPropagation()}
-                >
-                  {/* Modal Header */}
-                  <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                    <h2 className="text-lg font-heading font-medium text-gray-900">
-                      Product Details
-                    </h2>
-                    <button
-                      onClick={() => setShowProductDetailsModal(false)}
-                      className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
-                    >
-                      <Icon name="X" size={20} className="text-gray-600" />
-                    </button>
-                  </div>
 
-                  {/* Modal Content */}
-                  <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                      {/* Product Image */}
-                      <div className="overflow-hidden bg-gray-50 border border-gray-200 rounded flex items-center justify-center">
-                        <img
-                          src={product?.imageUrl || product?.image || '/placeholder.jpg'}
-                          alt={product?.name || 'Product'}
-                          className="max-w-full max-h-[300px] w-auto h-auto object-contain"
-                          loading="lazy"
-                          onError={e => {
-                            if (!e.target.src.includes('placeholder')) {
-                              e.target.src = '/placeholder.jpg'
-                            }
-                          }}
-                        />
-                      </div>
-
-                      {/* Product Info */}
-                      <div>
-                        <h3 className="text-xl font-heading font-medium text-gray-900 mb-2">
-                          {product?.name || 'Product Name'}
-                        </h3>
-                        <p className="text-lg font-heading font-medium text-gray-900 mb-4">
-                          {formatCurrency(Number(product?.price || 0))}
-                        </p>
-                        {product?.description && (
-                          <p className="text-sm font-body text-gray-600 leading-relaxed mb-4 text-justify">
-                            {product.description}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Product Details */}
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-heading font-medium text-gray-900 mb-3">
-                        Product Details
-                      </h4>
-                      <ul className="space-y-2 text-sm font-body text-gray-600">
-                        {product?.category && (
-                          <li>
-                            <span className="font-medium">Kategori:</span> {product.category.name}
-                          </li>
-                        )}
-                        <li>
-                          <span className="font-medium">SKU:</span> {product?.id?.slice(0, 8).toUpperCase() || '-'}
-                        </li>
-                        <li>
-                          <span className="font-medium">Stok:</span> {product?.stock || 0} unit
-                        </li>
-                        <li>
-                          <span className="font-medium">Asal:</span> Indonesia
-                        </li>
-                        {product?.description && (
-                          <li>
-                            <span className="font-medium">Deskripsi:</span>
-                            <p className="mt-1 text-gray-600 text-justify">{product.description}</p>
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         )}
       </main>

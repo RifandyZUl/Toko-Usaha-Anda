@@ -38,6 +38,8 @@ import {
   Trash2,
   ArrowLeft,
   Check,
+  MessageSquare,
+  RotateCcw,
 } from 'lucide-react'
 
 /**
@@ -87,6 +89,8 @@ const iconMap = {
   Trash2,
   ArrowLeft,
   Check,
+  MessageSquare,
+  RotateCcw,
 }
 
 function Icon({ name, className = '', size = 24, ...props }) {

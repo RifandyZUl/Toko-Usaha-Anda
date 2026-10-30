@@ -6,6 +6,7 @@ import {
   sendEmailVerificationOtp,
   verifyEmailVerificationOtp,
   sendRegisterOtpToWhatsApp,
+  validateEmailDomain,
 } from '../services/otpService.js'
 
 /**
@@ -86,6 +87,12 @@ export async function sendEmailOtp(req, res) {
       return res.status(400).json({ error: 'Alamat email tidak valid.' })
     }
 
+    // Validasi domain dan format email sebelum generate OTP
+    const domainCheck = await validateEmailDomain(cleanEmail)
+    if (!domainCheck.valid) {
+      return res.status(400).json({ error: domainCheck.message })
+    }
+
     // Check if email already registered
     const existing = await prisma.user.findUnique({ where: { email: cleanEmail } })
     if (existing) {
@@ -126,22 +133,18 @@ export async function verifyEmailOtp(req, res) {
 }
 
 /**
- * Send OTP via WhatsApp for Registration (fallback when email OTP not received)
+ * Send OTP via WhatsApp for WhatsApp-First Registration (Opsi A)
  */
 export async function sendRegisterWaOtp(req, res) {
   try {
-    const { email, phone } = req.body
-    const cleanEmail = (email || '').trim().toLowerCase()
+    const { phone } = req.body
     const cleanPhone = (phone || '').trim()
 
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      return res.status(400).json({ error: 'Alamat email wajib diisi dengan benar.' })
-    }
     if (!cleanPhone || cleanPhone.length < 8) {
       return res.status(400).json({ error: 'Nomor WhatsApp wajib diisi minimal 8 digit angka.' })
     }
 
-    const result = await sendRegisterOtpToWhatsApp(cleanEmail, cleanPhone)
+    const result = await sendRegisterOtpToWhatsApp(cleanPhone)
     return res.status(200).json(result)
   } catch (err) {
     const status = err.statusCode || 500

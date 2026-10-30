@@ -1,7 +1,61 @@
 import crypto from 'crypto'
+import dns from 'dns/promises'
 import prisma from '../config/database.js'
 import { sendEmailOtp } from './emailService.js'
 import { logInfo, logError, logWarn } from '../utils/logger.js'
+
+/**
+ * Validate email format and verify domain has active DNS MX records
+ * Rejects fake / non-existent domains before creating OTP
+ */
+export async function validateEmailDomain(email) {
+  const cleanEmail = (email || '').trim().toLowerCase()
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    return { valid: false, message: 'Format alamat email tidak valid.' }
+  }
+  const parts = cleanEmail.split('@')
+  if (parts.length !== 2 || !parts[1] || !parts[1].includes('.')) {
+    return { valid: false, message: 'Domain email tidak lengkap atau tidak valid.' }
+  }
+  const domain = parts[1].trim()
+
+  // Catch common domain typos
+  const typoMap = {
+    'gnail.com': 'gmail.com',
+    'gmaill.com': 'gmail.com',
+    'gmai.com': 'gmail.com',
+    'yaho.com': 'yahoo.com',
+    'hotmial.com': 'hotmail.com',
+  }
+  if (typoMap[domain]) {
+    return {
+      valid: false,
+      message: `Kemungkinan salah ketik "${domain}". Apakah maksud Anda "${typoMap[domain]}"?`,
+    }
+  }
+
+  // Check MX records via DNS
+  try {
+    const mxRecords = await dns.resolveMx(domain)
+    if (!mxRecords || mxRecords.length === 0) {
+      return {
+        valid: false,
+        message: `Domain email @${domain} tidak memiliki mail exchange (MX) aktif untuk menerima email.`,
+      }
+    }
+  } catch (err) {
+    if (err.code === 'ENOTFOUND' || err.code === 'ENODATA' || err.code === 'SERVFAIL') {
+      return {
+        valid: false,
+        message: `Domain email @${domain} tidak ditemukan di internet atau tidak dapat menerima email.`,
+      }
+    }
+    // Network glitch: log and let pass
+    logWarn(`DNS MX check warning for domain ${domain}:`, err.message)
+  }
+
+  return { valid: true }
+}
 
 /**
  * Service to manage Email & WhatsApp OTP generation, delivery, and verification.
@@ -211,6 +265,14 @@ export async function sendEmailVerificationOtp(rawEmail) {
     throw err
   }
 
+  // Domain validation & MX check (Opsi C)
+  const domainCheck = await validateEmailDomain(email)
+  if (!domainCheck.valid) {
+    const err = new Error(domainCheck.message)
+    err.statusCode = 400
+    throw err
+  }
+
   // Cek cooldown (minimal 60 detik)
   const latestOtp = await prisma.emailVerificationOtp.findFirst({
     where: { email },
@@ -263,16 +325,10 @@ export async function sendEmailVerificationOtp(rawEmail) {
 const waRegisterCooldownCache = new Map()
 
 /**
- * Send OTP for Registration via WhatsApp (Fallback when email OTP is not received)
+ * Send OTP for WhatsApp-First Registration (Opsi A)
+ * Stores OTP in waOtpCache keyed by phone number; does NOT touch emailVerificationOtp.
  */
-export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
-  const email = (rawEmail || '').trim().toLowerCase()
-  if (!email || !email.includes('@')) {
-    const err = new Error('Format alamat email tidak valid.')
-    err.statusCode = 400
-    throw err
-  }
-
+export async function sendRegisterOtpToWhatsApp(rawPhone) {
   const normalized = normalizePhoneNumber(rawPhone)
   if (!normalized || normalized.length < 10) {
     const err = new Error('Nomor WhatsApp tidak valid. Masukkan minimal 10 digit angka.')
@@ -280,15 +336,7 @@ export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
     throw err
   }
 
-  // 1. Check if email already registered
-  const existingUser = await prisma.user.findUnique({ where: { email } })
-  if (existingUser) {
-    const err = new Error('Email ini sudah terdaftar. Silakan login atau gunakan email lain.')
-    err.statusCode = 409
-    throw err
-  }
-
-  // 2. Check if phone number already registered to another user
+  // 1. Check if phone number already registered to another user
   const existingPhone = await prisma.user.findFirst({
     where: {
       OR: [
@@ -304,7 +352,7 @@ export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
     throw err
   }
 
-  // 3. Check WhatsApp resend cooldown (independent from email cooldown)
+  // 2. Check WhatsApp resend cooldown (independent from email cooldown)
   const lastWaSent = waRegisterCooldownCache.get(normalized)
   if (lastWaSent && Date.now() - lastWaSent < RESEND_COOLDOWN_MS) {
     const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - lastWaSent)) / 1000)
@@ -313,19 +361,13 @@ export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
     throw err
   }
 
-  // 4. Generate 6-digit OTP code with 1 minute expiry
+  // 3. Generate 6-digit OTP code and store in waOtpCache
   const otp = crypto.randomInt(100000, 999999).toString()
-  const otpHash = hashOtp(otp)
-  const expiresAt = new Date(Date.now() + OTP_TTL_MS)
-
-  // Replace existing OTP in DB
-  await prisma.emailVerificationOtp.deleteMany({ where: { email } })
-  await prisma.emailVerificationOtp.create({
-    data: {
-      email,
-      otpHash,
-      expiresAt,
-    },
+  waOtpCache.set(normalized, {
+    otp,
+    expiresAt: Date.now() + OTP_TTL_MS,
+    attempts: 0,
+    createdAt: Date.now(),
   })
 
   // Track WhatsApp send cooldown
@@ -377,7 +419,6 @@ export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
   // Fallback Simulation Mode (only if FONNTE_TOKEN not configured)
   console.log(`\n======================================================`)
   console.log(`[SIMULASI OTP WHATSAPP PENDAFTARAN]`)
-  console.log(`Email User   : ${email}`)
   console.log(`Nomor Tujuan : ${normalized} (${rawPhone})`)
   console.log(`Kode OTP     : ${otp}`)
   console.log(`Masa Berlaku : 1 Menit`)

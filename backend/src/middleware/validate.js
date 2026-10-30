@@ -41,16 +41,27 @@ export const validateRegister = [
     .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters')
     .escape(),
 
+  body('channel')
+    .optional()
+    .isIn(['EMAIL', 'WHATSAPP']).withMessage('Channel registrasi harus EMAIL atau WHATSAPP'),
+
   body('email')
+    .if((value, { req }) => req.body.channel !== 'WHATSAPP')
     .trim()
     .notEmpty().withMessage('Email is required')
     .isEmail().withMessage('Must be a valid email address')
     .normalizeEmail()
     .isLength({ max: 255 }).withMessage('Email is too long'),
 
+  body('phone')
+    .if((value, { req }) => req.body.channel === 'WHATSAPP')
+    .trim()
+    .notEmpty().withMessage('Nomor WhatsApp wajib diisi untuk registrasi via WhatsApp')
+    .isLength({ min: 9, max: 20 }).withMessage('Nomor WhatsApp minimal 9 digit angka'),
+
   body('otp')
     .trim()
-    .notEmpty().withMessage('Kode OTP email wajib diisi')
+    .notEmpty().withMessage('Kode OTP wajib diisi')
     .isLength({ min: 6, max: 6 }).withMessage('Kode OTP harus 6 digit angka')
     .isNumeric().withMessage('Kode OTP harus berupa angka'),
 
@@ -65,9 +76,8 @@ export const validateRegister = [
 export const validateLogin = [
   body('email')
     .trim()
-    .notEmpty().withMessage('Email is required')
-    .isEmail().withMessage('Must be a valid email address')
-    .normalizeEmail(),
+    .notEmpty().withMessage('Email atau nomor WhatsApp wajib diisi')
+    .isLength({ max: 255 }).withMessage('Input terlalu panjang'),
 
   body('password')
     .notEmpty().withMessage('Password is required')

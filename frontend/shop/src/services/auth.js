@@ -213,11 +213,11 @@ export const verifyEmailOtp = async (email, otp) => {
 }
 
 /**
- * Send OTP via WhatsApp for Registration fallback
+ * Send OTP via WhatsApp for WhatsApp-first Registration (Opsi A)
  */
-export const sendRegisterWaOtp = async (email, phone) => {
+export const sendRegisterWaOtp = async phone => {
   try {
-    const response = await apiClient.post('/auth/send-register-wa-otp', { email, phone })
+    const response = await apiClient.post('/auth/send-register-wa-otp', { phone })
     return {
       success: true,
       ...response,

@@ -16,7 +16,12 @@ import { asyncHandler } from '../utils/asyncHandler.js'
 import { HTTP_STATUS } from '../constants/index.js'
 import { logWarn } from '../utils/logger.js'
 
-import { verifyEmailVerificationOtp, normalizePhoneNumber } from '../services/otpService.js'
+import {
+  verifyEmailVerificationOtp,
+  verifyOtpCode,
+  normalizePhoneNumber,
+  validateEmailDomain,
+} from '../services/otpService.js'
 
 // Bcrypt cost factor — 12 is the current industry recommendation
 const BCRYPT_ROUNDS = 12
@@ -67,11 +72,96 @@ const sendTokenResponse = (res, user, statusCode, message) => {
 
 /**
  * POST /api/auth/register
+ * Supports strict Email registration (Option C & A) and WhatsApp-first registration (Option A)
  */
 export const register = asyncHandler(async (req, res) => {
-  const { email, name, password, phone, otp } = req.body
+  const { channel = 'EMAIL', email, name, password, phone, otp } = req.body
+
+  // ─── Jalur Registrasi WhatsApp (WhatsApp-First) ──────────────────────────
+  if (channel === 'WHATSAPP') {
+    if (!phone?.trim()) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        error: 'Nomor WhatsApp wajib diisi untuk registrasi jalur WhatsApp.',
+      })
+    }
+
+    const cleanPhone = phone.trim()
+    const normalized = normalizePhoneNumber(cleanPhone)
+    if (!normalized || normalized.length < 10) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        error: 'Nomor WhatsApp minimal 10 digit angka valid.',
+      })
+    }
+
+    // Cek apakah nomor WhatsApp sudah pernah terdaftar
+    const existingPhone = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: cleanPhone },
+          { phone: normalized },
+          ...(normalized.startsWith('62') ? [{ phone: '0' + normalized.slice(2) }] : []),
+        ],
+      },
+    })
+    if (existingPhone) {
+      return res.status(HTTP_STATUS.CONFLICT).json({
+        error: 'Nomor WhatsApp ini sudah terdaftar pada akun lain. Silakan login atau gunakan nomor lain.',
+      })
+    }
+
+    // Verifikasi OTP WhatsApp secara strict dari waOtpCache
+    const otpVerification = verifyOtpCode(normalized, otp)
+    if (!otpVerification.success) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        error: otpVerification.message,
+      })
+    }
+
+    let finalEmail = `${normalized}@whatsapp.user`
+    if (email?.trim()) {
+      const cleanEmail = email.trim().toLowerCase()
+      const domainCheck = await validateEmailDomain(cleanEmail)
+      if (!domainCheck.valid) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: domainCheck.message })
+      }
+      const existingEmail = await prisma.user.findUnique({ where: { email: cleanEmail } })
+      if (existingEmail) {
+        return res.status(HTTP_STATUS.CONFLICT).json({
+          error: 'Email ini sudah terdaftar pada akun lain. Gunakan email lain.',
+        })
+      }
+      finalEmail = cleanEmail
+    }
+
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS)
+
+    const user = await prisma.user.create({
+      data: {
+        email: finalEmail,
+        name,
+        password: hashedPassword,
+        phone: normalized,
+        isEmailVerified: false,
+        isPhoneVerified: true,
+        phoneVerifiedAt: new Date(),
+      },
+    })
+
+    return sendTokenResponse(res, user, HTTP_STATUS.CREATED, 'Pendaftaran akun via WhatsApp berhasil diverifikasi.')
+  }
+
+  // ─── Jalur Registrasi Email (Strict Email OTP) ───────────────────────────
   const cleanEmail = (email || '').trim().toLowerCase()
 
+  // 1. Validasi format & domain email aktif (Opsi C)
+  const domainCheck = await validateEmailDomain(cleanEmail)
+  if (!domainCheck.valid) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: domainCheck.message,
+    })
+  }
+
+  // 2. Cek apakah email sudah terdaftar
   const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } })
   if (existingUser) {
     return res.status(HTTP_STATUS.CONFLICT).json({
@@ -79,7 +169,7 @@ export const register = asyncHandler(async (req, res) => {
     })
   }
 
-  // Validasi nomor telepon/WhatsApp belum pernah terdaftar
+  // 3. Validasi nomor telepon/WhatsApp jika diisi opsional
   if (phone?.trim()) {
     const cleanPhone = phone.trim()
     const normalized = normalizePhoneNumber(cleanPhone)
@@ -99,7 +189,7 @@ export const register = asyncHandler(async (req, res) => {
     }
   }
 
-  // Verifikasi kode OTP email
+  // 4. Verifikasi kode OTP email secara strict dari tabel email_verification_otps
   const otpVerification = await verifyEmailVerificationOtp(cleanEmail, otp)
   if (!otpVerification.success) {
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -117,6 +207,7 @@ export const register = asyncHandler(async (req, res) => {
       phone: phone?.trim() || null,
       isEmailVerified: true,
       emailVerifiedAt: new Date(),
+      isPhoneVerified: false,
     },
   })
 
@@ -125,22 +216,35 @@ export const register = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/auth/login
+ * Supports login via Email or WhatsApp Phone Number
  */
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body
+  const identifier = (email || '').trim()
 
-  const user = await prisma.user.findUnique({ where: { email } })
+  const normalizedPhone = normalizePhoneNumber(identifier)
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: identifier.toLowerCase() },
+        { phone: identifier },
+        ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
+        ...(identifier.startsWith('0') ? [{ phone: '62' + identifier.slice(1) }] : []),
+      ],
+    },
+  })
+
   const hashToCompare = user?.password ?? DUMMY_HASH
   const isValidPassword = await bcrypt.compare(password, hashToCompare)
 
   if (!user || !isValidPassword) {
-    logWarn('Failed login attempt', { email, ip: req.ip })
+    logWarn('Failed login attempt', { identifier, ip: req.ip })
     return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-      error: 'Invalid email or password.',
+      error: 'Email, nomor WhatsApp, atau kata sandi tidak sesuai.',
     })
   }
 
-  sendTokenResponse(res, user, HTTP_STATUS.OK, 'Login successful.')
+  sendTokenResponse(res, user, HTTP_STATUS.OK, 'Login berhasil.')
 })
 
 /**
