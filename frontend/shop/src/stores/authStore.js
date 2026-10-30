@@ -39,7 +39,25 @@ export const useAuthStore = create(
 
         // Actions
         fetchUserCart: async () => {
+          const currentUser = get().user
+          if (!currentUser?.id) return
+
           try {
+            // Cek apakah ada backup offline keranjang dari sesi logout sebelumnya yang terputus koneksi
+            const pendingKey = `toko-pending-cart-${currentUser.id}`
+            const pendingData = typeof window !== 'undefined' ? window.localStorage?.getItem(pendingKey) : null
+            if (pendingData) {
+              try {
+                const parsedPending = JSON.parse(pendingData)
+                if (Array.isArray(parsedPending) && parsedPending.length > 0) {
+                  await syncCartToBackend(parsedPending, 'merge')
+                  window.localStorage?.removeItem(pendingKey)
+                }
+              } catch (pendingErr) {
+                console.error('Failed to sync pending offline cart:', pendingErr)
+              }
+            }
+
             const cartRes = await getCart()
             if (cartRes.success && Array.isArray(cartRes.items) && cartRes.items.length > 0) {
               const formatted = cartRes.items.map(item => {
@@ -132,25 +150,47 @@ export const useAuthStore = create(
 
       /**
        * User-initiated logout:
-       * 1. Saves active cart to backend DB so it's safely kept in user's account
-       * 2. Clears browser local state so guest/other user cannot see it
-       * 3. Invalidates server auth cookie
+       * 1. Mencoba menyimpan keranjang aktif ke database backend sebelum logout.
+       * 2. Jika koneksi putus/timeout, simpan backup offline terisolasi (toko-pending-cart-${userId})
+       *    sehingga produk tidak hilang dan otomatis tersinkron saat user login kembali.
+       * 3. Selalu memprioritaskan keamanan dengan langsung mengosongkan state keranjang lokal agar tamu tidak bisa melihatnya.
+       * 4. Menghapus cookie otentikasi di server.
        */
       logout: async () => {
-        // 1. Save user's cart to backend DB before logging out
+        const currentUser = get().user
         const currentItems = useCartStore.getState().items
-        if (currentItems && currentItems.length > 0) {
+
+        // 1. Simpan keranjang ke server jika ada item aktif (dibatasi timeout 2 detik)
+        if (currentUser?.id && currentItems && currentItems.length > 0) {
           try {
-            await syncCartToBackend(currentItems, 'replace')
-          } catch (e) {
-            console.warn('Failed to sync cart before logout:', e)
+            const syncPromise = syncCartToBackend(currentItems, 'replace')
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Logout sync timeout')), 2000)
+            )
+            await Promise.race([syncPromise, timeoutPromise])
+            // Berhasil sinkronisasi, bersihkan backup offline jika ada
+            if (typeof window !== 'undefined') {
+              window.localStorage?.removeItem(`toko-pending-cart-${currentUser.id}`)
+            }
+          } catch (syncErr) {
+            console.warn('Network issue during logout. Storing offline user cart backup:', syncErr.message)
+            try {
+              if (typeof window !== 'undefined') {
+                window.localStorage?.setItem(
+                  `toko-pending-cart-${currentUser.id}`,
+                  JSON.stringify(currentItems)
+                )
+              }
+            } catch (storageErr) {
+              console.error('Failed to store pending cart backup:', storageErr)
+            }
           }
         }
 
         // 2. Clear user state
         set({ user: null, error: null })
 
-        // 3. Clear local cart so it is empty for guests
+        // 3. Selalu kosongkan keranjang lokal agar aman dan tidak terlihat oleh pengguna tamu
         try {
           useCartStore.getState().clearCart()
         } catch (e) {
