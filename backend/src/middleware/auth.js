@@ -5,7 +5,6 @@
 
 import jwt from 'jsonwebtoken'
 import { HTTP_STATUS, USER_ROLE, ERROR_MESSAGES } from '../constants/index.js'
-import { UnauthorizedError, ForbiddenError } from '../utils/errors.js'
 import { logWarn } from '../utils/logger.js'
 
 /**

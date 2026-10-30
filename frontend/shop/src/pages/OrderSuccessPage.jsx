@@ -9,6 +9,7 @@ import Loading from '../components/Loading'
 import ErrorMessage from '../components/ErrorMessage'
 import { formatCurrency } from '../utils/format'
 import { loadMidtransSnap } from '../utils/checkoutHelpers'
+import { handleCopyFeedback } from '../utils/clipboard'
 import OrderSuccessPaymentInfo from '../components/order/OrderSuccessPaymentInfo'
 
 /**
@@ -89,16 +90,9 @@ function OrderSuccessPage() {
 
   const shippingFee = order ? Number(order.shippingFee || 15000) : 15000
 
-  // Copy helper
+  // Copy helper with legacy fallback
   const handleCopy = (text, elementId) => {
-    navigator.clipboard.writeText(text)
-    const element = document.getElementById(elementId)
-    if (element) {
-      element.innerText = 'Tersalin!'
-      setTimeout(() => {
-        element.innerText = 'Salin'
-      }, 2000)
-    }
+    handleCopyFeedback(text, elementId)
   }
 
   // Midtrans retry trigger

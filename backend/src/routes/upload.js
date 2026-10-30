@@ -6,7 +6,7 @@
 import express from 'express'
 import { uploadSingle } from '../middleware/upload.js'
 import { authenticate, adminOnly } from '../middleware/auth.js'
-import { supabase, STORAGE_BUCKET, isSupabaseConfigured, getSupabaseUrl } from '../config/supabase.js'
+import { supabase, STORAGE_BUCKET, isSupabaseConfigured } from '../config/supabase.js'
 import { 
   generateUniqueFilename, 
   validateImageFile, 

@@ -1,6 +1,6 @@
 import express from 'express'
 import { handleNotification, simulatePayment } from '../controllers/paymentController.js'
-import { authenticate, adminOnly } from '../middleware/auth.js'
+import { authenticate } from '../middleware/auth.js'
 
 const router = express.Router()
 

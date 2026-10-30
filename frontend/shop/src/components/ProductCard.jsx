@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { formatCurrency } from '../utils/format'
 import { getProductImageUrl, handleImageError } from '../utils/imageUtils'
-import Icon from '@shared/components/Icon.jsx'
 
 /**
  * Modern Premium Product Card Component

@@ -9,16 +9,13 @@ import ProductGridSkeleton from '../components/ProductGridSkeleton'
 import EmptyState from '../components/EmptyState'
 import BackToTop from '../components/BackToTop'
 import { scrollToProducts } from '../utils/scrollUtils'
-import { handleImageError } from '../utils/imageUtils'
 import { useDataFetching } from '../hooks'
-import { logDebug } from '../utils/logger'
 
 /**
  * Shop Page - Toko Usaha Anda E-Commerce
  */
 function ShopPage() {
   const [searchParams] = useSearchParams()
-  const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
 
   // Fetch categories
@@ -172,20 +169,6 @@ function ShopPage() {
     [categories]
   )
 
-  // Handle featured section click
-  const handleFeaturedClick = useCallback(
-    (e, categoryKeywords) => {
-      e.preventDefault()
-      const categoryId = findCategoryByKeywords(categoryKeywords)
-      if (categoryId) {
-        handleCategorySelect(categoryId)
-      } else {
-        // Fallback to all if category not found
-        handleCategorySelect('all')
-      }
-    },
-    [findCategoryByKeywords, handleCategorySelect]
-  )
 
   // Listen for category filter events from navbar
   useEffect(() => {
