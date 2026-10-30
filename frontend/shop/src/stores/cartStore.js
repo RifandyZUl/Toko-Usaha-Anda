@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { syncCartToBackend } from '../services/cart'
 
 /**
  * Helper to get unique key for a cart item
@@ -7,6 +8,23 @@ import { persist } from 'zustand/middleware'
 export const getItemKey = (item) => {
   if (!item) return ''
   return item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
+}
+
+/**
+ * Helper to automatically sync cart changes to backend database if user is logged in
+ */
+const syncIfAuthenticated = (items) => {
+  try {
+    const authStorage = typeof window !== 'undefined' ? window.localStorage?.getItem('toko-auth-storage') : null
+    if (authStorage) {
+      const parsed = JSON.parse(authStorage)
+      if (parsed?.state?.user?.id) {
+        syncCartToBackend(items, 'replace').catch(e => {
+          console.warn('Auto cart sync to backend failed:', e)
+        })
+      }
+    }
+  } catch (e) {}
 }
 
 /**
@@ -50,6 +68,7 @@ export const useCartStore = create(
           : [...currentSelected, cartKey]
 
         set({ items: updatedItems, selectedItemKeys: updatedSelected })
+        syncIfAuthenticated(updatedItems)
       },
 
       removeItem: cartKeyOrId => {
@@ -60,6 +79,7 @@ export const useCartStore = create(
           k => k !== cartKeyOrId
         )
         set({ items: remainingItems, selectedItemKeys: updatedSelected })
+        syncIfAuthenticated(remainingItems)
       },
 
       removeItemsByKeys: (keysToRemove = []) => {
@@ -67,6 +87,7 @@ export const useCartStore = create(
         const remainingItems = get().items.filter(item => !keySet.has(getItemKey(item)))
         const updatedSelected = (get().selectedItemKeys || []).filter(k => !keySet.has(k))
         set({ items: remainingItems, selectedItemKeys: updatedSelected })
+        syncIfAuthenticated(remainingItems)
       },
 
       updateQuantity: (cartKeyOrId, quantity) => {
@@ -82,13 +103,14 @@ export const useCartStore = create(
         const maxStock = targetItem && typeof targetItem.stock === 'number' ? targetItem.stock : 9999
         const finalQty = Math.min(quantity, maxStock)
 
-        set({
-          items: items.map(item =>
-            getItemKey(item) === cartKeyOrId || item.id === cartKeyOrId
-              ? { ...item, quantity: finalQty }
-              : item
-          ),
-        })
+        const updatedItems = items.map(item =>
+          getItemKey(item) === cartKeyOrId || item.id === cartKeyOrId
+            ? { ...item, quantity: finalQty }
+            : item
+        )
+
+        set({ items: updatedItems })
+        syncIfAuthenticated(updatedItems)
       },
 
       clearCart: () => {

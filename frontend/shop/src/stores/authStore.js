@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { login, register, getCurrentUser, logout as logoutAPI } from '../services/auth'
-import { getCart } from '../services/cart'
+import { getCart, syncCartToBackend } from '../services/cart'
 import { useCartStore } from './cartStore'
 
 const authChannel =
@@ -11,7 +11,7 @@ const authChannel =
 
 /**
  * Auth Store using Zustand
- * Manages authentication state
+ * Manages authentication state and cross-session cart sync
  */
 export const useAuthStore = create(
   persist(
@@ -38,36 +38,42 @@ export const useAuthStore = create(
         error: null,
 
         // Actions
+        fetchUserCart: async () => {
+          try {
+            const cartRes = await getCart()
+            if (cartRes.success && Array.isArray(cartRes.items) && cartRes.items.length > 0) {
+              const formatted = cartRes.items.map(item => {
+                const prod = item.product || {}
+                const effectivePrice = item.variant
+                  ? Number(item.variant.price)
+                  : Number(prod.price || item.price || 0)
+                const effectiveStock = item.variant ? item.variant.stock : (prod.stock || 0)
+                return {
+                  id: prod.id || item.productId,
+                  name: prod.name || 'Produk',
+                  price: effectivePrice,
+                  image: prod.imageUrl || prod.image || '/placeholder.jpg',
+                  stock: effectiveStock,
+                  variantId: item.variantId || null,
+                  variantName: item.variantName || item.variant?.name || null,
+                  quantity: item.quantity || 1,
+                }
+              })
+              useCartStore.getState().setItems(formatted)
+            }
+          } catch (cartErr) {
+            console.warn('Could not sync user cart from backend:', cartErr)
+          }
+        },
+
         setAuth: async (user) => {
           const unwrapped = user?.user || user
           set({ user: unwrapped, error: null })
           authChannel?.postMessage({ type: 'LOGIN' })
 
-          // Sync user's cart from backend if available
+          // Restore user's cart from backend if authenticated
           if (unwrapped) {
-            try {
-              const cartRes = await getCart()
-              if (cartRes.success && Array.isArray(cartRes.items) && cartRes.items.length > 0) {
-                const formatted = cartRes.items.map(item => {
-                  const prod = item.product || {}
-                  const effectivePrice = item.variant ? Number(item.variant.price) : Number(prod.price || item.price || 0)
-                  const effectiveStock = item.variant ? item.variant.stock : (prod.stock || 0)
-                  return {
-                    id: prod.id || item.productId,
-                    name: prod.name || 'Produk',
-                    price: effectivePrice,
-                    image: prod.imageUrl || prod.image || '/placeholder.jpg',
-                    stock: effectiveStock,
-                    variantId: item.variantId || null,
-                    variantName: item.variantName || item.variant?.name || null,
-                    quantity: item.quantity || 1,
-                  }
-                })
-                useCartStore.getState().setItems(formatted)
-              }
-            } catch (cartErr) {
-              console.warn('Could not sync user cart from backend:', cartErr)
-            }
+            await get().fetchUserCart()
           }
         },
 
@@ -89,7 +95,7 @@ export const useAuthStore = create(
         try {
           const result = await login({ email, password })
           if (result.success) {
-            get().setAuth(result.user)
+            await get().setAuth(result.user)
             return { success: true }
           } else {
             set({ error: result.error || 'Login failed' })
@@ -109,7 +115,7 @@ export const useAuthStore = create(
         try {
           const result = await register(userData)
           if (result.success) {
-            get().setAuth(result.user)
+            await get().setAuth(result.user)
             return { success: true }
           } else {
             set({ error: result.error || 'Registration failed' })
@@ -125,16 +131,34 @@ export const useAuthStore = create(
       },
 
       /**
-       * User-initiated logout — clears state AND calls backend to clear HttpOnly cookie.
+       * User-initiated logout:
+       * 1. Saves active cart to backend DB so it's safely kept in user's account
+       * 2. Clears browser local state so guest/other user cannot see it
+       * 3. Invalidates server auth cookie
        */
       logout: async () => {
+        // 1. Save user's cart to backend DB before logging out
+        const currentItems = useCartStore.getState().items
+        if (currentItems && currentItems.length > 0) {
+          try {
+            await syncCartToBackend(currentItems, 'replace')
+          } catch (e) {
+            console.warn('Failed to sync cart before logout:', e)
+          }
+        }
+
+        // 2. Clear user state
         set({ user: null, error: null })
+
+        // 3. Clear local cart so it is empty for guests
         try {
           useCartStore.getState().clearCart()
         } catch (e) {
           console.error('Failed to clear cart on logout:', e)
         }
+
         authChannel?.postMessage({ type: 'LOGOUT' })
+
         try {
           await logoutAPI()
         } catch {
@@ -148,6 +172,10 @@ export const useAuthStore = create(
           const user = result?.user?.user || result?.user
           if (result.success && user) {
             set({ user })
+            // Restore user cart if local cart is empty
+            if (useCartStore.getState().items.length === 0) {
+              await get().fetchUserCart()
+            }
             return true
           } else {
             // Only clear local state — don't call logout API
