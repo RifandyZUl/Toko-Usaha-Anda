@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { getProducts, getCategories } from '../services/products'
-import ShopNavigation from '../components/ShopNavigation'
-import ProductCard from '../components/ProductCard'
-import ProductGridSkeleton from '../components/ProductGridSkeleton'
-import EmptyState from '../components/EmptyState'
-import BackToTop from '../components/BackToTop'
+import ShopNavigation from '../components/navigation/ShopNavigation'
+import ProductCard from '../components/product/ProductCard'
+import ProductGridSkeleton from '../components/common/ProductGridSkeleton'
+import EmptyState from '../components/common/EmptyState'
+import BackToTop from '../components/common/BackToTop'
 import Icon from '@shared/components/Icon.jsx'
 
 /**

@@ -1,9 +1,9 @@
 import Icon from '@shared/components/Icon.jsx'
-import Loading from '../Loading'
-import ErrorMessage from '../ErrorMessage'
-import TrackingModal from '../TrackingModal'
-import DisputeModal from '../DisputeModal'
-import ReviewModal from '../ReviewModal'
+import Loading from '../common/Loading'
+import ErrorMessage from '../common/ErrorMessage'
+import TrackingModal from '../modals/TrackingModal'
+import DisputeModal from '../modals/DisputeModal'
+import ReviewModal from '../modals/ReviewModal'
 import ProfileOrderCard from './ProfileOrderCard'
 
 /**

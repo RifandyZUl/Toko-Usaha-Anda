@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
 import { useAuthStore } from '../stores/authStore'
-import Loading from '../components/Loading'
+import Loading from '../components/common/Loading'
 
 /**
  * Login Page - Elegant design

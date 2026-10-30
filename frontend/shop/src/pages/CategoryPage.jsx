@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getProducts, getCategories } from '../services/products'
-import ShopNavigation from '../components/ShopNavigation'
-import ProductCard from '../components/ProductCard'
-import ProductGridSkeleton from '../components/ProductGridSkeleton'
-import EmptyState from '../components/EmptyState'
-import BackToTop from '../components/BackToTop'
+import ShopNavigation from '../components/navigation/ShopNavigation'
+import ProductCard from '../components/product/ProductCard'
+import ProductGridSkeleton from '../components/common/ProductGridSkeleton'
+import EmptyState from '../components/common/EmptyState'
+import BackToTop from '../components/common/BackToTop'
 import Icon from '@shared/components/Icon.jsx'
 
 /**
@@ -81,17 +81,25 @@ function CategoryPage() {
     return list // newest default
   }, [products, sortBy])
 
-  const categoryTitle = currentCategory?.name || (
-    slug === 'household' ? 'Kebutuhan Rumah Tangga' :
-    slug === 'tools' ? 'Perkakas Tukang' :
-    slug === 'motorcycle' ? 'Alat Alat Motor' : slug
-  )
+  const categoryTitle =
+    currentCategory?.name ||
+    (slug === 'household'
+      ? 'Kebutuhan Rumah Tangga'
+      : slug === 'tools'
+        ? 'Perkakas Tukang'
+        : slug === 'motorcycle'
+          ? 'Alat Alat Motor'
+          : slug)
 
-  const categoryDescription = currentCategory?.description || (
-    slug === 'household' ? 'Koleksi perlengkapan kebersihan dan kebutuhan harian rumah tangga berkualitas.' :
-    slug === 'tools' ? 'Peralatan pertukangan, kunci, palu, dan perkakas teknik lengkap berstandar tinggi.' :
-    slug === 'motorcycle' ? 'Aksesoris motor, gembok cakram, tali bagasi, dan perlengkapan motor pilihan.' : ''
-  )
+  const categoryDescription =
+    currentCategory?.description ||
+    (slug === 'household'
+      ? 'Koleksi perlengkapan kebersihan dan kebutuhan harian rumah tangga berkualitas.'
+      : slug === 'tools'
+        ? 'Peralatan pertukangan, kunci, palu, dan perkakas teknik lengkap berstandar tinggi.'
+        : slug === 'motorcycle'
+          ? 'Aksesoris motor, gembok cakram, tali bagasi, dan perlengkapan motor pilihan.'
+          : '')
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -162,9 +170,7 @@ function CategoryPage() {
       <main className="container-custom py-8">
         {/* Sort Filter Bar */}
         <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-200/60">
-          <p className="text-xs text-gray-500 font-body">
-            Katalog Resmi Toko Usaha Anda
-          </p>
+          <p className="text-xs text-gray-500 font-body">Katalog Resmi Toko Usaha Anda</p>
 
           <div className="flex items-center gap-2">
             <label htmlFor="sortSelect" className="text-xs font-body text-gray-600">

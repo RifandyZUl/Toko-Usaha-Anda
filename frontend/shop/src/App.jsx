@@ -11,7 +11,7 @@ import OrderDetailPage from './pages/OrderDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
-import ProtectedRoute from './components/ProtectedRoute'
+import ProtectedRoute from './components/auth/ProtectedRoute'
 import ErrorBoundary from '@shared/components/ErrorBoundary.jsx'
 import { useAuthStore } from './stores/authStore'
 
@@ -25,7 +25,7 @@ function App() {
     checkAuth()
 
     // Sync auth state across multiple browser tabs
-    const handleStorageChange = (e) => {
+    const handleStorageChange = e => {
       if (e.key === 'toko-auth-storage') {
         checkAuth()
       }

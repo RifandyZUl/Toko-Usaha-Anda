@@ -4,7 +4,7 @@ import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
 import { useAuthStore } from '../stores/authStore'
 import { sendEmailOtp, sendRegisterWaOtp } from '../services/auth'
-import Loading from '../components/Loading'
+import Loading from '../components/common/Loading'
 
 /**
  * Register Page with Email & WhatsApp OTP Verification (1-minute validity)

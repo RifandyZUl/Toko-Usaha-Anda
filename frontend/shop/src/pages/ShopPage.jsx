@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { getProducts, getCategories, getFeaturedProducts } from '../services/products'
 import { apiClient } from '../config/api'
-import ShopNavigation from '../components/ShopNavigation'
-import ErrorMessage from '../components/ErrorMessage'
-import ProductCard from '../components/ProductCard'
-import ProductGridSkeleton from '../components/ProductGridSkeleton'
-import EmptyState from '../components/EmptyState'
-import BackToTop from '../components/BackToTop'
+import ShopNavigation from '../components/navigation/ShopNavigation'
+import ErrorMessage from '../components/common/ErrorMessage'
+import ProductCard from '../components/product/ProductCard'
+import ProductGridSkeleton from '../components/common/ProductGridSkeleton'
+import EmptyState from '../components/common/EmptyState'
+import BackToTop from '../components/common/BackToTop'
 import { scrollToProducts } from '../utils/scrollUtils'
 import { useDataFetching } from '../hooks'
 import { logDebug } from '../utils/logger'
@@ -171,7 +171,6 @@ function ShopPage() {
     },
     [categories]
   )
-
 
   // Listen for category filter events from navbar
   useEffect(() => {
@@ -425,7 +424,9 @@ function ShopPage() {
                 className="text-xs font-heading font-medium text-gray-600 hover:text-gray-900 uppercase tracking-wider inline-flex items-center gap-1 group"
               >
                 <span>Lihat Semua</span>
-                <span className="transform group-hover:translate-x-0.5 transition-transform">→</span>
+                <span className="transform group-hover:translate-x-0.5 transition-transform">
+                  →
+                </span>
               </Link>
             </div>
 
@@ -475,8 +476,13 @@ function ShopPage() {
                     <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-2.5 shadow-xs">
                       <span className="text-emerald-600 font-bold">✓</span>
                       <div>
-                        <strong className="block font-semibold">Pesan Anda Berhasil Terkirim!</strong>
-                        <span>Terima kasih telah menghubungi Toko Usaha Anda. Tim kami akan segera merespons ke email/telepon Anda.</span>
+                        <strong className="block font-semibold">
+                          Pesan Anda Berhasil Terkirim!
+                        </strong>
+                        <span>
+                          Terima kasih telah menghubungi Toko Usaha Anda. Tim kami akan segera
+                          merespons ke email/telepon Anda.
+                        </span>
                       </div>
                     </div>
                   )}
