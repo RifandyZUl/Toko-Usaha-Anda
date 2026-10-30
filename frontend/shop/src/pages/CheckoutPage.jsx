@@ -254,7 +254,7 @@ function CheckoutPage() {
         setIsProcessing(false)
       }
     },
-    [items, clearCart, navigate, setAuth, user?.name, user?.phone, scrollToError]
+    [checkoutItems, removeItemsByKeys, navigate, setAuth, user?.name, user?.phone, scrollToError]
   )
 
   const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit, setValues } = useForm(

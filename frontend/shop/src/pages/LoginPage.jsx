@@ -13,7 +13,7 @@ function LoginPage() {
   const location = useLocation()
   const { login, isLoading, error, user } = useAuthStore()
   const isAuthenticated = !!user
-  
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -86,9 +86,7 @@ function LoginPage() {
                 TOKO USAHA ANDA
               </h1>
             </Link>
-            <h2 className="text-2xl font-heading font-medium text-gray-900 mb-2">
-              Sign In
-            </h2>
+            <h2 className="text-2xl font-heading font-medium text-gray-900 mb-2">Sign In</h2>
             <p className="text-sm font-body text-gray-600">
               Welcome back. Please sign in to continue.
             </p>
@@ -100,7 +98,8 @@ function LoginPage() {
               <div className="flex items-center gap-2 text-red-600">
                 <Icon name="AlertCircle" size={18} />
                 <p className="text-xs font-medium">
-                  {formError || (typeof error === 'string' ? error : error?.message || 'Login gagal')}
+                  {formError ||
+                    (typeof error === 'string' ? error : error?.message || 'Login gagal')}
                 </p>
               </div>
             </div>
@@ -110,8 +109,11 @@ function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email or WhatsApp Phone */}
             <div>
-              <label htmlFor="email" className="block text-xs font-body font-medium text-gray-900 mb-2 uppercase tracking-wider">
-                Email atau No. WhatsApp
+              <label
+                htmlFor="email"
+                className="block text-xs font-body font-medium text-gray-900 mb-2 uppercase tracking-wider"
+              >
+                Email/WhatsApp
               </label>
               <input
                 type="text"
@@ -128,7 +130,10 @@ function LoginPage() {
 
             {/* Password */}
             <div>
-              <label htmlFor="password" className="block text-xs font-body font-medium text-gray-900 mb-2 uppercase tracking-wider">
+              <label
+                htmlFor="password"
+                className="block text-xs font-body font-medium text-gray-900 mb-2 uppercase tracking-wider"
+              >
                 Password
               </label>
               <input
