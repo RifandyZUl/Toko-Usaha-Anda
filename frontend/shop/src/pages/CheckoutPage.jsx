@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
-import { useCartStore } from '../stores/cartStore'
+import { useCartStore, getItemKey } from '../stores/cartStore'
 import { useAuthStore } from '../stores/authStore'
 import { useForm } from '../hooks/useForm'
 import { useLocation } from '../hooks/useLocation'
@@ -26,7 +26,7 @@ import CheckoutOrderSummary from '../components/checkout/CheckoutOrderSummary'
  */
 function CheckoutPage() {
   const navigate = useNavigate()
-  const { items, getTotalPrice, clearCart } = useCartStore()
+  const { items, getSelectedItems, removeItemsByKeys, clearCart } = useCartStore()
   const { user, setAuth } = useAuthStore()
   const [orderError, setOrderError] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -36,7 +36,15 @@ function CheckoutPage() {
   const [serverCourierOptions, setServerCourierOptions] = useState(null)
   const setValuesRef = useRef(null)
 
-  const totalPrice = useMemo(() => getTotalPrice(), [getTotalPrice])
+  // Only checkout items that were selected in CartPage (or all if opened directly)
+  const checkoutItems = useMemo(() => {
+    const selected = getSelectedItems()
+    return selected.length > 0 ? selected : items
+  }, [getSelectedItems, items])
+
+  const totalPrice = useMemo(() => {
+    return checkoutItems.reduce((acc, it) => acc + Number(it.price) * it.quantity, 0)
+  }, [checkoutItems])
 
   // Pre-fill form with user data if available
   const initialValues = useMemo(() => {
@@ -91,7 +99,7 @@ function CheckoutPage() {
 
       try {
         // 0. Ensure cart has items
-        if (!items || items.length === 0) {
+        if (!checkoutItems || checkoutItems.length === 0) {
           setOrderError('Keranjang belanja kosong. Silakan pilih produk terlebih dahulu.')
           setIsProcessing(false)
           scrollToError()
@@ -99,7 +107,7 @@ function CheckoutPage() {
         }
 
         // 1. Sync local cart to backend
-        const syncResult = await syncCartToBackend(items)
+        const syncResult = await syncCartToBackend(checkoutItems)
         if (!syncResult.success) {
           setOrderError(syncResult.error || 'Gagal menyinkronkan keranjang belanja ke server.')
           setIsProcessing(false)
@@ -171,15 +179,20 @@ function CheckoutPage() {
               return
             }
 
+            const clearPurchasedItems = () => {
+              const purchasedKeys = checkoutItems.map(it => getItemKey(it))
+              removeItemsByKeys(purchasedKeys)
+            }
+
             window.snap.pay(orderResult.snapToken, {
               onSuccess: () => {
-                clearCart()
+                clearPurchasedItems()
                 navigate('/shop/order-success', {
                   state: { orderId: orderResult.order.id },
                 })
               },
               onPending: () => {
-                clearCart()
+                clearPurchasedItems()
                 navigate('/shop/order-success', {
                   state: { orderId: orderResult.order.id, isPending: true },
                 })
@@ -191,7 +204,7 @@ function CheckoutPage() {
                 scrollToError()
               },
               onClose: () => {
-                clearCart()
+                clearPurchasedItems()
                 navigate(`/shop/order/${orderResult.order.id}`, {
                   state: { isPending: true },
                 })
@@ -199,7 +212,8 @@ function CheckoutPage() {
             })
           } else {
             // Cash / Virtual Account Transfer / QRIS success
-            clearCart()
+            const purchasedKeys = checkoutItems.map(it => getItemKey(it))
+            removeItemsByKeys(purchasedKeys)
             navigate('/shop/order-success', {
               state: { orderId: orderResult.order.id },
             })
@@ -954,7 +968,7 @@ function CheckoutPage() {
           {/* Order Summary */}
           <div className="lg:col-span-1">
             <CheckoutOrderSummary
-              items={items}
+              items={checkoutItems}
               totalPrice={totalPrice}
               shippingFee={shippingFee}
               finalTotal={finalTotal}

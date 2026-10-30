@@ -11,6 +11,7 @@ import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import { useDataFetching } from '../hooks'
 import { formatCurrency } from '../utils/format'
+import { formatImageUrl, handleImageError } from '../utils/imageUtils'
 
 /**
  * Product Detail Page - Elegant design inspired by Nike
@@ -64,17 +65,18 @@ function ProductDetailPage() {
   // Compute all available images for slide carousel
   const galleryImages = useMemo(() => {
     if (!product) return []
-    const imgs = []
+    const rawImgs = []
     if (Array.isArray(product.images) && product.images.length > 0) {
-      imgs.push(...product.images.filter(Boolean))
+      rawImgs.push(...product.images.filter(Boolean))
     } else if (product.imageUrl || product.image) {
-      imgs.push(product.imageUrl || product.image)
+      rawImgs.push(product.imageUrl || product.image)
     }
     // If selected variant has a specific image, place it at the front
-    if (selectedVariant?.image && !imgs.includes(selectedVariant.image)) {
-      imgs.unshift(selectedVariant.image)
+    if (selectedVariant?.image && !rawImgs.includes(selectedVariant.image)) {
+      rawImgs.unshift(selectedVariant.image)
     }
-    return imgs.length > 0 ? imgs : ['/placeholder.jpg']
+    const formatted = rawImgs.map(img => formatImageUrl(img))
+    return formatted.length > 0 ? formatted : ['/placeholder.jpg']
   }, [product, selectedVariant])
 
   // Reset active image index when product or variant changes
@@ -135,7 +137,7 @@ function ProductDetailPage() {
       id: product.id,
       name: product.name,
       price: effectivePrice,
-      image: selectedVariant?.image || product.imageUrl || product.image || '/placeholder.jpg',
+      image: formatImageUrl(selectedVariant?.image || product.imageUrl || product.image || '/placeholder.jpg'),
       stock: effectiveStock,
       variantId: selectedVariant ? selectedVariant.id : null,
       variantName: selectedVariant ? selectedVariant.name : null,
@@ -263,11 +265,8 @@ function ProductDetailPage() {
                           src={imgSrc}
                           alt={`${product?.name || 'Product'} ${idx + 1}`}
                           className="max-w-full max-h-[460px] w-auto h-auto object-contain pointer-events-none"
-                          crossOrigin="anonymous"
                           loading={idx === 0 ? 'eager' : 'lazy'}
-                          onError={e => {
-                            e.target.src = '/placeholder.jpg'
-                          }}
+                          onError={e => handleImageError(e, product)}
                         />
                       </div>
                     ))}
@@ -319,9 +318,7 @@ function ProductDetailPage() {
                           src={imgSrc}
                           alt={`Thumbnail ${idx + 1}`}
                           className="w-full h-full object-cover"
-                          onError={e => {
-                            e.target.src = '/placeholder.jpg'
-                          }}
+                          onError={e => handleImageError(e, product)}
                         />
                       </button>
                     ))}
@@ -506,7 +503,7 @@ function ProductDetailPage() {
                   {/* Description below button */}
                   {product?.description && (
                     <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-sm font-heading font-medium text-black leading-relaxed">
+                      <p className="text-sm font-heading font-medium text-black leading-relaxed text-justify">
                         {product.description}
                       </p>
                     </div>
@@ -706,7 +703,7 @@ function ProductDetailPage() {
                           {formatCurrency(Number(product?.price || 0))}
                         </p>
                         {product?.description && (
-                          <p className="text-sm font-body text-gray-600 leading-relaxed mb-4">
+                          <p className="text-sm font-body text-gray-600 leading-relaxed mb-4 text-justify">
                             {product.description}
                           </p>
                         )}
@@ -736,7 +733,7 @@ function ProductDetailPage() {
                         {product?.description && (
                           <li>
                             <span className="font-medium">Deskripsi:</span>
-                            <p className="mt-1 text-gray-600">{product.description}</p>
+                            <p className="mt-1 text-gray-600 text-justify">{product.description}</p>
                           </li>
                         )}
                       </ul>

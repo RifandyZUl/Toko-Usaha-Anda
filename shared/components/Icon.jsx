@@ -33,6 +33,11 @@ import {
   Loader2,
   LogOut,
   History,
+  Plus,
+  Minus,
+  Trash2,
+  ArrowLeft,
+  Check,
 } from 'lucide-react'
 
 /**
@@ -77,6 +82,11 @@ const iconMap = {
   ShoppingCart,
   Search,
   Loader2,
+  Plus,
+  Minus,
+  Trash2,
+  ArrowLeft,
+  Check,
 }
 
 function Icon({ name, className = '', size = 24, ...props }) {

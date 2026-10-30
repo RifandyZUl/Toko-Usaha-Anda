@@ -2,36 +2,42 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
-import { useCartStore } from '../stores/cartStore'
+import { useCartStore, getItemKey } from '../stores/cartStore'
 import { useAuthStore } from '../stores/authStore'
 import ShopNavigation from '../components/navigation/ShopNavigation'
 import { formatCurrency } from '../utils/format'
+import { formatImageUrl, handleImageError } from '../utils/imageUtils'
 import { logError, logInfo } from '../utils/logger'
 import { getProductById } from '../services/products'
 
 /**
  * Modern Premium Cart Page - Toko Usaha Anda E-Commerce
+ * Features: Selective Checkout (Checkbox), High-contrast stepper, Plain variants, Clean images
  */
 function CartPage() {
   const navigate = useNavigate()
   const {
     items,
+    selectedItemKeys,
+    toggleSelectItem,
+    selectAllItems,
+    setSelectedKeys,
     updateQuantity,
     removeItem,
-    getTotalPrice,
+    removeItemsByKeys,
   } = useCartStore()
   const { isAuthenticated } = useAuthStore()
-  
+
   const [productStocks, setProductStocks] = useState({})
   const [loadingStocks, setLoadingStocks] = useState(false)
-  
-  const handleCheckout = useCallback(() => {
-    if (!isAuthenticated()) {
-      navigate('/shop/login', { state: { from: { pathname: '/shop/checkout' } } })
-      return
+
+  // Initialize selected items (select all by default if newly opened)
+  useEffect(() => {
+    if (items.length > 0 && (!selectedItemKeys || selectedItemKeys.length === 0)) {
+      const allKeys = items.map(it => getItemKey(it))
+      setSelectedKeys(allKeys)
     }
-    navigate('/shop/checkout')
-  }, [isAuthenticated, navigate])
+  }, [items, selectedItemKeys, setSelectedKeys])
 
   // Fetch current stock for all cart items
   useEffect(() => {
@@ -46,10 +52,10 @@ function CartPage() {
 
       try {
         const validItems = []
-        
+
         await Promise.all(
           items.map(async item => {
-            const itemKey = item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
+            const itemKey = getItemKey(item)
             try {
               const result = await getProductById(item.id)
               if (result.success && result.product) {
@@ -71,13 +77,11 @@ function CartPage() {
           })
         )
         setProductStocks(stockMap)
-        
+
         // Auto-adjust quantities that exceed stock
         validItems.forEach(item => {
-          const itemKey = item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
-          const currentStock = stockMap[itemKey] !== undefined 
-            ? stockMap[itemKey] 
-            : (item.stock || 0)
+          const itemKey = getItemKey(item)
+          const currentStock = stockMap[itemKey] !== undefined ? stockMap[itemKey] : item.stock || 0
           if (item.quantity > currentStock && currentStock > 0) {
             updateQuantity(itemKey, currentStock)
           }
@@ -93,10 +97,44 @@ function CartPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items])
 
-  const totalPrice = useMemo(() => getTotalPrice(), [getTotalPrice])
-  const shippingFee = 15000
-  const finalTotal = useMemo(() => totalPrice + shippingFee, [totalPrice])
-  const totalItemCount = useMemo(() => items.reduce((acc, it) => acc + (it.quantity || 1), 0), [items])
+  // Selected items calculation
+  const selectedItems = useMemo(() => {
+    const currentSelected = selectedItemKeys || []
+    return items.filter(it => currentSelected.includes(getItemKey(it)))
+  }, [items, selectedItemKeys])
+
+  const selectedCount = selectedItems.length
+  const isAllSelected = items.length > 0 && selectedCount === items.length
+  const isPartiallySelected = selectedCount > 0 && selectedCount < items.length
+
+  const selectedTotalPrice = useMemo(() => {
+    return selectedItems.reduce((acc, it) => acc + Number(it.price) * it.quantity, 0)
+  }, [selectedItems])
+
+  const selectedTotalItemsCount = useMemo(() => {
+    return selectedItems.reduce((acc, it) => acc + (it.quantity || 1), 0)
+  }, [selectedItems])
+
+  const shippingFee = selectedCount > 0 ? 15000 : 0
+  const finalTotal = selectedTotalPrice + shippingFee
+
+  // Check if any selected item is out of stock or exceeds stock
+  const hasInvalidSelectedItem = useMemo(() => {
+    return selectedItems.some(item => {
+      const itemKey = getItemKey(item)
+      const st = productStocks[itemKey]
+      return st !== undefined && (st === 0 || item.quantity > st)
+    })
+  }, [selectedItems, productStocks])
+
+  const handleCheckout = useCallback(() => {
+    if (selectedCount === 0) return
+    if (!isAuthenticated()) {
+      navigate('/shop/login', { state: { from: { pathname: '/shop/checkout' } } })
+      return
+    }
+    navigate('/shop/checkout')
+  }, [selectedCount, isAuthenticated, navigate])
 
   if (items.length === 0) {
     return (
@@ -127,26 +165,26 @@ function CartPage() {
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
       <ShopNavigation />
-      
+
       <main className="container-custom py-10 md:py-14">
         {/* Breadcrumb & Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <nav className="flex items-center gap-2 text-xs text-gray-400 mb-3 font-body">
             <Link to="/shop" className="hover:text-primary-600 transition-colors">Toko</Link>
             <span>/</span>
             <span className="text-gray-700 font-medium">Keranjang Belanja</span>
           </nav>
-          
+
           <div className="flex flex-wrap items-baseline justify-between gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-heading font-medium text-gray-900 tracking-tight">
                 Keranjang Belanja
               </h1>
               <p className="text-xs md:text-sm font-body text-gray-500 mt-1">
-                Ada <span className="font-semibold text-gray-800">{items.length} jenis produk</span> ({totalItemCount} total item) siap diproses
+                Ada <span className="font-semibold text-gray-800">{items.length} jenis produk</span> ({items.reduce((acc, it) => acc + (it.quantity || 1), 0)} total item) di keranjang Anda
               </p>
             </div>
-            
+
             <Link
               to="/shop"
               className="text-xs font-body font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1.5 transition-colors"
@@ -160,41 +198,85 @@ function CartPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 xl:gap-10 items-start">
           {/* Cart Items List */}
           <div className="lg:col-span-2 space-y-4">
+            {/* Select All Bar */}
+            <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-gray-100 shadow-2xs flex items-center justify-between">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={el => {
+                    if (el) el.indeterminate = isPartiallySelected
+                  }}
+                  onChange={e => selectAllItems(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900 cursor-pointer accent-gray-900"
+                />
+                <span className="text-xs sm:text-sm font-body font-medium text-gray-800">
+                  Pilih Semua ({items.length} jenis barang)
+                </span>
+              </label>
+
+              {selectedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Hapus ${selectedCount} produk terpilih dari keranjang?`)) {
+                      removeItemsByKeys(selectedItemKeys)
+                    }
+                  }}
+                  className="text-xs text-red-600 hover:text-red-700 font-medium transition-colors cursor-pointer"
+                >
+                  Hapus Terpilih ({selectedCount})
+                </button>
+              )}
+            </div>
+
+            {/* List of items */}
             {items.map(item => {
-              const itemKey = item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
-              const currentStock = productStocks[itemKey] !== undefined 
-                ? productStocks[itemKey] 
-                : (item.stock || 0)
+              const itemKey = getItemKey(item)
+              const currentStock = productStocks[itemKey] !== undefined ? productStocks[itemKey] : item.stock || 0
               const isOutOfStock = currentStock === 0
               const isQuantityExceeded = item.quantity > currentStock
               const maxQuantity = Math.max(0, currentStock)
               const itemSubtotal = Number(item.price) * item.quantity
+              const isSelected = (selectedItemKeys || []).includes(itemKey)
+              const itemImageUrl = formatImageUrl(item.image)
 
               return (
                 <div
                   key={itemKey}
-                  className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs hover:border-gray-200 transition-all flex flex-col sm:flex-row gap-4 sm:gap-5"
+                  className={`bg-white rounded-2xl p-4 sm:p-5 border transition-all flex flex-col sm:flex-row gap-4 sm:gap-5 ${
+                    isSelected ? 'border-gray-300 shadow-xs ring-1 ring-gray-900/5' : 'border-gray-100 shadow-2xs opacity-90'
+                  }`}
                 >
+                  {/* Select Checkbox */}
+                  <div className="flex items-center sm:items-start pt-1">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelectItem(itemKey)}
+                      className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900 cursor-pointer accent-gray-900"
+                      aria-label={`Pilih ${item.name}`}
+                    />
+                  </div>
+
                   {/* Product Image Thumbnail */}
                   <Link
                     to={`/shop/product/${item.id}`}
-                    className="relative flex-shrink-0 w-24 h-24 sm:w-28 sm:h-28 overflow-hidden bg-gray-50 rounded-xl border border-gray-100 group"
+                    className="relative flex-shrink-0 w-24 h-24 sm:w-28 sm:h-28 overflow-hidden bg-gray-50 rounded-xl border border-gray-100 group flex items-center justify-center"
                   >
                     <img
-                      src={item.image || '/placeholder.jpg'}
+                      src={itemImageUrl}
                       alt={item.name}
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                       loading="lazy"
-                      onError={e => {
-                        e.target.src = '/placeholder.jpg'
-                      }}
+                      onError={e => handleImageError(e, item)}
                     />
                   </Link>
 
                   {/* Product Details */}
                   <div className="flex-1 flex flex-col justify-between">
                     <div>
-                      <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex items-start justify-between gap-3 mb-1.5">
                         <Link
                           to={`/shop/product/${item.id}`}
                           className="hover:text-primary-600 transition-colors"
@@ -203,11 +285,11 @@ function CartPage() {
                             {item.name}
                           </h3>
                         </Link>
-                        
+
                         {/* Remove Action */}
                         <button
                           onClick={() => removeItem(itemKey)}
-                          className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                          className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0 cursor-pointer"
                           title="Hapus dari keranjang"
                           aria-label="Hapus produk"
                         >
@@ -215,18 +297,13 @@ function CartPage() {
                         </button>
                       </div>
 
-                      {/* Variant Badge & Price per item */}
-                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                      {/* Plain Variant Display (No Orange Background / Dot) */}
+                      <div className="flex flex-wrap items-center gap-2 mb-2.5">
                         {item.variantName ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-900 border border-amber-200/60">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                          <span className="text-xs text-gray-600 font-medium">
                             Varian: {item.variantName}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600">
-                            Standar
-                          </span>
-                        )}
+                        ) : null}
 
                         <span className="text-xs text-gray-400 font-body">
                           @ {formatCurrency(Number(item.price))}
@@ -256,36 +333,40 @@ function CartPage() {
                       ) : null}
                     </div>
 
-                    {/* Bottom Controls: Quantity & Subtotal */}
+                    {/* Bottom Controls: High-Contrast Quantity Stepper & Subtotal */}
                     <div className="pt-3 mt-2 border-t border-gray-100 flex items-center justify-between gap-4">
-                      {/* Quantity Stepper */}
-                      <div className="inline-flex items-center border border-gray-200 rounded-xl bg-gray-50/70 p-0.5">
+                      {/* Quantity Stepper with Crisp, Visible Plus & Minus */}
+                      <div className="inline-flex items-center border border-gray-300 rounded-xl bg-gray-50/80 p-0.5 shadow-2xs">
                         <button
+                          type="button"
                           onClick={() => updateQuantity(itemKey, item.quantity - 1)}
                           disabled={isOutOfStock || item.quantity <= 1}
-                          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-white shadow-xs text-gray-700 hover:text-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-800 hover:bg-gray-100 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
                           aria-label="Kurangi jumlah"
                         >
-                          <Icon name="Minus" size={12} />
+                          <Icon name="Minus" size={14} className="text-gray-800" />
                         </button>
-                        
-                        <span className={`w-9 sm:w-11 text-center text-xs sm:text-sm font-body font-semibold ${
-                          isQuantityExceeded ? 'text-red-600' : 'text-gray-900'
-                        }`}>
+
+                        <span
+                          className={`w-9 sm:w-11 text-center text-xs sm:text-sm font-body font-semibold ${
+                            isQuantityExceeded ? 'text-red-600' : 'text-gray-900'
+                          }`}
+                        >
                           {item.quantity}
                         </span>
-                        
+
                         <button
+                          type="button"
                           onClick={() => {
                             if (item.quantity < maxQuantity) {
                               updateQuantity(itemKey, item.quantity + 1)
                             }
                           }}
                           disabled={isOutOfStock || item.quantity >= maxQuantity}
-                          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-white shadow-xs text-gray-700 hover:text-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-800 hover:bg-gray-100 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
                           aria-label="Tambah jumlah"
                         >
-                          <Icon name="Plus" size={12} />
+                          <Icon name="Plus" size={14} className="text-gray-800" />
                         </button>
                       </div>
 
@@ -309,15 +390,15 @@ function CartPage() {
               <h2 className="text-lg font-heading font-medium text-gray-900 mb-5 pb-3 border-b border-gray-100">
                 Ringkasan Pesanan
               </h2>
-              
+
               <div className="space-y-3 mb-6 pb-5 border-b border-gray-100">
                 <div className="flex justify-between text-xs sm:text-sm font-body text-gray-600">
-                  <span>Total Harga ({totalItemCount} barang)</span>
+                  <span>Total Harga ({selectedTotalItemsCount} barang dipilih)</span>
                   <span className="font-medium text-gray-900">
-                    {formatCurrency(totalPrice)}
+                    {formatCurrency(selectedTotalPrice)}
                   </span>
                 </div>
-                
+
                 <div className="flex justify-between text-xs sm:text-sm font-body text-gray-600">
                   <span className="flex items-center gap-1">
                     Estimasi Ongkir
@@ -342,13 +423,10 @@ function CartPage() {
 
               {/* Checkout CTA */}
               <button
+                type="button"
                 onClick={handleCheckout}
-                disabled={items.some(item => {
-                  const itemKey = item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
-                  const st = productStocks[itemKey]
-                  return st !== undefined && (st === 0 || item.quantity > st)
-                })}
-                className="w-full mb-4 group cursor-pointer disabled:cursor-not-allowed"
+                disabled={selectedCount === 0 || hasInvalidSelectedItem}
+                className="w-full mb-4 group cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Button
                   variant="primary"
@@ -356,10 +434,20 @@ function CartPage() {
                   size="lg"
                   className="uppercase tracking-wider py-3.5 flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
                 >
-                  <span>Lanjut ke Pembayaran</span>
+                  <span>
+                    {selectedCount === 0
+                      ? 'Pilih Produk Dulu'
+                      : `Lanjut ke Pembayaran (${selectedTotalItemsCount})`}
+                  </span>
                   <Icon name="ArrowRight" size={16} className="transition-transform group-hover:translate-x-1" />
                 </Button>
               </button>
+
+              {selectedCount === 0 && (
+                <p className="text-xs text-amber-700 text-center -mt-2 mb-3">
+                  Pilih minimal 1 produk di atas untuk melanjutkan ke pembayaran.
+                </p>
+              )}
 
               <Link
                 to="/shop"

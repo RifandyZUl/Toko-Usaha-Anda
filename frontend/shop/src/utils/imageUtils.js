@@ -53,22 +53,39 @@ export const fixSupabaseImageUrl = (originalSrc) => {
 }
 
 /**
- * Get product image URL with fallback
- * @param {Object} product - Product object
- * @returns {string} Image URL
+ * Format any image URL with backend host and fallback
+ * @param {string|Object} input - String URL or product/variant object
+ * @returns {string} Formatted full image URL
  */
-export const getProductImageUrl = (product) => {
-  const url = product?.imageUrl || product?.image
-  if (!url) return '/placeholder.jpg'
+export const formatImageUrl = (input) => {
+  if (!input) return '/placeholder.jpg'
+
+  let url = ''
+  if (typeof input === 'string') {
+    url = input.trim()
+  } else if (typeof input === 'object') {
+    url = input.imageUrl || input.image || input.url || ''
+  }
+
+  if (!url || typeof url !== 'string') return '/placeholder.jpg'
 
   // Prepend backend host if URL is a local relative upload path
-  if (typeof url === 'string' && url.startsWith('/uploads')) {
+  if (url.startsWith('/uploads')) {
     const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
     const backendHost = apiBase.replace(/\/api\/?$/, '')
     return `${backendHost}${url}`
   }
 
   return url
+}
+
+/**
+ * Get product image URL with fallback (alias to formatImageUrl)
+ * @param {Object|string} product - Product object or direct URL string
+ * @returns {string} Image URL
+ */
+export const getProductImageUrl = (product) => {
+  return formatImageUrl(product)
 }
 
 /**

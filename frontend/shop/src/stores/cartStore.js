@@ -2,52 +2,71 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 /**
+ * Helper to get unique key for a cart item
+ */
+export const getItemKey = (item) => {
+  if (!item) return ''
+  return item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)
+}
+
+/**
  * Cart Store menggunakan Zustand
- * State management untuk shopping cart
+ * State management untuk shopping cart dengan dukungan seleksi checkout per item
  */
 export const useCartStore = create(
   persist(
     (set, get) => ({
       // State
       items: [],
+      selectedItemKeys: [], // Keys of items selected for checkout
       isOpen: false,
 
       // Actions
       addItem: (product, quantity = 1) => {
         const items = get().items
-        const cartKey = product.variantId ? `${product.id}-${product.variantId}` : product.id
-        const existingItem = items.find(
-          item => (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) === cartKey
-        )
+        const cartKey = getItemKey(product)
+        const existingItem = items.find(item => getItemKey(item) === cartKey)
         const maxStock = typeof product.stock === 'number' ? product.stock : 9999
 
         if (maxStock <= 0) return // Don't add out of stock products
 
+        let updatedItems = []
         if (existingItem) {
           const newQty = Math.min(existingItem.quantity + quantity, maxStock)
-          set({
-            items: items.map(item =>
-              (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) === cartKey
-                ? { ...item, ...product, cartKey, quantity: newQty }
-                : item
-            ),
-          })
+          updatedItems = items.map(item =>
+            getItemKey(item) === cartKey
+              ? { ...item, ...product, cartKey, quantity: newQty }
+              : item
+          )
         } else {
           const initialQty = Math.min(Math.max(1, quantity), maxStock)
-          set({
-            items: [...items, { ...product, cartKey, quantity: initialQty }],
-          })
+          updatedItems = [...items, { ...product, cartKey, quantity: initialQty }]
         }
+
+        // Auto-select newly added item
+        const currentSelected = get().selectedItemKeys || []
+        const updatedSelected = currentSelected.includes(cartKey)
+          ? currentSelected
+          : [...currentSelected, cartKey]
+
+        set({ items: updatedItems, selectedItemKeys: updatedSelected })
       },
 
       removeItem: cartKeyOrId => {
-        set({
-          items: get().items.filter(
-            item =>
-              (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) !== cartKeyOrId &&
-              item.id !== cartKeyOrId
-          ),
-        })
+        const remainingItems = get().items.filter(
+          item => getItemKey(item) !== cartKeyOrId && item.id !== cartKeyOrId
+        )
+        const updatedSelected = (get().selectedItemKeys || []).filter(
+          k => k !== cartKeyOrId
+        )
+        set({ items: remainingItems, selectedItemKeys: updatedSelected })
+      },
+
+      removeItemsByKeys: (keysToRemove = []) => {
+        const keySet = new Set(keysToRemove)
+        const remainingItems = get().items.filter(item => !keySet.has(getItemKey(item)))
+        const updatedSelected = (get().selectedItemKeys || []).filter(k => !keySet.has(k))
+        set({ items: remainingItems, selectedItemKeys: updatedSelected })
       },
 
       updateQuantity: (cartKeyOrId, quantity) => {
@@ -58,17 +77,14 @@ export const useCartStore = create(
 
         const items = get().items
         const targetItem = items.find(
-          item =>
-            (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) === cartKeyOrId ||
-            item.id === cartKeyOrId
+          item => getItemKey(item) === cartKeyOrId || item.id === cartKeyOrId
         )
         const maxStock = targetItem && typeof targetItem.stock === 'number' ? targetItem.stock : 9999
         const finalQty = Math.min(quantity, maxStock)
 
         set({
           items: items.map(item =>
-            (item.cartKey || (item.variantId ? `${item.id}-${item.variantId}` : item.id)) === cartKeyOrId ||
-            item.id === cartKeyOrId
+            getItemKey(item) === cartKeyOrId || item.id === cartKeyOrId
               ? { ...item, quantity: finalQty }
               : item
           ),
@@ -76,7 +92,30 @@ export const useCartStore = create(
       },
 
       clearCart: () => {
-        set({ items: [] })
+        set({ items: [], selectedItemKeys: [] })
+      },
+
+      // Selection actions for selective checkout
+      toggleSelectItem: (cartKey) => {
+        const current = get().selectedItemKeys || []
+        if (current.includes(cartKey)) {
+          set({ selectedItemKeys: current.filter(k => k !== cartKey) })
+        } else {
+          set({ selectedItemKeys: [...current, cartKey] })
+        }
+      },
+
+      selectAllItems: (selectAll = true) => {
+        if (selectAll) {
+          const allKeys = get().items.map(it => getItemKey(it))
+          set({ selectedItemKeys: allKeys })
+        } else {
+          set({ selectedItemKeys: [] })
+        }
+      },
+
+      setSelectedKeys: (keys = []) => {
+        set({ selectedItemKeys: keys })
       },
 
       toggleCart: () => {
@@ -101,6 +140,29 @@ export const useCartStore = create(
           (total, item) => total + item.price * item.quantity,
           0
         )
+      },
+
+      getSelectedItems: () => {
+        const items = get().items
+        const selected = get().selectedItemKeys
+        // If not initialized or empty, default to all items
+        if (!selected || selected.length === 0) {
+          return []
+        }
+        return items.filter(it => selected.includes(getItemKey(it)))
+      },
+
+      getSelectedTotalPrice: () => {
+        const selectedItems = get().getSelectedItems()
+        return selectedItems.reduce(
+          (total, item) => total + Number(item.price) * item.quantity,
+          0
+        )
+      },
+
+      getSelectedTotalItems: () => {
+        const selectedItems = get().getSelectedItems()
+        return selectedItems.reduce((total, item) => total + item.quantity, 0)
       },
     }),
     {
