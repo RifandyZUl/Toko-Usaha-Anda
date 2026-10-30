@@ -33,6 +33,27 @@ export const getProducts = async (params = {}) => {
 }
 
 /**
+ * Get featured products (most popular & best selling)
+ * @param {number} limit - Max number of featured products to fetch
+ */
+export const getFeaturedProducts = async (limit = 10) => {
+  try {
+    const response = await apiClient.get('/products/featured', { limit })
+    return {
+      success: true,
+      products: response.products || [],
+    }
+  } catch (error) {
+    logError('Error fetching featured products', error)
+    return {
+      success: false,
+      error: error.message,
+      products: [],
+    }
+  }
+}
+
+/**
  * Get product by ID
  * @param {string|number} productId - Product ID
  */

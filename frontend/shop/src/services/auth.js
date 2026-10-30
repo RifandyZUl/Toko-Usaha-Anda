@@ -174,4 +174,43 @@ export const checkPhoneStatus = async phone => {
   }
 }
 
+/**
+ * Send Email OTP for registration / verification
+ */
+export const sendEmailOtp = async email => {
+  try {
+    const response = await apiClient.post('/auth/send-email-otp', { email })
+    return {
+      success: true,
+      ...response,
+    }
+  } catch (error) {
+    logError('Error sending email OTP', error)
+    return {
+      success: false,
+      error: error.message || 'Gagal mengirim kode OTP ke email.',
+    }
+  }
+}
+
+/**
+ * Verify Email OTP code
+ */
+export const verifyEmailOtp = async (email, otp) => {
+  try {
+    const response = await apiClient.post('/auth/verify-email-otp', { email, otp })
+    return {
+      success: true,
+      ...response,
+    }
+  } catch (error) {
+    logError('Error verifying email OTP', error)
+    return {
+      success: false,
+      error: error.message || 'Kode OTP email tidak valid atau kedaluwarsa.',
+    }
+  }
+}
+
+
 

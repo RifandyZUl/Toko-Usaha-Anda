@@ -33,6 +33,7 @@ import uploadRoutes from './routes/upload.js'
 import paymentRoutes from './routes/payment.js'
 import locationRoutes from './routes/location.js'
 import shippingRoutes from './routes/shipping.js'
+import webhookRoutes from './routes/webhook.js'
 import { startOrderExpiryCron } from './services/orderExpiryService.js'
 import { startOrderAutoCompleteCron } from './services/orderAutoCompleteService.js'
 
@@ -118,9 +119,9 @@ app.use(cookieParser())
 app.use(hppMiddleware)
 app.use(sanitizeInput)
 
-// 6. General API rate limiter (applied to all /api routes except payment webhook)
+// 6. General API rate limiter (applied to all /api routes except payment notification and webhooks)
 app.use('/api', (req, res, next) => {
-  if (req.path === '/payment/notification') {
+  if (req.path === '/payment/notification' || req.path.startsWith('/webhook')) {
     return next()
   }
   return generalLimiter(req, res, next)
@@ -155,6 +156,7 @@ app.use('/api/upload', uploadLimiter, uploadRoutes)
 app.use('/api/payment', paymentRoutes)
 app.use('/api/location', locationRoutes)
 app.use('/api/shipping', shippingRoutes)
+app.use('/api/webhook', webhookRoutes)
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 

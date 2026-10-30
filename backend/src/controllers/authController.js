@@ -16,6 +16,8 @@ import { asyncHandler } from '../utils/asyncHandler.js'
 import { HTTP_STATUS } from '../constants/index.js'
 import { logWarn } from '../utils/logger.js'
 
+import { verifyEmailVerificationOtp } from '../services/otpService.js'
+
 // Bcrypt cost factor — 12 is the current industry recommendation
 const BCRYPT_ROUNDS = 12
 
@@ -57,6 +59,8 @@ const sendTokenResponse = (res, user, statusCode, message) => {
       name: user.name,
       phone: user.phone,
       role: user.role,
+      isEmailVerified: user.isEmailVerified,
+      isPhoneVerified: user.isPhoneVerified,
     },
   })
 }
@@ -65,22 +69,38 @@ const sendTokenResponse = (res, user, statusCode, message) => {
  * POST /api/auth/register
  */
 export const register = asyncHandler(async (req, res) => {
-  const { email, name, password, phone } = req.body
+  const { email, name, password, phone, otp } = req.body
+  const cleanEmail = (email || '').trim().toLowerCase()
 
-  const existingUser = await prisma.user.findUnique({ where: { email } })
+  const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } })
   if (existingUser) {
     return res.status(HTTP_STATUS.CONFLICT).json({
-      error: 'An account with this email already exists.',
+      error: 'Akun dengan email ini sudah terdaftar. Silakan gunakan email lain atau langsung masuk.',
+    })
+  }
+
+  // Verifikasi kode OTP email
+  const otpVerification = await verifyEmailVerificationOtp(cleanEmail, otp)
+  if (!otpVerification.success) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: otpVerification.message,
     })
   }
 
   const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS)
 
   const user = await prisma.user.create({
-    data: { email, name, password: hashedPassword, phone },
+    data: {
+      email: cleanEmail,
+      name,
+      password: hashedPassword,
+      phone: phone?.trim() || null,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
   })
 
-  sendTokenResponse(res, user, HTTP_STATUS.CREATED, 'Account created successfully.')
+  sendTokenResponse(res, user, HTTP_STATUS.CREATED, 'Pendaftaran akun berhasil diverifikasi.')
 })
 
 /**

@@ -95,8 +95,8 @@ class ProductService {
   /**
    * Get featured products (prioritizing most ordered / best selling, then newest)
    */
-  async getFeaturedProducts(limit = 4) {
-    const limitNum = Math.min(20, Math.max(1, parseInt(limit) || 4))
+  async getFeaturedProducts(limit = 10) {
+    const limitNum = Math.min(20, Math.max(1, parseInt(limit) || 10))
 
     const products = await prisma.product.findMany({
       where: { isActive: true },
@@ -125,10 +125,16 @@ class ProductService {
 
     const transformedProducts = await transformProducts(products)
 
-    return transformedProducts.map((p, idx) => ({
-      ...p,
-      badge: (p._count?.orderItems > 0 || idx === 0) ? 'Terlaris' : (idx === 1 ? 'Populer' : null),
-    }))
+    return transformedProducts.map((p, idx) => {
+      const orderCount = p._count?.orderItems || 0
+      const isTopSeller = orderCount > 0 || idx < 3
+      return {
+        ...p,
+        isFeatured: true,
+        orderCount,
+        badge: isTopSeller ? 'Terlaris' : 'Unggulan',
+      }
+    })
   }
 
   /**
@@ -168,6 +174,17 @@ class ProductService {
 
     // Enforce that category belongs to the 3 canonical categories
     await this.validateCanonicalCategory(productData.categoryId)
+
+    if (Array.isArray(productData.images)) {
+      productData.images = productData.images.filter(img => typeof img === 'string' && img.trim().length > 0)
+      if (productData.images.length > 0 && !productData.image) {
+        productData.image = productData.images[0]
+      }
+    } else if (productData.image) {
+      productData.images = [productData.image]
+    } else {
+      productData.images = []
+    }
 
     if (productData.slug) {
       const existing = await prisma.product.findUnique({ where: { slug: productData.slug } })
@@ -237,6 +254,17 @@ class ProductService {
     if (productData.slug && productData.slug !== existing.slug) {
       const slugExists = await prisma.product.findUnique({ where: { slug: productData.slug } })
       if (slugExists) throw new ConflictError(ERROR_MESSAGES.PRODUCT_SLUG_EXISTS)
+    }
+
+    if (Array.isArray(productData.images)) {
+      productData.images = productData.images.filter(img => typeof img === 'string' && img.trim().length > 0)
+      if (productData.images.length > 0) {
+        productData.image = productData.images[0]
+      } else {
+        productData.image = null
+      }
+    } else if (productData.image) {
+      productData.images = [productData.image]
     }
 
     const updated = await prisma.$transaction(async (tx) => {

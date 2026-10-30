@@ -73,6 +73,7 @@ export default function ProductsPage() {
     price: '',
     stock: '',
     image: '',
+    images: [],
     categoryId: '',
     isActive: true,
   })
@@ -100,13 +101,18 @@ export default function ProductsPage() {
   const handleEdit = product => {
     setEditingProduct(product)
     const hasVariants = Boolean(product.variants && product.variants.length > 0)
+    const initialImages = Array.isArray(product.images) && product.images.length > 0
+      ? product.images
+      : (product.image ? [product.image] : [])
+
     setFormData({
       name: product.name || '',
       slug: product.slug || generateSlug(product.name || ''),
       description: product.description || '',
       price: product.price?.toString() || '',
       stock: product.stock?.toString() || '',
-      image: product.image || '',
+      image: initialImages[0] || product.image || '',
+      images: initialImages,
       categoryId: product.categoryId || '',
       isActive: product.isActive ?? true,
       hasVariants,
@@ -123,7 +129,7 @@ export default function ProductsPage() {
     })
     setError(null)
     setImageFile(null)
-    setImagePreview(product.image || null)
+    setImagePreview(initialImages[0] || null)
     setShowModal(true)
   }
 
@@ -136,6 +142,7 @@ export default function ProductsPage() {
       price: '',
       stock: '',
       image: '',
+      images: [],
       categoryId: categories.length > 0 ? categories[0].id : '',
       isActive: true,
       hasVariants: false,
@@ -148,56 +155,76 @@ export default function ProductsPage() {
   }
 
   /**
-   * Handle image file selection
+   * Handle image files selection (supports multiple files)
    * @param {React.ChangeEvent<HTMLInputElement>} e - File input event
    */
   const handleImageChange = async e => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      alert('Hanya file gambar yang diizinkan')
-      return
+    const validFiles = []
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) {
+        alert(`File ${file.name} bukan gambar. Hanya file gambar yang diizinkan.`)
+        continue
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`Ukuran file ${file.name} melebihi batas 5MB.`)
+        continue
+      }
+      validFiles.push(file)
     }
 
-    // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file maksimal 5MB')
-      return
-    }
+    if (validFiles.length === 0) return
 
-    setImageFile(file)
-
-    // Create preview
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setImagePreview(reader.result)
-    }
-    reader.readAsDataURL(file)
-
-    // Upload image
     setUploadingImage(true)
-    const result = await uploadImage(file)
+    const uploadedUrls = []
+
+    for (const file of validFiles) {
+      const result = await uploadImage(file)
+      if (result.success && result.url) {
+        uploadedUrls.push(result.url)
+      } else {
+        alert(result.error || `Gagal mengupload ${file.name}`)
+      }
+    }
+
     setUploadingImage(false)
 
-    if (result.success) {
-      // URL sudah full URL dari Supabase atau sudah di-handle di upload service
-      setFormData({ ...formData, image: result.url })
-    } else {
-      alert(result.error || 'Gagal mengupload gambar')
-      setImageFile(null)
-      setImagePreview(null)
+    if (uploadedUrls.length > 0) {
+      setFormData(prev => {
+        const nextImages = [...(prev.images || []), ...uploadedUrls]
+        return {
+          ...prev,
+          images: nextImages,
+          image: nextImages[0] || prev.image || '',
+        }
+      })
+      setImagePreview(prev => prev || uploadedUrls[0])
     }
+
+    // Reset file input value so user can re-select same file if needed
+    e.target.value = ''
   }
 
   /**
-   * Remove selected image
+   * Remove selected image by index (or all if no index)
    */
-  const handleRemoveImage = () => {
-    setImageFile(null)
-    setImagePreview(null)
-    setFormData({ ...formData, image: '' })
+  const handleRemoveImage = index => {
+    if (typeof index === 'number') {
+      setFormData(prev => {
+        const nextImages = (prev.images || []).filter((_, idx) => idx !== index)
+        return {
+          ...prev,
+          images: nextImages,
+          image: nextImages[0] || '',
+        }
+      })
+    } else {
+      setImageFile(null)
+      setImagePreview(null)
+      setFormData(prev => ({ ...prev, image: '', images: [] }))
+    }
   }
 
 

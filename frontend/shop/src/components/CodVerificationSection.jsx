@@ -19,7 +19,8 @@ export default function CodVerificationSection({
   const [eligibility, setEligibility] = useState({ eligible: true, message: '', isPhoneVerified: false })
   const [otpSent, setOtpSent] = useState(false)
   const [otpCode, setOtpCode] = useState('')
-  const [countdown, setCountdown] = useState(0)
+  const [countdown, setCountdown] = useState(0) // Resend cooldown in seconds
+  const [validityCountdown, setValidityCountdown] = useState(0) // OTP validity in seconds (5 min)
   const [isSending, setIsSending] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [devOtp, setDevOtp] = useState(null)
@@ -28,6 +29,7 @@ export default function CodVerificationSection({
 
   const phoneInputRef = useRef(null)
   const timerRef = useRef(null)
+  const validityTimerRef = useRef(null)
   const prevPhoneRef = useRef(shippingPhone)
 
   const onEligibilityChangeRef = useRef(onEligibilityChange)
@@ -43,18 +45,27 @@ export default function CodVerificationSection({
       setOtpSent(false)
       setOtpCode('')
       setDevOtp(null)
+      setValidityCountdown(0)
       setErrorMessage('')
       setSuccessMessage('')
     }
   }, [shippingPhone])
 
-  // Countdown timer for resend
+  // Cooldown timer for resend
   useEffect(() => {
     if (countdown > 0) {
       timerRef.current = setTimeout(() => setCountdown(prev => prev - 1), 1000)
     }
     return () => clearTimeout(timerRef.current)
   }, [countdown])
+
+  // Expiration timer for OTP validity (5 minutes)
+  useEffect(() => {
+    if (validityCountdown > 0) {
+      validityTimerRef.current = setTimeout(() => setValidityCountdown(prev => prev - 1), 1000)
+    }
+    return () => clearTimeout(validityTimerRef.current)
+  }, [validityCountdown])
 
   // Check COD eligibility when phone or order total changes
   useEffect(() => {
@@ -110,8 +121,9 @@ export default function CodVerificationSection({
       const res = await sendOtp(currentPhone)
       if (res && res.success) {
         setOtpSent(true)
-        setCountdown(60)
-        setSuccessMessage('Kode OTP berhasil dikirimkan ke WhatsApp Anda.')
+        setCountdown(res.cooldownSeconds || 60)
+        setValidityCountdown(res.expiresInSeconds || 300)
+        setSuccessMessage(res.message || 'Kode OTP berhasil dikirimkan ke WhatsApp Anda.')
         if (res.devOtp) {
           setDevOtp(res.devOtp)
           setOtpCode(res.devOtp)
@@ -303,35 +315,50 @@ export default function CodVerificationSection({
 
       {/* OTP Input Form */}
       {otpSent && (
-        <div className="pt-2 border-t border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="relative">
-            <input
-              type="text"
-              maxLength={6}
-              placeholder="000000"
-              value={otpCode}
-              onChange={e => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-              className="w-36 h-10 px-3 bg-white border-2 border-gray-300 focus:border-emerald-500 focus:outline-none rounded-lg text-center font-mono text-base font-bold tracking-widest text-gray-900 shadow-sm"
-            />
+        <div className="pt-2 border-t border-gray-100 space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500 font-body">Masukkan 6 digit kode OTP:</span>
+            {validityCountdown > 0 ? (
+              <span className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-medium">
+                ⏱️ Berlaku {Math.floor(validityCountdown / 60)}:{(validityCountdown % 60).toString().padStart(2, '0')}
+              </span>
+            ) : (
+              <span className="font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                ⚠️ Kode Kedaluwarsa
+              </span>
+            )}
           </div>
 
-          <button
-            type="button"
-            onClick={handleVerifyOtp}
-            disabled={isVerifying || otpCode.length < 6}
-            className="h-10 px-5 bg-gray-900 hover:bg-black active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
-          >
-            {isVerifying ? 'Memverifikasi...' : 'Verifikasi OTP'}
-          </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative">
+              <input
+                type="text"
+                maxLength={6}
+                placeholder="000000"
+                value={otpCode}
+                onChange={e => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                className="w-36 h-10 px-3 bg-white border-2 border-gray-300 focus:border-emerald-500 focus:outline-none rounded-lg text-center font-mono text-base font-bold tracking-widest text-gray-900 shadow-sm"
+              />
+            </div>
 
-          <button
-            type="button"
-            disabled={countdown > 0 || isSending}
-            onClick={handleSendOtp}
-            className="text-xs text-gray-500 hover:text-gray-900 disabled:opacity-50 underline font-body ml-2 cursor-pointer"
-          >
-            {countdown > 0 ? `Kirim ulang (${countdown}s)` : 'Kirim Ulang'}
-          </button>
+            <button
+              type="button"
+              onClick={handleVerifyOtp}
+              disabled={isVerifying || otpCode.length < 6 || validityCountdown === 0}
+              className="h-10 px-5 bg-gray-900 hover:bg-black active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
+            >
+              {isVerifying ? 'Memverifikasi...' : 'Verifikasi OTP'}
+            </button>
+
+            <button
+              type="button"
+              disabled={countdown > 0 || isSending}
+              onClick={handleSendOtp}
+              className="text-xs text-gray-500 hover:text-gray-900 disabled:opacity-50 underline font-body ml-2 cursor-pointer"
+            >
+              {countdown > 0 ? `Kirim ulang (${countdown}s)` : 'Kirim Ulang'}
+            </button>
+          </div>
         </div>
       )}
     </div>

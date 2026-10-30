@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCartStore } from '../stores/cartStore'
 import { useAuthStore } from '../stores/authStore'
 import { getProductById, getProductReviews } from '../services/products'
@@ -23,6 +24,8 @@ function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1)
   const [selectedVariant, setSelectedVariant] = useState(null)
   const [variantError, setVariantError] = useState(null)
+  const [activeImageIndex, setActiveImageIndex] = useState(0)
+  const [touchStartX, setTouchStartX] = useState(null)
   const [expandedSections, setExpandedSections] = useState({
     delivery: false,
     reviews: false,
@@ -58,6 +61,51 @@ function ProductDetailPage() {
     if (!productData) return null
     return productData.product || productData
   }, [productData])
+
+  // Compute all available images for slide carousel
+  const galleryImages = useMemo(() => {
+    if (!product) return []
+    const imgs = []
+    if (Array.isArray(product.images) && product.images.length > 0) {
+      imgs.push(...product.images.filter(Boolean))
+    } else if (product.imageUrl || product.image) {
+      imgs.push(product.imageUrl || product.image)
+    }
+    // If selected variant has a specific image, place it at the front
+    if (selectedVariant?.image && !imgs.includes(selectedVariant.image)) {
+      imgs.unshift(selectedVariant.image)
+    }
+    return imgs.length > 0 ? imgs : ['/placeholder.jpg']
+  }, [product, selectedVariant])
+
+  // Reset active image index when product or variant changes
+  useEffect(() => {
+    setActiveImageIndex(0)
+  }, [product?.id, selectedVariant?.id])
+
+  const handlePrevImage = useCallback(() => {
+    setActiveImageIndex(prev => (prev === 0 ? galleryImages.length - 1 : prev - 1))
+  }, [galleryImages.length])
+
+  const handleNextImage = useCallback(() => {
+    setActiveImageIndex(prev => (prev === galleryImages.length - 1 ? 0 : prev + 1))
+  }, [galleryImages.length])
+
+  const handleTouchStart = e => {
+    setTouchStartX(e.touches[0].clientX)
+  }
+
+  const handleTouchEnd = e => {
+    if (touchStartX === null) return
+    const touchEndX = e.changedTouches[0].clientX
+    const diff = touchStartX - touchEndX
+    if (diff > 40) {
+      handleNextImage()
+    } else if (diff < -40) {
+      handlePrevImage()
+    }
+    setTouchStartX(null)
+  }
 
   // Select initial in-stock variant when product loads
   useEffect(() => {
@@ -194,30 +242,92 @@ function ProductDetailPage() {
         {product && !loading && !error && (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6 mb-6">
-              {/* Product Image */}
-              <div className="overflow-hidden bg-white border border-gray-200 flex items-center justify-center">
-                <img
-                  src={product?.imageUrl || product?.image || '/placeholder.jpg'}
-                  alt={product?.name || 'Product'}
-                  className="max-w-full max-h-[500px] w-auto h-auto object-contain"
-                  crossOrigin="anonymous"
-                  loading="lazy"
-                  onError={e => {
-                    const attemptedSrc = e.target.src
-                    logError('Product detail - Image load error', {
-                      productId: product?.id,
-                      imageUrl: product?.imageUrl,
-                      image: product?.image,
-                      attemptedSrc,
-                    })
-                    if (!attemptedSrc.includes('placeholder')) {
-                      e.target.src = '/placeholder.jpg'
-                    }
-                  }}
-                  onLoad={() => {
-                    logDebug('Product detail - Image loaded successfully', product?.id)
-                  }}
-                />
+              {/* Product Image Gallery Slider */}
+              <div className="flex flex-col space-y-3">
+                {/* Main Slider Viewport */}
+                <div
+                  className="relative w-full aspect-square max-h-[500px] bg-white border border-gray-200 rounded-xl overflow-hidden flex items-center justify-center group select-none"
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
+                >
+                  {/* Sliding Container */}
+                  <div
+                    className="flex w-full h-full transition-transform duration-300 ease-out"
+                    style={{ transform: `translateX(-${activeImageIndex * 100}%)` }}
+                  >
+                    {galleryImages.map((imgSrc, idx) => (
+                      <div
+                        key={`${imgSrc}-${idx}`}
+                        className="w-full h-full flex-shrink-0 flex items-center justify-center p-4 bg-white"
+                      >
+                        <img
+                          src={imgSrc}
+                          alt={`${product?.name || 'Product'} ${idx + 1}`}
+                          className="max-w-full max-h-[460px] w-auto h-auto object-contain pointer-events-none"
+                          crossOrigin="anonymous"
+                          loading={idx === 0 ? 'eager' : 'lazy'}
+                          onError={e => {
+                            e.target.src = '/placeholder.jpg'
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Navigation Arrows (if > 1 image) */}
+                  {galleryImages.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handlePrevImage}
+                        aria-label="Foto sebelumnya"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-80 group-hover:opacity-100 hover:scale-105 z-10"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNextImage}
+                        aria-label="Foto selanjutnya"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-80 group-hover:opacity-100 hover:scale-105 z-10"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+
+                      {/* Image Counter Badge */}
+                      <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-full z-10">
+                        {activeImageIndex + 1} / {galleryImages.length}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Horizontal Thumbnails Strip (if > 1 image) */}
+                {galleryImages.length > 1 && (
+                  <div className="flex items-center space-x-2.5 overflow-x-auto py-1 scrollbar-thin">
+                    {galleryImages.map((imgSrc, idx) => (
+                      <button
+                        key={`thumb-${imgSrc}-${idx}`}
+                        type="button"
+                        onClick={() => setActiveImageIndex(idx)}
+                        className={`relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 bg-white transition-all ${
+                          activeImageIndex === idx
+                            ? 'border-primary-600 ring-2 ring-primary-500/20 scale-105 shadow-sm'
+                            : 'border-gray-200 opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <img
+                          src={imgSrc}
+                          alt={`Thumbnail ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={e => {
+                            e.target.src = '/placeholder.jpg'
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Product Info */}

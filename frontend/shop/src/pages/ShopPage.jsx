@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { getProducts, getCategories } from '../services/products'
+import { getProducts, getCategories, getFeaturedProducts } from '../services/products'
 import ShopNavigation from '../components/ShopNavigation'
 import ErrorMessage from '../components/ErrorMessage'
 import ProductCard from '../components/ProductCard'
@@ -47,6 +47,36 @@ function ShopPage() {
   const [productsLoading, setProductsLoading] = useState(false)
   const [productsError, setProductsError] = useState(null)
 
+  // Contact Us Form State
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    comment: '',
+  })
+  const [isSubmittingContact, setIsSubmittingContact] = useState(false)
+  const [contactStatus, setContactStatus] = useState({ sent: false, error: null })
+
+  const handleContactChange = e => {
+    const { name, value } = e.target
+    setContactForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleContactSubmit = e => {
+    e.preventDefault()
+    if (!contactForm.name.trim() || !contactForm.email.trim() || !contactForm.comment.trim()) {
+      return
+    }
+
+    setIsSubmittingContact(true)
+    setTimeout(() => {
+      setIsSubmittingContact(false)
+      setContactStatus({ sent: true, error: null })
+      setContactForm({ name: '', email: '', phone: '', comment: '' })
+      setTimeout(() => setContactStatus({ sent: false, error: null }), 7000)
+    }, 600)
+  }
+
   // Fetch products when category or categories change
   useEffect(() => {
     // Don't fetch if categories are still loading
@@ -60,45 +90,29 @@ function ShopPage() {
       setProductsError(null)
 
       try {
-        const params = {
-          page: 1,
-          limit: 100,
-        }
+        let result
 
-        if (searchQuery.trim()) {
-          params.search = searchQuery.trim()
-        }
-
-        // Only filter by category if we have categories and selectedCategory is not 'all'
-        if (selectedCategory !== 'all' && categories.length > 0) {
-          const category = categories.find(
-            cat => cat.id === selectedCategory || cat.slug === selectedCategory
-          )
-          if (category?.slug) {
-            params.category = category.slug
-            logDebug('ShopPage - Filtering by category', { category: category.slug })
+        // Jika tidak ada keyword pencarian, ambil 10 produk unggulan (terlaris / most ordered)
+        if (!searchQuery.trim()) {
+          result = await getFeaturedProducts(10)
+          if (!result.success || !result.products || result.products.length === 0) {
+            result = await getProducts({ page: 1, limit: 10 })
           }
+        } else {
+          const params = {
+            page: 1,
+            limit: 20,
+            search: searchQuery.trim(),
+          }
+          result = await getProducts(params)
         }
-
-        logDebug('ShopPage - Fetching products', params)
-        const result = await getProducts(params)
-        logDebug('ShopPage - Products result', {
-          success: result.success,
-          productsCount: result.products?.length || 0,
-          hasProducts: !!result.products,
-        })
 
         if (result.success && result.products) {
           const productsArray = Array.isArray(result.products) ? result.products : []
           setProducts(productsArray)
           logDebug('ShopPage - Products set successfully', { count: productsArray.length })
         } else {
-          logDebug('ShopPage - Products fetch failed', {
-            success: result.success,
-            error: result.error,
-            hasProducts: !!result.products,
-          })
-          setProductsError(result.error || 'Gagal memuat produk')
+          setProductsError(result.error || 'Gagal memuat produk unggulan')
           setProducts([])
         }
       } catch (err) {
@@ -112,7 +126,7 @@ function ShopPage() {
 
     fetchProducts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory, categories.length, categoriesLoading, searchQuery])
+  }, [categories.length, categoriesLoading, searchQuery])
 
   // Combine loading and error states
   const loading = categoriesLoading || productsLoading
@@ -305,8 +319,7 @@ function ShopPage() {
         <div className="flex flex-col md:flex-row h-[600px] md:h-[700px]">
           {/* Left Section - Kebutuhan Rumah Tangga */}
           <Link
-            to="/shop"
-            onClick={e => handleFeaturedClick(e, ['kebutuhan rumah', 'rumah tangga', 'household'])}
+            to="/shop/category/household"
             className="relative flex-1 h-[300px] md:h-full overflow-hidden group cursor-pointer bg-gray-100"
             style={{
               backgroundImage: `url('https://images.unsplash.com/photo-1556911220-bff31c812dba?w=1200&h=800&fit=crop')`,
@@ -315,20 +328,7 @@ function ShopPage() {
               backgroundRepeat: 'no-repeat',
             }}
           >
-            <img
-              src="https://images.unsplash.com/photo-1556911220-bff31c812dba?w=1200&h=800&fit=crop"
-              alt="Kebutuhan Rumah Tangga"
-              className="w-full h-full object-cover opacity-0"
-              loading="lazy"
-              onError={e =>
-                handleImageError(
-                  e,
-                  null,
-                  'https://images.unsplash.com/photo-1556911220-bff31c812dba?w=1200&h=800&fit=crop'
-                )
-              }
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent"></div>
             <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
               <h3 className="text-2xl md:text-3xl font-heading font-semibold text-white mb-2 drop-shadow-lg">
                 Kebutuhan Rumah Tangga
@@ -336,9 +336,9 @@ function ShopPage() {
               <p className="text-sm md:text-base font-body text-white/95 mb-4 drop-shadow-md">
                 Kebutuhan rumah tangga lengkap dan berkualitas
               </p>
-              <button className="bg-white text-gray-900 px-6 py-2.5 rounded-full text-sm font-body font-medium hover:bg-gray-100 transition-colors uppercase tracking-wider shadow-lg">
-                Explore
-              </button>
+              <span className="inline-block bg-white text-gray-900 px-6 py-2.5 rounded-full text-sm font-body font-medium group-hover:bg-gray-100 transition-colors uppercase tracking-wider shadow-lg">
+                Shop
+              </span>
             </div>
           </Link>
 
@@ -346,8 +346,7 @@ function ShopPage() {
           <div className="flex flex-col flex-1 h-[300px] md:h-full">
             {/* Top Right - Perkakas Tukang */}
             <Link
-              to="/shop"
-              onClick={e => handleFeaturedClick(e, ['perkakas', 'tools', 'tukang'])}
+              to="/shop/category/tools"
               className="relative flex-1 h-1/2 overflow-hidden group cursor-pointer bg-gray-100"
               style={{
                 backgroundImage: `url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1200&h=800&fit=crop')`,
@@ -356,20 +355,7 @@ function ShopPage() {
                 backgroundRepeat: 'no-repeat',
               }}
             >
-              <img
-                src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1200&h=800&fit=crop"
-                alt="Perkakas Tukang"
-                className="w-full h-full object-cover opacity-0"
-                loading="lazy"
-                onError={e =>
-                  handleImageError(
-                    e,
-                    null,
-                    'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1200&h=800&fit=crop'
-                  )
-                }
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
                 <h3 className="text-xl md:text-2xl font-heading font-semibold text-white mb-2 drop-shadow-lg">
                   Perkakas Tukang
@@ -377,16 +363,15 @@ function ShopPage() {
                 <p className="text-xs md:text-sm font-body text-white/95 mb-4 drop-shadow-md">
                   Alat pertukangan berkualitas
                 </p>
-                <button className="bg-white text-gray-900 px-6 py-2.5 rounded-full text-sm font-body font-medium hover:bg-gray-100 transition-colors uppercase tracking-wider shadow-lg">
+                <span className="inline-block bg-white text-gray-900 px-6 py-2.5 rounded-full text-sm font-body font-medium group-hover:bg-gray-100 transition-colors uppercase tracking-wider shadow-lg">
                   Shop
-                </button>
+                </span>
               </div>
             </Link>
 
             {/* Bottom Right - Alat Alat Motor */}
             <Link
-              to="/shop"
-              onClick={e => handleFeaturedClick(e, ['motor', 'motorcycle', 'alat motor'])}
+              to="/shop/category/motorcycle"
               className="relative flex-1 h-1/2 overflow-hidden group cursor-pointer border-t md:border-t-0 md:border-l border-gray-300 bg-gray-100"
               style={{
                 backgroundImage: `url('https://blog.indoteknik.com/wp-content/uploads/2025/03/day-6-71.jpg')`,
@@ -395,20 +380,7 @@ function ShopPage() {
                 backgroundRepeat: 'no-repeat',
               }}
             >
-              <img
-                src="https://blog.indoteknik.com/wp-content/uploads/2025/03/day-6-71.jpg"
-                alt="Alat Alat Motor"
-                className="w-full h-full object-cover opacity-0"
-                loading="lazy"
-                onError={e =>
-                  handleImageError(
-                    e,
-                    null,
-                    'https://images.unsplash.com/photo-1558980664-1db506751c6e?w=1200&h=800&fit=crop'
-                  )
-                }
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
                 <h3 className="text-xl md:text-2xl font-heading font-semibold text-white mb-2 drop-shadow-lg">
                   Alat Alat Motor
@@ -416,9 +388,9 @@ function ShopPage() {
                 <p className="text-xs md:text-sm font-body text-white/95 mb-4 drop-shadow-md">
                   Aksesoris dan peralatan motor
                 </p>
-                <button className="bg-white text-gray-900 px-6 py-2.5 rounded-full text-sm font-body font-medium hover:bg-gray-100 transition-colors uppercase tracking-wider shadow-lg">
+                <span className="inline-block bg-white text-gray-900 px-6 py-2.5 rounded-full text-sm font-body font-medium group-hover:bg-gray-100 transition-colors uppercase tracking-wider shadow-lg">
                   Shop
-                </button>
+                </span>
               </div>
             </Link>
           </div>
@@ -427,32 +399,6 @@ function ShopPage() {
 
       {/* Main Content */}
       <main className="container-custom py-8 products-section">
-        {/* Category Filter - Modern & Clean Pill Tabs */}
-        {categories.length > 0 && (
-          <div className="mb-8 pb-4">
-            <div className="flex flex-wrap gap-2.5 justify-center items-center">
-              {categories.map(category => {
-                const isActive = selectedCategory === (category.id || category.slug)
-                return (
-                  <button
-                    key={category.id || category.slug}
-                    onClick={() => handleCategorySelect(category.id || category.slug)}
-                    className={`px-4 py-2 rounded-full text-xs font-body tracking-wider uppercase transition-all duration-200 font-medium ${
-                      isActive
-                        ? 'bg-gray-900 text-white shadow-md ring-2 ring-gray-900/10'
-                        : 'bg-white text-gray-600 border border-gray-200/90 hover:border-gray-400 hover:text-gray-900 hover:bg-gray-50'
-                    }`}
-                  >
-                    {category.name}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-
-
         {/* Loading State */}
         {loading && <ProductGridSkeleton count={10} />}
 
@@ -463,7 +409,6 @@ function ShopPage() {
             onRetry={() => {
               setSelectedCategory('all')
               setProductsError(null)
-              // Re-fetch categories to reset error state
               if (categoriesError) {
                 fetchCategoriesData()
               }
@@ -471,18 +416,139 @@ function ShopPage() {
           />
         )}
 
-        {/* Products Grid - Elegant Layout */}
+        {/* Products Grid - Max 10 Products for Homepage */}
         {!loading && !error && (
           <>
+            {/* Section Header: Produk Unggulan */}
+            <div className="mb-6 flex items-center justify-between border-b border-gray-200 pb-4">
+              <h2 className="text-xl sm:text-2xl font-heading font-semibold text-gray-900 tracking-tight">
+                Produk Unggulan
+              </h2>
+              <Link
+                to="/shop/all"
+                className="text-xs font-heading font-medium text-gray-600 hover:text-gray-900 uppercase tracking-wider inline-flex items-center gap-1 group"
+              >
+                <span>Lihat Semua</span>
+                <span className="transform group-hover:translate-x-0.5 transition-transform">→</span>
+              </Link>
+            </div>
+
             {products.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {products.map(product => (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+                {products.slice(0, 10).map(product => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
             ) : (
-              <EmptyState message="Tidak ada produk ditemukan dalam kategori ini" />
+              <EmptyState message="Tidak ada produk ditemukan dalam katalog" />
             )}
+
+            {/* All Collection Banner Section - Reference Style */}
+            <section className="relative mt-14 rounded-2xl overflow-hidden shadow-lg border border-gray-200">
+              <div className="relative h-[280px] sm:h-[360px] md:h-[420px] w-full">
+                <img
+                  src="/images/all-collection-banner.jpg"
+                  alt="All Collection"
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                {/* Dark overlay & Call to Action */}
+                <div className="absolute inset-0 bg-black/45 backdrop-blur-[0.5px] flex flex-col items-center justify-center text-center px-4">
+                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-heading font-bold text-white tracking-wide mb-5 drop-shadow-md">
+                    All Collection
+                  </h2>
+                  <Link
+                    to="/shop/all"
+                    className="bg-white text-gray-900 hover:bg-gray-100 hover:scale-105 active:scale-95 px-8 py-3 rounded-full text-xs sm:text-sm font-heading font-semibold uppercase tracking-wider shadow-lg transition-all duration-200"
+                  >
+                    Shop Now
+                  </Link>
+                </div>
+              </div>
+            </section>
+
+            {/* Contact Us Section - Clean, Precise, and Minimalist Design */}
+            <section className="mt-16 pt-10 pb-4 border-t border-gray-200/80">
+              <div className="max-w-2xl mx-auto px-4">
+                <h2 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900 text-center tracking-tight mb-8">
+                  Contact us
+                </h2>
+
+                <form onSubmit={handleContactSubmit} className="space-y-4">
+                  {contactStatus.sent && (
+                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-2.5 shadow-xs">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <div>
+                        <strong className="block font-semibold">Pesan Anda Berhasil Terkirim!</strong>
+                        <span>Terima kasih telah menghubungi Toko Usaha Anda. Tim kami akan segera merespons ke email/telepon Anda.</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Row 1: Name & Email */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <input
+                        type="text"
+                        name="name"
+                        value={contactForm.name}
+                        onChange={handleContactChange}
+                        placeholder="Name"
+                        required
+                        className="w-full px-4 py-3 rounded-md border border-gray-200 text-sm font-body text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="email"
+                        name="email"
+                        value={contactForm.email}
+                        onChange={handleContactChange}
+                        placeholder="Email"
+                        required
+                        className="w-full px-4 py-3 rounded-md border border-gray-200 text-sm font-body text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Phone */}
+                  <div>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={contactForm.phone}
+                      onChange={handleContactChange}
+                      placeholder="Phone"
+                      className="w-full px-4 py-3 rounded-md border border-gray-200 text-sm font-body text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-colors"
+                    />
+                  </div>
+
+                  {/* Row 3: Comment */}
+                  <div>
+                    <textarea
+                      name="comment"
+                      rows="6"
+                      value={contactForm.comment}
+                      onChange={handleContactChange}
+                      placeholder="Comment"
+                      required
+                      className="w-full px-4 py-3 rounded-md border border-gray-200 text-sm font-body text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-colors resize-y leading-relaxed"
+                    ></textarea>
+                  </div>
+
+                  {/* Row 4: Submit Button */}
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingContact}
+                      className="inline-flex items-center justify-center px-7 py-2.5 bg-black hover:bg-gray-800 active:scale-98 text-white text-xs sm:text-sm font-heading font-medium rounded-xl shadow-xs transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmittingContact ? 'Mengirim...' : 'Submit'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </section>
           </>
         )}
       </main>

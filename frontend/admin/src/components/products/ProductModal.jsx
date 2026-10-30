@@ -244,8 +244,8 @@ export default function ProductModal({
         stock: calculatedStock,
         categoryId: formData.categoryId,
         isActive: formData.isActive ?? true,
-        image: formData.image || null,
-        images: formData.image ? [formData.image] : [],
+        image: (formData.images && formData.images.length > 0) ? formData.images[0] : (formData.image || null),
+        images: (formData.images && formData.images.length > 0) ? formData.images : (formData.image ? [formData.image] : []),
         variants: isVariants ? parsedVariants : [],
       }
 
@@ -701,56 +701,146 @@ export default function ProductModal({
             </div>
           )}
 
-          {/* Gambar Produk */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Gambar Produk</label>
-            {(imagePreview || localImagePreview) && (
-              <div className="mb-4 relative inline-block">
-                <img
-                  src={imagePreview || localImagePreview}
-                  alt="Preview"
-                  className="w-32 h-32 object-cover rounded-lg border border-gray-300"
-                />
-                <button
-                  type="button"
-                  onClick={onRemoveImage}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                  disabled={uploadingImage}
-                >
-                  <X className="h-4 w-4" />
-                </button>
+          {/* Gambar Produk - Multi Image Gallery */}
+          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <label className="block text-sm font-bold text-gray-900">Galeri Foto Produk</label>
+                <p className="text-xs text-gray-500">
+                  Unggah beberapa foto sekaligus. Foto pertama akan menjadi foto sampul/utama.
+                </p>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+                {(formData.images || (formData.image ? [formData.image] : [])).length} Foto
+              </span>
+            </div>
+
+            {/* Thumbnails Grid */}
+            {((formData.images && formData.images.length > 0) || formData.image) && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 my-3">
+                {(formData.images && formData.images.length > 0
+                  ? formData.images
+                  : [formData.image]
+                ).map((imgUrl, idx) => (
+                  <div
+                    key={`${imgUrl}-${idx}`}
+                    className={`relative group rounded-lg overflow-hidden border-2 bg-white shadow-sm transition-all ${
+                      idx === 0 ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="aspect-square w-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                      <img
+                        src={imgUrl}
+                        alt={`Produk ${idx + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        onError={e => {
+                          e.target.src = '/placeholder.jpg'
+                        }}
+                      />
+                    </div>
+
+                    {/* Badge Utama */}
+                    {idx === 0 ? (
+                      <span className="absolute top-1.5 left-1.5 bg-primary-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
+                        Foto Utama
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = [...(formData.images || [])]
+                          const [picked] = list.splice(idx, 1)
+                          const next = [picked, ...list]
+                          setFormData({ ...formData, images: next, image: next[0] })
+                        }}
+                        className="absolute top-1.5 left-1.5 bg-gray-900/80 hover:bg-primary-600 text-white text-[10px] font-medium px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Jadikan foto utama"
+                      >
+                        Set Utama
+                      </button>
+                    )}
+
+                    {/* Tombol Hapus */}
+                    <button
+                      type="button"
+                      onClick={() => onRemoveImage(idx)}
+                      className="absolute top-1.5 right-1.5 bg-red-600 text-white rounded-full p-1 shadow hover:bg-red-700 transition-colors"
+                      title="Hapus foto ini"
+                      disabled={uploadingImage}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
 
-            <div className="flex items-center space-x-4">
-              <label className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            {/* Upload Buttons & Direct URL input */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <label className="flex items-center space-x-2 px-4 py-2 border border-primary-600 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-lg cursor-pointer transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
                 <Upload className="h-4 w-4" />
-                <span className="text-sm">
-                  {uploadingImage ? 'Mengupload...' : imageFile ? 'Ganti Gambar' : 'Pilih Gambar'}
+                <span>
+                  {uploadingImage ? 'Mengupload...' : '+ Tambah / Unggah Foto (Bisa Banyak)'}
                 </span>
                 <input
                   type="file"
                   accept="image/*"
+                  multiple
                   onChange={onImageChange}
                   className="hidden"
                   disabled={uploadingImage}
                 />
               </label>
-              {uploadingImage && <div className="text-sm text-gray-500">Mengupload gambar...</div>}
+
+              {uploadingImage && (
+                <div className="text-xs text-primary-600 font-medium flex items-center gap-1.5">
+                  <div className="w-3 h-3 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                  Sedang mengunggah gambar...
+                </div>
+              )}
             </div>
 
-            <div className="mt-3">
-              <label className="block text-xs text-gray-500 mb-1">Atau masukkan URL gambar langsung:</label>
-              <input
-                type="url"
-                value={formData.image}
-                onChange={e => {
-                  setFormData({ ...formData, image: e.target.value })
-                  if (e.target.value) setLocalImagePreview(e.target.value)
-                }}
-                className="input text-sm"
-                placeholder="https://example.com/image.jpg"
-              />
+            {/* Direct URL input */}
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Atau tempel URL gambar eksternal:
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  id="direct-img-url"
+                  placeholder="https://example.com/foto-produk.jpg"
+                  className="input text-xs flex-1"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      const val = e.target.value.trim()
+                      if (val) {
+                        const current = formData.images || (formData.image ? [formData.image] : [])
+                        const next = [...current, val]
+                        setFormData({ ...formData, images: next, image: next[0] })
+                        e.target.value = ''
+                      }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('direct-img-url')
+                    if (el && el.value.trim()) {
+                      const val = el.value.trim()
+                      const current = formData.images || (formData.image ? [formData.image] : [])
+                      const next = [...current, val]
+                      setFormData({ ...formData, images: next, image: next[0] })
+                      el.value = ''
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs font-semibold bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors"
+                >
+                  Tambah URL
+                </button>
+              </div>
             </div>
           </div>
 

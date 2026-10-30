@@ -214,69 +214,21 @@ function ShopNavigation() {
           </Link>
 
           {/* Category Navigation - Center */}
-          <div className="hidden lg:flex items-center gap-4 xl:gap-6 justify-center flex-1 max-w-xl mx-auto px-2">
+          <div className="hidden lg:flex items-center gap-6 xl:gap-8 justify-center flex-1 max-w-xl mx-auto px-2">
             <Link
-              to="/shop"
-              onClick={e => {
-                e.preventDefault()
-                localStorage.setItem(
-                  'pendingCategoryFilter',
-                  JSON.stringify(['kebutuhan rumah', 'rumah tangga', 'household'])
-                )
-                if (location.pathname === '/shop' || location.pathname === '/shop/') {
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                  const event = new CustomEvent('filterCategory', {
-                    detail: { keywords: ['kebutuhan rumah', 'rumah tangga', 'household'] },
-                  })
-                  window.dispatchEvent(event)
-                } else {
-                  navigate('/shop')
-                }
-              }}
+              to="/shop/category/household"
               className="text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider transition-colors whitespace-nowrap"
             >
               Kebutuhan Rumah Tangga
             </Link>
             <Link
-              to="/shop"
-              onClick={e => {
-                e.preventDefault()
-                localStorage.setItem(
-                  'pendingCategoryFilter',
-                  JSON.stringify(['perkakas', 'tools', 'tukang'])
-                )
-                if (location.pathname === '/shop' || location.pathname === '/shop/') {
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                  const event = new CustomEvent('filterCategory', {
-                    detail: { keywords: ['perkakas', 'tools', 'tukang'] },
-                  })
-                  window.dispatchEvent(event)
-                } else {
-                  navigate('/shop')
-                }
-              }}
+              to="/shop/category/tools"
               className="text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider transition-colors whitespace-nowrap"
             >
               Perkakas Tukang
             </Link>
             <Link
-              to="/shop"
-              onClick={e => {
-                e.preventDefault()
-                localStorage.setItem(
-                  'pendingCategoryFilter',
-                  JSON.stringify(['motor', 'motorcycle', 'alat motor'])
-                )
-                if (location.pathname === '/shop' || location.pathname === '/shop/') {
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                  const event = new CustomEvent('filterCategory', {
-                    detail: { keywords: ['motor', 'motorcycle', 'alat motor'] },
-                  })
-                  window.dispatchEvent(event)
-                } else {
-                  navigate('/shop')
-                }
-              }}
+              to="/shop/category/motorcycle"
               className="text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider transition-colors whitespace-nowrap"
             >
               Alat Alat Motor
@@ -394,67 +346,22 @@ function ShopNavigation() {
             Beranda
           </a>
           <Link
-            to="/shop"
-            onClick={e => {
-              e.preventDefault()
-              setIsMobileMenuOpen(false)
-              localStorage.setItem(
-                'pendingCategoryFilter',
-                JSON.stringify(['kebutuhan rumah', 'rumah tangga', 'household'])
-              )
-              if (location.pathname === '/shop') {
-                const event = new CustomEvent('filterCategory', {
-                  detail: { keywords: ['kebutuhan rumah', 'rumah tangga', 'household'] },
-                })
-                window.dispatchEvent(event)
-              } else {
-                navigate('/shop')
-              }
-            }}
+            to="/shop/category/household"
+            onClick={() => setIsMobileMenuOpen(false)}
             className="block text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider"
           >
             Kebutuhan Rumah Tangga
           </Link>
           <Link
-            to="/shop"
-            onClick={e => {
-              e.preventDefault()
-              setIsMobileMenuOpen(false)
-              localStorage.setItem(
-                'pendingCategoryFilter',
-                JSON.stringify(['perkakas', 'tools', 'tukang'])
-              )
-              if (location.pathname === '/shop') {
-                const event = new CustomEvent('filterCategory', {
-                  detail: { keywords: ['perkakas', 'tools', 'tukang'] },
-                })
-                window.dispatchEvent(event)
-              } else {
-                navigate('/shop')
-              }
-            }}
+            to="/shop/category/tools"
+            onClick={() => setIsMobileMenuOpen(false)}
             className="block text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider"
           >
             Perkakas Tukang
           </Link>
           <Link
-            to="/shop"
-            onClick={e => {
-              e.preventDefault()
-              setIsMobileMenuOpen(false)
-              localStorage.setItem(
-                'pendingCategoryFilter',
-                JSON.stringify(['motor', 'motorcycle', 'alat motor'])
-              )
-              if (location.pathname === '/shop') {
-                const event = new CustomEvent('filterCategory', {
-                  detail: { keywords: ['motor', 'motorcycle', 'alat motor'] },
-                })
-                window.dispatchEvent(event)
-              } else {
-                navigate('/shop')
-              }
-            }}
+            to="/shop/category/motorcycle"
+            onClick={() => setIsMobileMenuOpen(false)}
             className="block text-xs font-body font-medium text-gray-700 hover:text-primary-600 uppercase tracking-wider"
           >
             Alat Alat Motor

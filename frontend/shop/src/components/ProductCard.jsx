@@ -25,29 +25,14 @@ function ProductCard({ product }) {
         className="relative block overflow-hidden bg-gray-50 aspect-square"
         aria-label={`Lihat detail ${product.name}`}
       >
+
         <img
           src={imageUrl}
           alt={product.name}
-          className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-108"
+          className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
           loading="lazy"
           onError={(e) => handleImageError(e, product)}
         />
-
-        {/* Floating Variant Badge */}
-        {hasVariants && (
-          <div className="absolute top-2.5 left-2.5 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold text-gray-800 shadow-xs border border-gray-200/70 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary-500"></span>
-            <span>{variants.length} Varian</span>
-          </div>
-        )}
-
-        {/* Quick View Hover Overlay Button */}
-        <div className="absolute inset-x-3 bottom-3 opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-2 group-hover:translate-y-0 hidden sm:block">
-          <div className="bg-white/95 backdrop-blur-xs hover:bg-primary-600 hover:text-white text-gray-900 text-xs font-body font-medium py-2 px-3 rounded-xl text-center shadow-md border border-gray-200/60 transition-colors flex items-center justify-center gap-1.5">
-            <span>{hasVariants ? 'Pilih Varian' : 'Lihat Produk'}</span>
-            <Icon name="ArrowRight" size={13} />
-          </div>
-        </div>
       </Link>
 
       {/* Product Info */}

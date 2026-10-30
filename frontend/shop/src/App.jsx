@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ShopPage from './pages/ShopPage'
+import CategoryPage from './pages/CategoryPage'
+import AllProductsPage from './pages/AllProductsPage'
 import ProductDetailPage from './pages/ProductDetailPage'
 import CartPage from './pages/CartPage'
 import CheckoutPage from './pages/CheckoutPage'
@@ -37,6 +39,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/shop" element={<ShopPage />} />
+          <Route path="/shop/category/:slug" element={<CategoryPage />} />
+          <Route path="/shop/all" element={<AllProductsPage />} />
           <Route path="/shop/product/:id" element={<ProductDetailPage />} />
           <Route path="/shop/cart" element={<CartPage />} />
           <Route path="/shop/login" element={<LoginPage />} />

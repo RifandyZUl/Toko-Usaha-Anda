@@ -20,6 +20,10 @@ model User {
   phone     String?
   address   String?
   role      UserRole @default(CUSTOMER)
+  isEmailVerified Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  isPhoneVerified Boolean   @default(false)
+  phoneVerifiedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
@@ -27,6 +31,19 @@ model User {
   orders    Order[]
   
   @@map("users")
+}
+
+// Email Verification OTP Model
+model EmailVerificationOtp {
+  id        String   @id @default(uuid())
+  email     String
+  otpHash   String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("email_verification_otps")
 }
 
 enum UserRole {

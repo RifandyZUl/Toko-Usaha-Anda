@@ -48,6 +48,12 @@ export const validateRegister = [
     .normalizeEmail()
     .isLength({ max: 255 }).withMessage('Email is too long'),
 
+  body('otp')
+    .trim()
+    .notEmpty().withMessage('Kode OTP email wajib diisi')
+    .isLength({ min: 6, max: 6 }).withMessage('Kode OTP harus 6 digit angka')
+    .isNumeric().withMessage('Kode OTP harus berupa angka'),
+
   body('password')
     .notEmpty().withMessage('Password is required')
     .isLength({ min: 6, max: 100 }).withMessage('Password must be between 6 and 100 characters')

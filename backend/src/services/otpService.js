@@ -1,16 +1,20 @@
 import crypto from 'crypto'
+import prisma from '../config/database.js'
+import { sendEmailOtp } from './emailService.js'
+import { logInfo, logError, logWarn } from '../utils/logger.js'
 
 /**
- * Service to manage WhatsApp / SMS OTP generation, delivery, and verification.
+ * Service to manage Email & WhatsApp OTP generation, delivery, and verification.
  */
 
-// In-memory cache for OTPs and verified phone numbers
-const otpCache = new Map()
+// In-memory cache for WhatsApp OTPs and verified phone numbers
+const waOtpCache = new Map()
 const verifiedPhoneCache = new Map()
 
-const OTP_TTL_MS = 5 * 60 * 1000 // 5 minutes validity
+export const OTP_TTL_MS = 5 * 60 * 1000 // 5 minutes validity
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours validity
 const MAX_VERIFY_ATTEMPTS = 5
+const RESEND_COOLDOWN_MS = 60 * 1000 // 60 seconds cooldown
 
 /**
  * Standardize Indonesian phone numbers to 628... format
@@ -28,13 +32,34 @@ export function normalizePhoneNumber(phone) {
 }
 
 /**
- * Generate 6-digit numeric OTP and cache it
+ * Helper to hash OTP code with SHA-256
+ */
+function hashOtp(code) {
+  return crypto.createHash('sha256').update(String(code).trim()).digest('hex')
+}
+
+// ==========================================
+// WHATSAPP OTP FUNCTIONS
+// ==========================================
+
+/**
+ * Generate 6-digit numeric OTP and cache it for WhatsApp
  */
 export function generateOtp(phone) {
   const normalized = normalizePhoneNumber(phone)
+  const existing = waOtpCache.get(normalized)
+
+  // Check resend cooldown
+  if (existing && Date.now() - existing.createdAt < RESEND_COOLDOWN_MS) {
+    const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - existing.createdAt)) / 1000)
+    const err = new Error(`Mohon tunggu ${remainingSeconds} detik sebelum meminta kode OTP WhatsApp baru.`)
+    err.statusCode = 429
+    throw err
+  }
+
   const otp = crypto.randomInt(100000, 999999).toString()
 
-  otpCache.set(normalized, {
+  waOtpCache.set(normalized, {
     otp,
     expiresAt: Date.now() + OTP_TTL_MS,
     attempts: 0,
@@ -45,13 +70,14 @@ export function generateOtp(phone) {
 }
 
 /**
- * Send OTP to user's WhatsApp
+ * Send OTP to user's WhatsApp via Fonnte Gateway or Simulation
  */
 export async function sendOtpToWhatsApp(phone) {
   const { normalized, otp } = generateOtp(phone)
-  const fonnteToken = process.env.FONNTE_TOKEN
+  const fonnteToken = process.env.FONNTE_TOKEN?.trim()
 
-  if (fonnteToken) {
+  // Jika token Fonnte ada dan bukan placeholder
+  if (fonnteToken && fonnteToken !== 'your_fonnte_token_here') {
     try {
       const response = await fetch('https://api.fonnte.com/send', {
         method: 'POST',
@@ -61,43 +87,53 @@ export async function sendOtpToWhatsApp(phone) {
         },
         body: new URLSearchParams({
           target: normalized,
-          message: `[Toko Usaha Anda] Kode verifikasi Anda adalah: *${otp}*.\n\nJangan berikan kode ini kepada siapa pun. Kode berlaku selama 5 menit untuk mengamankan pesanan Anda.`,
+          message: `[Toko Usaha Anda] Kode verifikasi Anda adalah: *${otp}*.\n\nKode berlaku selama 5 menit. Jangan berikan kode ini kepada siapa pun demi keamanan Anda.`,
         }),
       })
+
       const result = await response.json()
-      return {
-        success: true,
-        message: 'Kode OTP telah dikirim ke WhatsApp Anda.',
-        simulated: false,
-        fonnteStatus: result.status,
+      if (result.status === true) {
+        logInfo(`Real WhatsApp OTP sent successfully to ${normalized}`)
+        return {
+          success: true,
+          message: 'Kode OTP telah dikirim ke nomor WhatsApp Anda.',
+          simulated: false,
+          expiresInSeconds: 300,
+          cooldownSeconds: 60,
+        }
       }
+
+      logWarn('Fonnte API responded with error status:', result)
     } catch (err) {
-      console.error('Fonnte WhatsApp gateway error:', err)
+      logError('Fonnte WhatsApp gateway error:', err)
     }
   }
 
-  // Simulated fallback mode (when no third-party WhatsApp gateway token is set)
+  // Simulated fallback mode jika belum setting token Fonnte
   console.log(`\n======================================================`)
   console.log(`[SIMULASI OTP WHATSAPP]`)
   console.log(`Nomor Tujuan : ${normalized} (${phone})`)
   console.log(`Kode OTP     : ${otp}`)
   console.log(`Masa Berlaku : 5 Menit`)
+  console.log(`Catatan      : Isi FONNTE_TOKEN di backend/.env untuk kirim WA asli`)
   console.log(`======================================================\n`)
 
   return {
     success: true,
-    message: 'Kode OTP telah dikirim (Mode Simulasi). Periksa log konsol atau gunakan kode yang tertera.',
+    message: 'Kode OTP telah dikirim (Mode Simulasi). Periksa log konsol backend atau gunakan kode tertera.',
     simulated: true,
-    devOtp: otp, // Provided for easy manual testing
+    devOtp: otp,
+    expiresInSeconds: 300,
+    cooldownSeconds: 60,
   }
 }
 
 /**
- * Verify OTP submitted by customer
+ * Verify OTP submitted by customer for WhatsApp
  */
 export function verifyOtpCode(phone, submittedCode) {
   const normalized = normalizePhoneNumber(phone)
-  const record = otpCache.get(normalized)
+  const record = waOtpCache.get(normalized)
 
   if (!record) {
     return {
@@ -107,7 +143,7 @@ export function verifyOtpCode(phone, submittedCode) {
   }
 
   if (Date.now() > record.expiresAt) {
-    otpCache.delete(normalized)
+    waOtpCache.delete(normalized)
     return {
       success: false,
       message: 'Kode OTP telah kedaluwarsa. Silakan minta kode OTP baru.',
@@ -115,7 +151,7 @@ export function verifyOtpCode(phone, submittedCode) {
   }
 
   if (record.attempts >= MAX_VERIFY_ATTEMPTS) {
-    otpCache.delete(normalized)
+    waOtpCache.delete(normalized)
     return {
       success: false,
       message: 'Batas percobaan memasukkan kode telah terlampaui. Silakan minta kode OTP baru.',
@@ -131,7 +167,7 @@ export function verifyOtpCode(phone, submittedCode) {
   }
 
   // OTP verified successfully
-  otpCache.delete(normalized)
+  waOtpCache.delete(normalized)
   verifiedPhoneCache.set(normalized, {
     verifiedAt: Date.now(),
     expiresAt: Date.now() + VERIFICATION_TTL_MS,
@@ -158,4 +194,136 @@ export function isPhoneNumberVerified(phone) {
   }
 
   return true
+}
+
+// ==========================================
+// EMAIL OTP FUNCTIONS
+// ==========================================
+
+/**
+ * Generate, save to DB, and send OTP to Email
+ */
+export async function sendEmailVerificationOtp(rawEmail) {
+  const email = (rawEmail || '').trim().toLowerCase()
+  if (!email || !email.includes('@')) {
+    const err = new Error('Format alamat email tidak valid.')
+    err.statusCode = 400
+    throw err
+  }
+
+  // Cek cooldown (minimal 60 detik)
+  const latestOtp = await prisma.emailVerificationOtp.findFirst({
+    where: { email },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  if (latestOtp) {
+    const timeSinceLast = Date.now() - new Date(latestOtp.createdAt).getTime()
+    if (timeSinceLast < RESEND_COOLDOWN_MS) {
+      const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - timeSinceLast) / 1000)
+      const err = new Error(`Mohon tunggu ${remainingSeconds} detik sebelum meminta kode OTP email baru.`)
+      err.statusCode = 429
+      throw err
+    }
+  }
+
+  // Buat kode 6 digit
+  const otp = crypto.randomInt(100000, 999999).toString()
+  const otpHash = hashOtp(otp)
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS)
+
+  // Hapus kode OTP lama untuk email ini agar tabel tetap rapi
+  await prisma.emailVerificationOtp.deleteMany({
+    where: { email },
+  })
+
+  // Simpan record baru
+  await prisma.emailVerificationOtp.create({
+    data: {
+      email,
+      otpHash,
+      expiresAt,
+    },
+  })
+
+  // Kirim email via nodemailer
+  const sendResult = await sendEmailOtp(email, otp)
+
+  return {
+    success: true,
+    message: sendResult.message,
+    simulated: sendResult.simulated,
+    devOtp: sendResult.devOtp,
+    expiresInSeconds: 300,
+    cooldownSeconds: 60,
+  }
+}
+
+/**
+ * Verify OTP submitted for Email verification
+ */
+export async function verifyEmailVerificationOtp(rawEmail, submittedCode) {
+  const email = (rawEmail || '').trim().toLowerCase()
+  const cleanCode = (submittedCode || '').trim()
+
+  if (!email || !cleanCode) {
+    return {
+      success: false,
+      message: 'Email dan kode OTP wajib diisi.',
+    }
+  }
+
+  const record = await prisma.emailVerificationOtp.findFirst({
+    where: { email },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  if (!record) {
+    return {
+      success: false,
+      message: 'Kode OTP belum diminta atau sudah kedaluwarsa. Silakan kirim ulang kode baru.',
+    }
+  }
+
+  if (new Date() > new Date(record.expiresAt)) {
+    await prisma.emailVerificationOtp.deleteMany({ where: { email } })
+    return {
+      success: false,
+      message: 'Kode OTP telah kedaluwarsa (lebih dari 5 menit). Silakan minta kode baru.',
+    }
+  }
+
+  if (record.attempts >= MAX_VERIFY_ATTEMPTS) {
+    await prisma.emailVerificationOtp.deleteMany({ where: { email } })
+    return {
+      success: false,
+      message: 'Batas percobaan memasukkan kode telah habis. Silakan kirim ulang kode OTP.',
+    }
+  }
+
+  const submittedHash = hashOtp(cleanCode)
+  const isMatch = crypto.timingSafeEqual(
+    Buffer.from(record.otpHash, 'utf8'),
+    Buffer.from(submittedHash, 'utf8')
+  )
+
+  if (!isMatch) {
+    await prisma.emailVerificationOtp.update({
+      where: { id: record.id },
+      data: { attempts: { increment: 1 } },
+    })
+
+    return {
+      success: false,
+      message: `Kode OTP salah. Sisa kesempatan: ${MAX_VERIFY_ATTEMPTS - (record.attempts + 1)} kali.`,
+    }
+  }
+
+  // Verifikasi berhasil, hapus token OTP dari database
+  await prisma.emailVerificationOtp.deleteMany({ where: { email } })
+
+  return {
+    success: true,
+    message: 'Email berhasil diverifikasi!',
+  }
 }
