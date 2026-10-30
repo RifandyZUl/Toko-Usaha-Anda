@@ -24,7 +24,9 @@ const syncIfAuthenticated = (items) => {
         })
       }
     }
-  } catch (e) {}
+  } catch (err) {
+    console.debug('Skip background cart sync:', err?.message)
+  }
 }
 
 /**
