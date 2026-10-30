@@ -9,9 +9,8 @@ import { getProductById, getProductReviews } from '../services/products'
 import ShopNavigation from '../components/ShopNavigation'
 import Loading from '../components/Loading'
 import ErrorMessage from '../components/ErrorMessage'
-import { formatCurrency } from '../utils/format'
 import { useDataFetching } from '../hooks'
-import { logDebug, logError } from '../utils/logger'
+import { formatCurrency } from '../utils/format'
 
 /**
  * Product Detail Page - Elegant design inspired by Nike

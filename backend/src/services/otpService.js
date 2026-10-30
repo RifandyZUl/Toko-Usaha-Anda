@@ -259,6 +259,9 @@ export async function sendEmailVerificationOtp(rawEmail) {
   }
 }
 
+// In-memory cache for tracking WA register cooldown per number
+const waRegisterCooldownCache = new Map()
+
 /**
  * Send OTP for Registration via WhatsApp (Fallback when email OTP is not received)
  */
@@ -277,7 +280,7 @@ export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
     throw err
   }
 
-  // Check if email already registered
+  // 1. Check if email already registered
   const existingUser = await prisma.user.findUnique({ where: { email } })
   if (existingUser) {
     const err = new Error('Email ini sudah terdaftar. Silakan login atau gunakan email lain.')
@@ -285,23 +288,32 @@ export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
     throw err
   }
 
-  // Check cooldown (60 seconds)
-  const latestOtp = await prisma.emailVerificationOtp.findFirst({
-    where: { email },
-    orderBy: { createdAt: 'desc' },
+  // 2. Check if phone number already registered to another user
+  const existingPhone = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { phone: rawPhone.trim() },
+        { phone: normalized },
+        ...(normalized.startsWith('62') ? [{ phone: '0' + normalized.slice(2) }] : []),
+      ],
+    },
   })
-
-  if (latestOtp) {
-    const timeSinceLast = Date.now() - new Date(latestOtp.createdAt).getTime()
-    if (timeSinceLast < RESEND_COOLDOWN_MS) {
-      const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - timeSinceLast) / 1000)
-      const err = new Error(`Mohon tunggu ${remainingSeconds} detik sebelum meminta kode OTP baru.`)
-      err.statusCode = 429
-      throw err
-    }
+  if (existingPhone) {
+    const err = new Error('Nomor WhatsApp ini sudah terdaftar pada akun lain. Silakan masuk atau gunakan nomor lain.')
+    err.statusCode = 409
+    throw err
   }
 
-  // Generate 6-digit OTP code with 1 minute expiry
+  // 3. Check WhatsApp resend cooldown (independent from email cooldown)
+  const lastWaSent = waRegisterCooldownCache.get(normalized)
+  if (lastWaSent && Date.now() - lastWaSent < RESEND_COOLDOWN_MS) {
+    const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - lastWaSent)) / 1000)
+    const err = new Error(`Mohon tunggu ${remainingSeconds} detik sebelum meminta kode OTP WhatsApp baru.`)
+    err.statusCode = 429
+    throw err
+  }
+
+  // 4. Generate 6-digit OTP code with 1 minute expiry
   const otp = crypto.randomInt(100000, 999999).toString()
   const otpHash = hashOtp(otp)
   const expiresAt = new Date(Date.now() + OTP_TTL_MS)
@@ -315,6 +327,9 @@ export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
       expiresAt,
     },
   })
+
+  // Track WhatsApp send cooldown
+  waRegisterCooldownCache.set(normalized, Date.now())
 
   const fonnteToken = process.env.FONNTE_TOKEN?.trim()
 
@@ -345,13 +360,21 @@ export async function sendRegisterOtpToWhatsApp(rawEmail, rawPhone) {
         }
       }
 
-      logWarn('Fonnte API responded with error status:', result)
+      logError('Fonnte WhatsApp gateway returned false status:', result)
+      const reason = result.reason || result.message || 'Nomor WhatsApp tidak dapat menerima pesan atau sedang tidak aktif.'
+      const err = new Error(`Gagal mengirim WhatsApp: ${reason}`)
+      err.statusCode = 400
+      throw err
     } catch (err) {
+      if (err.statusCode) throw err
       logError('Fonnte WhatsApp gateway error for registration OTP:', err)
+      const networkErr = new Error('Terjadi kendala jaringan saat menghubungi gateway WhatsApp. Silakan coba lagi.')
+      networkErr.statusCode = 502
+      throw networkErr
     }
   }
 
-  // Fallback Simulation Mode
+  // Fallback Simulation Mode (only if FONNTE_TOKEN not configured)
   console.log(`\n======================================================`)
   console.log(`[SIMULASI OTP WHATSAPP PENDAFTARAN]`)
   console.log(`Email User   : ${email}`)

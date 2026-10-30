@@ -16,7 +16,7 @@ import { asyncHandler } from '../utils/asyncHandler.js'
 import { HTTP_STATUS } from '../constants/index.js'
 import { logWarn } from '../utils/logger.js'
 
-import { verifyEmailVerificationOtp } from '../services/otpService.js'
+import { verifyEmailVerificationOtp, normalizePhoneNumber } from '../services/otpService.js'
 
 // Bcrypt cost factor — 12 is the current industry recommendation
 const BCRYPT_ROUNDS = 12
@@ -77,6 +77,26 @@ export const register = asyncHandler(async (req, res) => {
     return res.status(HTTP_STATUS.CONFLICT).json({
       error: 'Akun dengan email ini sudah terdaftar. Silakan gunakan email lain atau langsung masuk.',
     })
+  }
+
+  // Validasi nomor telepon/WhatsApp belum pernah terdaftar
+  if (phone?.trim()) {
+    const cleanPhone = phone.trim()
+    const normalized = normalizePhoneNumber(cleanPhone)
+    const existingPhone = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: cleanPhone },
+          { phone: normalized },
+          ...(normalized.startsWith('62') ? [{ phone: '0' + normalized.slice(2) }] : []),
+        ],
+      },
+    })
+    if (existingPhone) {
+      return res.status(HTTP_STATUS.CONFLICT).json({
+        error: 'Nomor telepon/WhatsApp sudah terdaftar pada akun lain. Silakan login atau gunakan nomor lain.',
+      })
+    }
   }
 
   // Verifikasi kode OTP email

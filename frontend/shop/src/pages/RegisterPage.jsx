@@ -32,13 +32,15 @@ function RegisterPage() {
   const [activeOtpChannel, setActiveOtpChannel] = useState('EMAIL') // 'EMAIL' | 'WHATSAPP'
   const [showWaInput, setShowWaInput] = useState(false)
   const [waPhoneInput, setWaPhoneInput] = useState('')
-  const [cooldown, setCooldown] = useState(0) // Resend cooldown in seconds (60s)
+  const [emailCooldown, setEmailCooldown] = useState(0) // Email resend cooldown
+  const [waCooldown, setWaCooldown] = useState(0) // WhatsApp resend cooldown
   const [validityTime, setValidityTime] = useState(0) // OTP validity countdown in seconds (60s = 1m)
   const [devOtp, setDevOtp] = useState(null)
   const [formError, setFormError] = useState('')
   const [successInfo, setSuccessInfo] = useState('')
 
-  const cooldownTimerRef = useRef(null)
+  const emailCooldownTimerRef = useRef(null)
+  const waCooldownTimerRef = useRef(null)
   const validityTimerRef = useRef(null)
   const otpInputRef = useRef(null)
 
@@ -49,13 +51,21 @@ function RegisterPage() {
     }
   }, [isAuthenticated, navigate, location])
 
-  // Cooldown countdown for resend button
+  // Email cooldown timer
   useEffect(() => {
-    if (cooldown > 0) {
-      cooldownTimerRef.current = setTimeout(() => setCooldown(prev => prev - 1), 1000)
+    if (emailCooldown > 0) {
+      emailCooldownTimerRef.current = setTimeout(() => setEmailCooldown(prev => prev - 1), 1000)
     }
-    return () => clearTimeout(cooldownTimerRef.current)
-  }, [cooldown])
+    return () => clearTimeout(emailCooldownTimerRef.current)
+  }, [emailCooldown])
+
+  // WhatsApp cooldown timer
+  useEffect(() => {
+    if (waCooldown > 0) {
+      waCooldownTimerRef.current = setTimeout(() => setWaCooldown(prev => prev - 1), 1000)
+    }
+    return () => clearTimeout(waCooldownTimerRef.current)
+  }, [waCooldown])
 
   // Validity countdown for OTP expiration
   useEffect(() => {
@@ -130,7 +140,7 @@ function RegisterPage() {
       if (res && res.success) {
         setStep('OTP')
         setActiveOtpChannel('EMAIL')
-        setCooldown(res.cooldownSeconds || 60)
+        setEmailCooldown(res.cooldownSeconds || 60)
         setValidityTime(res.expiresInSeconds || 60) // 1 menit
         setSuccessInfo(res.message || 'Kode verifikasi OTP telah dikirim ke email Anda.')
         if (res.devOtp) {
@@ -163,7 +173,7 @@ function RegisterPage() {
       const res = await sendRegisterWaOtp(formData.email.trim(), cleanPhone)
       if (res && res.success) {
         setValidityTime(res.expiresInSeconds || 60) // 1 menit
-        setCooldown(res.cooldownSeconds || 60)
+        setWaCooldown(res.cooldownSeconds || 60)
         setFormData(prev => ({ ...prev, phone: targetPhone }))
         setActiveOtpChannel('WHATSAPP')
         setShowWaInput(false)
@@ -522,7 +532,7 @@ function RegisterPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          disabled={isSendingWaOtp || cooldown > 0}
+                          disabled={isSendingWaOtp || waCooldown > 0}
                           onClick={() => handleSendWaOtp(formData.phone)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium rounded text-xs transition-colors shadow-xs cursor-pointer disabled:opacity-50"
                         >
@@ -530,6 +540,11 @@ function RegisterPage() {
                             <>
                               <Icon name="Loader2" size={13} className="animate-spin" />
                               Mengirim ke WhatsApp...
+                            </>
+                          ) : waCooldown > 0 ? (
+                            <>
+                              <Icon name="Clock" size={13} />
+                              Kirim ulang WA ({waCooldown}s)
                             </>
                           ) : (
                             <>
@@ -561,7 +576,7 @@ function RegisterPage() {
                           />
                           <button
                             type="button"
-                            disabled={isSendingWaOtp || !waPhoneInput.trim()}
+                            disabled={isSendingWaOtp || waCooldown > 0 || !waPhoneInput.trim()}
                             onClick={() => handleSendWaOtp(waPhoneInput)}
                             className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium rounded text-xs cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
                           >
@@ -570,6 +585,8 @@ function RegisterPage() {
                                 <Icon name="Loader2" size={12} className="animate-spin" />
                                 Mengirim...
                               </>
+                            ) : waCooldown > 0 ? (
+                              `Tunggu (${waCooldown}s)`
                             ) : (
                               'Kirim ke WA'
                             )}
@@ -594,11 +611,11 @@ function RegisterPage() {
               <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs">
                 <button
                   type="button"
-                  disabled={cooldown > 0 || isSendingOtp || isSendingWaOtp}
+                  disabled={emailCooldown > 0 || isSendingOtp || isSendingWaOtp}
                   onClick={handleRequestOtp}
                   className="text-gray-700 hover:text-gray-900 underline font-medium disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  {cooldown > 0 ? `Kirim ulang via email (${cooldown}s)` : 'Kirim Ulang via Email'}
+                  {emailCooldown > 0 ? `Kirim ulang via email (${emailCooldown}s)` : 'Kirim Ulang via Email'}
                 </button>
 
                 <button
