@@ -17,8 +17,6 @@ export default function ProductModal({
   formData,
   setFormData,
   categories,
-  imagePreview,
-  imageFile,
   uploadingImage,
   onImageChange,
   onRemoveImage,
@@ -28,7 +26,6 @@ export default function ProductModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [formErrors, setFormErrors] = useState({})
-  const [localImagePreview, setLocalImagePreview] = useState(imagePreview)
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false)
   const [showMatrixGenerator, setShowMatrixGenerator] = useState(false)
   const [draggedImageIndex, setDraggedImageIndex] = useState(null)

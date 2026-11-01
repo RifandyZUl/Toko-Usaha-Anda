@@ -178,7 +178,9 @@ function RegisterPage() {
           setStep('OTP')
           setCooldown(res.cooldownSeconds || 60)
           setValidityTime(res.expiresInSeconds || 60)
-          setSuccessInfo(res.message || `Kode verifikasi OTP telah dikirim ke nomor WhatsApp (${cleanPhone}).`)
+          setSuccessInfo(
+            res.message || `Kode verifikasi OTP telah dikirim ke nomor WhatsApp (${cleanPhone}).`
+          )
           if (res.devOtp) setDevOtp(res.devOtp)
         } else {
           setFormError(res?.error || 'Gagal mengirim kode OTP ke WhatsApp. Silakan coba lagi.')
@@ -267,15 +269,15 @@ function RegisterPage() {
               {step === 'FORM'
                 ? 'Buat Akun Baru'
                 : channel === 'WHATSAPP'
-                ? 'Verifikasi WhatsApp'
-                : 'Verifikasi Email'}
+                  ? 'Verifikasi WhatsApp'
+                  : 'Verifikasi Email'}
             </h2>
             <p className="text-xs font-body text-gray-600">
               {step === 'FORM'
                 ? 'Pilih metode pendaftaran yang Anda inginkan'
                 : channel === 'WHATSAPP'
-                ? `Masukkan 6 digit kode OTP yang dikirim ke WhatsApp ${formData.phone}`
-                : `Masukkan 6 digit kode OTP yang dikirim ke email ${formData.email}`}
+                  ? `Masukkan 6 digit kode OTP yang dikirim ke WhatsApp ${formData.phone}`
+                  : `Masukkan 6 digit kode OTP yang dikirim ke email ${formData.email}`}
             </p>
           </div>
 
@@ -371,7 +373,6 @@ function RegisterPage() {
                   value={formData.name}
                   onChange={handleChange}
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:border-gray-900 focus:outline-none transition-colors"
-                  placeholder="Nama lengkap Anda"
                   required
                   disabled={isSendingOtp}
                 />
@@ -393,7 +394,6 @@ function RegisterPage() {
                       value={formData.email}
                       onChange={handleChange}
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:border-gray-900 focus:outline-none transition-colors"
-                      placeholder="contoh@gmail.com"
                       required
                       disabled={isSendingOtp}
                     />
@@ -407,7 +407,8 @@ function RegisterPage() {
                       htmlFor="phone"
                       className="block text-xs font-body font-medium text-gray-900 mb-1 uppercase tracking-wider"
                     >
-                      Nomor HP <span className="text-gray-400 font-normal lowercase">(opsional)</span>
+                      Nomor HP{' '}
+                      <span className="text-gray-400 font-normal lowercase">(opsional)</span>
                     </label>
                     <input
                       type="tel"
@@ -416,7 +417,6 @@ function RegisterPage() {
                       value={formData.phone}
                       onChange={handleChange}
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:border-gray-900 focus:outline-none transition-colors"
-                      placeholder="081234567890"
                       disabled={isSendingOtp}
                     />
                   </div>
@@ -437,7 +437,6 @@ function RegisterPage() {
                     value={formData.phone}
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-emerald-300 rounded focus:border-emerald-700 focus:outline-none transition-colors"
-                    placeholder="081234567890"
                     required
                     disabled={isSendingOtp}
                   />
@@ -597,8 +596,8 @@ function RegisterPage() {
                   {cooldown > 0
                     ? `Kirim ulang (${cooldown}s)`
                     : channel === 'WHATSAPP'
-                    ? 'Kirim Ulang Kode WA'
-                    : 'Kirim Ulang Kode Email'}
+                      ? 'Kirim Ulang Kode WA'
+                      : 'Kirim Ulang Kode Email'}
                 </button>
 
                 <button

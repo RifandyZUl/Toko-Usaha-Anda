@@ -58,21 +58,20 @@ async function runOtpTests() {
     if (wrongEmailOtp.success) throw new Error('Wrong email OTP should fail')
     console.log('   ✅ Wrong email OTP rejected correctly:', wrongEmailOtp.message)
 
-    // 4. Test Registration WA OTP Fallback (User not receiving email)
-    console.log('\n4️⃣ Testing Registration WA OTP Fallback (sendRegisterOtpToWhatsApp)...')
-    const fallbackEmail = `wa_fallback_${Date.now()}@gmail.com`
-    const registerWaResult = await sendRegisterOtpToWhatsApp(fallbackEmail, testPhone)
+    // 4. Test Registration WA OTP (sendRegisterOtpToWhatsApp)
+    console.log('\n4️⃣ Testing Registration WA OTP (sendRegisterOtpToWhatsApp)...')
+    const registerWaPhone = '081299887755'
+    const registerWaResult = await sendRegisterOtpToWhatsApp(registerWaPhone)
     console.log('   Register WA OTP Response:', registerWaResult)
     if (!registerWaResult.success) throw new Error('Failed to send Register WA OTP')
     if (registerWaResult.expiresInSeconds !== 60) {
       throw new Error(`Register WA OTP expiresInSeconds should be 60, got ${registerWaResult.expiresInSeconds}`)
     }
 
-    // If devOtp or simulated, verify that the OTP sent to WA can verify registration for that email
     if (registerWaResult.devOtp) {
-      const verifyFallback = await verifyEmailVerificationOtp(fallbackEmail, registerWaResult.devOtp)
-      if (!verifyFallback.success) throw new Error('Failed to verify OTP received via WhatsApp fallback')
-      console.log('   ✅ OTP from WhatsApp verified registration successfully:', verifyFallback.message)
+      const verifyWa = verifyOtpCode(registerWaPhone, registerWaResult.devOtp)
+      if (!verifyWa.success) throw new Error('Failed to verify OTP received via WhatsApp registration')
+      console.log('   ✅ OTP from WhatsApp verified registration successfully:', verifyWa.message)
     }
 
     console.log('\n🎉 ALL OTP TESTS (1-MINUTE EXPIRY & WA FALLBACK) PASSED SUCCESSFULLY!')

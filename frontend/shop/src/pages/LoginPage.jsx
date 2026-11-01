@@ -122,7 +122,6 @@ function LoginPage() {
                 value={formData.email}
                 onChange={handleChange}
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 focus:border-gray-900 focus:outline-none transition-colors"
-                placeholder="nama@email.com atau 081234567890"
                 required
                 disabled={isLoading}
               />
@@ -151,7 +150,6 @@ function LoginPage() {
                 value={formData.password}
                 onChange={handleChange}
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 focus:border-gray-900 focus:outline-none transition-colors"
-                placeholder="••••••••"
                 required
                 disabled={isLoading}
               />
