@@ -6,7 +6,12 @@
 const resolveApiBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL
   if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
-    let clean = envUrl.trim().replace(/\/+$/, '')
+    let clean = envUrl.trim()
+    // Auto-prepend https:// if user entered domain without protocol
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      clean = `https://${clean}`
+    }
+    clean = clean.replace(/\/+$/, '')
     if (!clean.endsWith('/api')) {
       clean = `${clean}/api`
     }
