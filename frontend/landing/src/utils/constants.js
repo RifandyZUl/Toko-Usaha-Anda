@@ -9,8 +9,32 @@ export const SECTIONS = {
   CONTACT: 'contact',
 }
 
-export const SHOP_URL = import.meta.env.VITE_SHOP_URL || 'http://localhost:3001'
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const resolveShopUrl = () => {
+  const envUrl = import.meta.env.VITE_SHOP_URL
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, '')
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return 'https://toko-usaha-anda.vercel.app'
+  }
+  return 'http://localhost:3001'
+}
+
+const resolveApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    let clean = envUrl.trim().replace(/\/+$/, '')
+    if (!clean.endsWith('/api')) clean = `${clean}/api`
+    return clean
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return 'https://toko-usaha-anda.vercel.app/api'
+  }
+  return 'http://localhost:5000/api'
+}
+
+export const SHOP_URL = resolveShopUrl()
+export const API_BASE_URL = resolveApiBaseUrl()
 
 export const NAVIGATION_ITEMS = [
   { id: 'home', label: 'Beranda', href: '#home' },

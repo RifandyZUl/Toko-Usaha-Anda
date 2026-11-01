@@ -3,7 +3,22 @@
  * Centralized API client with error handling, timeout, and retry logic
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const resolveApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    let clean = envUrl.trim().replace(/\/+$/, '')
+    if (!clean.endsWith('/api')) {
+      clean = `${clean}/api`
+    }
+    return clean
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return 'https://toko-usaha-anda.vercel.app/api'
+  }
+  return 'http://localhost:5000/api'
+}
+
+const API_BASE_URL = resolveApiBaseUrl()
 const REQUEST_TIMEOUT = 30000 // 30 seconds
 const MAX_RETRIES = 2
 const RETRY_DELAY = 1000 // 1 second
@@ -184,11 +199,16 @@ class ApiClient {
     }
   }
 
+  formatUrl(endpoint) {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+    return `${this.baseURL}${cleanEndpoint}`
+  }
+
   /**
    * GET request
    */
   async get(endpoint, params = {}) {
-    const url = new URL(`${this.baseURL}${endpoint}`)
+    const url = new URL(this.formatUrl(endpoint))
     Object.keys(params).forEach((key) => {
       if (params[key] !== undefined && params[key] !== null) {
         url.searchParams.append(key, params[key])
@@ -210,7 +230,7 @@ class ApiClient {
   async post(endpoint, data = {}) {
     return this.executeWithRetry(async () => {
       const response = await this.fetchWithTimeout(
-        `${this.baseURL}${endpoint}`,
+        this.formatUrl(endpoint),
         {
           method: 'POST',
           headers: this.getHeaders(),
@@ -227,7 +247,7 @@ class ApiClient {
   async put(endpoint, data = {}) {
     return this.executeWithRetry(async () => {
       const response = await this.fetchWithTimeout(
-        `${this.baseURL}${endpoint}`,
+        this.formatUrl(endpoint),
         {
           method: 'PUT',
           headers: this.getHeaders(),
@@ -244,7 +264,7 @@ class ApiClient {
   async patch(endpoint, data = {}) {
     return this.executeWithRetry(async () => {
       const response = await this.fetchWithTimeout(
-        `${this.baseURL}${endpoint}`,
+        this.formatUrl(endpoint),
         {
           method: 'PATCH',
           headers: this.getHeaders(),
@@ -261,7 +281,7 @@ class ApiClient {
   async delete(endpoint) {
     return this.executeWithRetry(async () => {
       const response = await this.fetchWithTimeout(
-        `${this.baseURL}${endpoint}`,
+        this.formatUrl(endpoint),
         {
           method: 'DELETE',
           headers: this.getHeaders(),
