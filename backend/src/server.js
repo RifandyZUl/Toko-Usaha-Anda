@@ -37,6 +37,7 @@ import webhookRoutes from './routes/webhook.js'
 import contactRoutes from './routes/contact.js'
 import { startOrderExpiryCron } from './services/orderExpiryService.js'
 import { startOrderAutoCompleteCron } from './services/orderAutoCompleteService.js'
+import { startResetSessionCleanupCron } from './services/otpService.js'
 
 import { errorHandler } from './middleware/errorHandler.js'
 import {
@@ -198,4 +199,7 @@ app.listen(PORT, async () => {
 
   // Start background auto-complete service for shipped orders (2 days window)
   startOrderAutoCompleteCron(5 * 60 * 1000)
+
+  // Start background cleaner for expired password reset sessions and stale OTPs (runs every 1 hour)
+  startResetSessionCleanupCron(60 * 60 * 1000)
 })

@@ -725,3 +725,55 @@ export async function consumeResetToken(resetToken) {
   }
 }
 
+/**
+ * Clean up expired password reset sessions and stale verification OTPs from database
+ * Runs periodically to keep the tables lean and fast
+ */
+export async function cleanupExpiredResetSessions() {
+  try {
+    const now = new Date()
+
+    // 1. Delete expired password reset sessions
+    const resetResult = await prisma.passwordResetSession.deleteMany({
+      where: {
+        expiresAt: { lt: now },
+      },
+    })
+
+    // 2. Also clean expired registration email verification OTPs
+    const emailOtpResult = await prisma.emailVerificationOtp.deleteMany({
+      where: {
+        expiresAt: { lt: now },
+      },
+    })
+
+    const totalCleaned = resetResult.count + emailOtpResult.count
+    if (totalCleaned > 0) {
+      logInfo('🧹 Auth background cleanup executed', {
+        deletedResetSessions: resetResult.count,
+        deletedEmailOtps: emailOtpResult.count,
+      })
+    }
+  } catch (error) {
+    logError('Error executing auth session cleanup cron', error)
+  }
+}
+
+/**
+ * Start background cron interval for cleaning expired auth sessions
+ * @param {number} intervalMs - Check interval in milliseconds (default: 1 hour)
+ */
+export function startResetSessionCleanupCron(intervalMs = 60 * 60 * 1000) {
+  // Run on startup
+  cleanupExpiredResetSessions()
+
+  // Schedule periodic cleanup
+  const intervalId = setInterval(cleanupExpiredResetSessions, intervalMs)
+  logInfo('⏱️ Auth session cleanup background service started', {
+    intervalMinutes: intervalMs / (60 * 1000),
+  })
+
+  return intervalId
+}
+
+
