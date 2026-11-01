@@ -35,6 +35,7 @@ function CheckoutPage() {
   const [isManualPostalCode, setIsManualPostalCode] = useState(false)
   const [serverCourierOptions, setServerCourierOptions] = useState(null)
   const setValuesRef = useRef(null)
+  const onSubmitRef = useRef(null)
 
   // Only checkout items that were selected in CartPage (or all if opened directly)
   const checkoutItems = useMemo(() => {
@@ -92,231 +93,11 @@ function CheckoutPage() {
     }, 50)
   }, [])
 
-  const onSubmit = useCallback(
-    async _formValues => {
-      setIsProcessing(true)
-      setOrderError(null)
-
-      let orderPayload = null
-      let idempotencyKey = ''
-
-      const handlePaymentFlow = async (resultOrder) => {
-        // Save address to user profile dynamically
-        try {
-          const newAddressObj = {
-            receiverName: values.receiverName,
-            shippingPhone: values.shippingPhone,
-            addressDetail: values.addressDetail,
-            province: values.province,
-            city: values.city,
-            subdistrict: values.subdistrict,
-            kelurahan: values.kelurahan,
-            postalCode: values.postalCode,
-            latitude: values.latitude,
-            longitude: values.longitude,
-          }
-          const serializedAddress = JSON.stringify(newAddressObj)
-          const profileResult = await updateProfile({
-            name: user?.name || values.receiverName,
-            phone: user?.phone || values.shippingPhone,
-            address: serializedAddress,
-          })
-          if (profileResult.success && profileResult.user) {
-            setAuth(profileResult.user)
-          }
-        } catch (profileErr) {
-          console.error('Failed to auto-save address to user profile:', profileErr)
-        }
-
-        if (values.paymentMethod === 'midtrans' && resultOrder.snapToken) {
-          // 4. Trigger Midtrans Snap payment
-          const isSnapLoaded = await loadMidtransSnap()
-          if (!isSnapLoaded) {
-            setOrderError('Gagal memuat sistem pembayaran Midtrans. Silakan coba lagi.')
-            setIsProcessing(false)
-            scrollToError()
-            return
-          }
-
-          const clearPurchasedItems = () => {
-            const purchasedKeys = checkoutItems.map(it => getItemKey(it))
-            removeItemsByKeys(purchasedKeys)
-          }
-
-          window.snap.pay(resultOrder.snapToken, {
-            onSuccess: () => {
-              clearPurchasedItems()
-              navigate('/shop/order-success', {
-                state: { orderId: resultOrder.order.id },
-              })
-            },
-            onPending: () => {
-              clearPurchasedItems()
-              navigate('/shop/order-success', {
-                state: { orderId: resultOrder.order.id, isPending: true },
-              })
-            },
-            onError: err => {
-              console.error('Midtrans payment error:', err)
-              setOrderError('Pembayaran gagal atau dibatalkan.')
-              setIsProcessing(false)
-              scrollToError()
-            },
-            onClose: () => {
-              clearPurchasedItems()
-              navigate(`/shop/order/${resultOrder.order.id}`, {
-                state: { isPending: true },
-              })
-            },
-          })
-        } else {
-          // Cash / Virtual Account Transfer / QRIS success
-          const purchasedKeys = checkoutItems.map(it => getItemKey(it))
-          removeItemsByKeys(purchasedKeys)
-          navigate('/shop/order-success', {
-            state: { orderId: resultOrder.order.id },
-          })
-        }
-      }
-
-      try {
-        // 0. Ensure cart has items
-        if (!checkoutItems || checkoutItems.length === 0) {
-          setOrderError('Keranjang belanja kosong. Silakan pilih produk terlebih dahulu.')
-          setIsProcessing(false)
-          scrollToError()
-          return
-        }
-
-        // 1. Sync local cart to backend
-        const syncResult = await syncCartToBackend(checkoutItems)
-        if (!syncResult.success) {
-          setOrderError(syncResult.error || 'Gagal menyinkronkan keranjang belanja ke server.')
-          setIsProcessing(false)
-          scrollToError()
-          return
-        }
-
-        const matchedCourier = courierOptions.find(o => o.id === values.shippingCourier && o.available)
-        const activeShippingFee = matchedCourier ? matchedCourier.fee : Number(values.shippingFee || 15000)
-
-        // 2. Prepare structured order payload
-        orderPayload = {
-          receiverName: values.receiverName?.trim(),
-          shippingPhone: values.shippingPhone?.trim(),
-          addressDetail: values.addressDetail?.trim(),
-          province: values.province?.trim(),
-          city: values.city?.trim(),
-          subdistrict: values.subdistrict?.trim(),
-          kelurahan: values.kelurahan?.trim(),
-          postalCode: values.postalCode?.trim(),
-          latitude: values.latitude ? String(values.latitude).trim() : null,
-          longitude: values.longitude ? String(values.longitude).trim() : null,
-          shippingCourier: values.shippingCourier,
-          shippingFee: activeShippingFee,
-          paymentMethod:
-            values.paymentMethod === 'transfer'
-              ? `TRANSFER_${values.selectedBank.toUpperCase()}`
-              : values.paymentMethod.toUpperCase(),
-        }
-
-        // 3. Create order with Idempotency Key protection
-        idempotencyKey = window.crypto?.randomUUID
-          ? window.crypto.randomUUID()
-          : `idempotency-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-        const orderResult = await createOrder(orderPayload, idempotencyKey)
-
-        if (orderResult.success) {
-          await handlePaymentFlow(orderResult)
-        } else if (orderResult.code === 'SHIPPING_FEE_CHANGED' && orderResult.newShippingFee) {
-          // Auto-adjust shipping fee and immediately auto-retry without showing red error message
-          const adjustedFee = Number(orderResult.newShippingFee)
-          setValuesRef.current?.(prev => ({
-            ...prev,
-            shippingFee: adjustedFee,
-          }))
-          const retryPayload = {
-            ...orderPayload,
-            shippingFee: adjustedFee,
-          }
-          const retryResult = await createOrder(retryPayload, `${idempotencyKey}-retry`)
-          if (retryResult.success) {
-            await handlePaymentFlow(retryResult)
-          } else {
-            setOrderError(retryResult.error || 'Gagal membuat pesanan')
-            scrollToError()
-          }
-        } else {
-          if (orderResult.errors && Array.isArray(orderResult.errors)) {
-            const validationMsg = orderResult.errors
-              .map(err => `${err.field}: ${err.message}`)
-              .join(', ')
-            setOrderError(`Validasi Gagal - ${validationMsg}`)
-          } else {
-            setOrderError(orderResult.error || 'Gagal membuat pesanan')
-          }
-          scrollToError()
-        }
-      } catch (error) {
-        logError('Checkout error', error)
-        if (error.code === 'SHIPPING_FEE_CHANGED' && error.data?.newShippingFee) {
-          // Auto-adjust and auto-retry without blocking user with error message
-          try {
-            const adjustedFee = Number(error.data.newShippingFee)
-            setValuesRef.current?.(prev => ({
-              ...prev,
-              shippingFee: adjustedFee,
-            }))
-            const retryPayload = {
-              ...(orderPayload || {}),
-              shippingFee: adjustedFee,
-            }
-            const retryKey = idempotencyKey ? `${idempotencyKey}-auto` : `idempotency-${Date.now()}`
-            const retryResult = await createOrder(retryPayload, retryKey)
-            if (retryResult.success) {
-              await handlePaymentFlow(retryResult)
-              return
-            }
-          } catch (retryErr) {
-            console.error('Auto-retry checkout error:', retryErr)
-          }
-        }
-        if (error.errors && Array.isArray(error.errors)) {
-          const validationMsg = error.errors.map(err => `${err.field}: ${err.message}`).join(', ')
-          setOrderError(`Validasi Gagal - ${validationMsg}`)
-        } else {
-          setOrderError(error.message || 'Terjadi kesalahan saat checkout')
-        }
-        scrollToError()
-      } finally {
-        setIsProcessing(false)
-      }
-    },
-    [
-      checkoutItems,
-      removeItemsByKeys,
-      navigate,
-      setAuth,
-      user?.name,
-      user?.phone,
-      scrollToError,
-      courierOptions,
-      values.addressDetail,
-      values.city,
-      values.kelurahan,
-      values.latitude,
-      values.longitude,
-      values.paymentMethod,
-      values.postalCode,
-      values.province,
-      values.receiverName,
-      values.selectedBank,
-      values.shippingCourier,
-      values.shippingFee,
-      values.shippingPhone,
-      values.subdistrict,
-    ]
-  )
+  const handleFormSubmit = useCallback(async formValues => {
+    if (onSubmitRef.current) {
+      return await onSubmitRef.current(formValues)
+    }
+  }, [])
 
   const {
     values,
@@ -327,7 +108,7 @@ function CheckoutPage() {
     handleBlur,
     handleSubmit,
     setValues,
-  } = useForm(initialValues, validateCheckoutForm, onSubmit)
+  } = useForm(initialValues, validateCheckoutForm, handleFormSubmit)
   setValuesRef.current = setValues
 
   const {
@@ -584,6 +365,222 @@ function CheckoutPage() {
     },
     [handleChange]
   )
+
+  const onSubmit = useCallback(
+    async formValues => {
+      setIsProcessing(true)
+      setOrderError(null)
+
+      let orderPayload = null
+      let idempotencyKey = ''
+
+      const currentValues = formValues || values
+
+      const handlePaymentFlow = async (resultOrder) => {
+        // Save address to user profile dynamically
+        try {
+          const newAddressObj = {
+            receiverName: currentValues.receiverName,
+            shippingPhone: currentValues.shippingPhone,
+            addressDetail: currentValues.addressDetail,
+            province: currentValues.province,
+            city: currentValues.city,
+            subdistrict: currentValues.subdistrict,
+            kelurahan: currentValues.kelurahan,
+            postalCode: currentValues.postalCode,
+            latitude: currentValues.latitude,
+            longitude: currentValues.longitude,
+          }
+          const serializedAddress = JSON.stringify(newAddressObj)
+          const profileResult = await updateProfile({
+            name: user?.name || currentValues.receiverName,
+            phone: user?.phone || currentValues.shippingPhone,
+            address: serializedAddress,
+          })
+          if (profileResult.success && profileResult.user) {
+            setAuth(profileResult.user)
+          }
+        } catch (profileErr) {
+          console.error('Failed to auto-save address to user profile:', profileErr)
+        }
+
+        if (currentValues.paymentMethod === 'midtrans' && resultOrder.snapToken) {
+          // 4. Trigger Midtrans Snap payment
+          const isSnapLoaded = await loadMidtransSnap()
+          if (!isSnapLoaded) {
+            setOrderError('Gagal memuat sistem pembayaran Midtrans. Silakan coba lagi.')
+            setIsProcessing(false)
+            scrollToError()
+            return
+          }
+
+          const clearPurchasedItems = () => {
+            const purchasedKeys = checkoutItems.map(it => getItemKey(it))
+            removeItemsByKeys(purchasedKeys)
+          }
+
+          window.snap.pay(resultOrder.snapToken, {
+            onSuccess: () => {
+              clearPurchasedItems()
+              navigate('/shop/order-success', {
+                state: { orderId: resultOrder.order.id },
+              })
+            },
+            onPending: () => {
+              clearPurchasedItems()
+              navigate('/shop/order-success', {
+                state: { orderId: resultOrder.order.id, isPending: true },
+              })
+            },
+            onError: err => {
+              console.error('Midtrans payment error:', err)
+              setOrderError('Pembayaran gagal atau dibatalkan.')
+              setIsProcessing(false)
+              scrollToError()
+            },
+            onClose: () => {
+              clearPurchasedItems()
+              navigate(`/shop/order/${resultOrder.order.id}`, {
+                state: { isPending: true },
+              })
+            },
+          })
+        } else {
+          // Cash / Virtual Account Transfer / QRIS success
+          const purchasedKeys = checkoutItems.map(it => getItemKey(it))
+          removeItemsByKeys(purchasedKeys)
+          navigate('/shop/order-success', {
+            state: { orderId: resultOrder.order.id },
+          })
+        }
+      }
+
+      try {
+        // 0. Ensure cart has items
+        if (!checkoutItems || checkoutItems.length === 0) {
+          setOrderError('Keranjang belanja kosong. Silakan pilih produk terlebih dahulu.')
+          setIsProcessing(false)
+          scrollToError()
+          return
+        }
+
+        // 1. Sync local cart to backend
+        const syncResult = await syncCartToBackend(checkoutItems)
+        if (!syncResult.success) {
+          setOrderError(syncResult.error || 'Gagal menyinkronkan keranjang belanja ke server.')
+          setIsProcessing(false)
+          scrollToError()
+          return
+        }
+
+        const matchedCourier = courierOptions.find(o => o.id === currentValues.shippingCourier && o.available)
+        const activeShippingFee = matchedCourier ? matchedCourier.fee : Number(currentValues.shippingFee || 15000)
+
+        // 2. Prepare structured order payload
+        orderPayload = {
+          receiverName: currentValues.receiverName?.trim(),
+          shippingPhone: currentValues.shippingPhone?.trim(),
+          addressDetail: currentValues.addressDetail?.trim(),
+          province: currentValues.province?.trim(),
+          city: currentValues.city?.trim(),
+          subdistrict: currentValues.subdistrict?.trim(),
+          kelurahan: currentValues.kelurahan?.trim(),
+          postalCode: currentValues.postalCode?.trim(),
+          latitude: currentValues.latitude ? String(currentValues.latitude).trim() : null,
+          longitude: currentValues.longitude ? String(currentValues.longitude).trim() : null,
+          shippingCourier: currentValues.shippingCourier,
+          shippingFee: activeShippingFee,
+          paymentMethod:
+            currentValues.paymentMethod === 'transfer'
+              ? `TRANSFER_${currentValues.selectedBank.toUpperCase()}`
+              : currentValues.paymentMethod.toUpperCase(),
+        }
+
+        // 3. Create order with Idempotency Key protection
+        idempotencyKey = window.crypto?.randomUUID
+          ? window.crypto.randomUUID()
+          : `idempotency-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+        const orderResult = await createOrder(orderPayload, idempotencyKey)
+
+        if (orderResult.success) {
+          await handlePaymentFlow(orderResult)
+        } else if (orderResult.code === 'SHIPPING_FEE_CHANGED' && orderResult.newShippingFee) {
+          // Auto-adjust shipping fee and immediately auto-retry without showing red error message
+          const adjustedFee = Number(orderResult.newShippingFee)
+          setValuesRef.current?.(prev => ({
+            ...prev,
+            shippingFee: adjustedFee,
+          }))
+          const retryPayload = {
+            ...orderPayload,
+            shippingFee: adjustedFee,
+          }
+          const retryResult = await createOrder(retryPayload, `${idempotencyKey}-retry`)
+          if (retryResult.success) {
+            await handlePaymentFlow(retryResult)
+          } else {
+            setOrderError(retryResult.error || 'Gagal membuat pesanan')
+            scrollToError()
+          }
+        } else {
+          if (orderResult.errors && Array.isArray(orderResult.errors)) {
+            const validationMsg = orderResult.errors
+              .map(err => `${err.field}: ${err.message}`)
+              .join(', ')
+            setOrderError(`Validasi Gagal - ${validationMsg}`)
+          } else {
+            setOrderError(orderResult.error || 'Gagal membuat pesanan')
+          }
+          scrollToError()
+        }
+      } catch (error) {
+        logError('Checkout error', error)
+        if (error.code === 'SHIPPING_FEE_CHANGED' && error.data?.newShippingFee) {
+          // Auto-adjust and auto-retry without blocking user with error message
+          try {
+            const adjustedFee = Number(error.data.newShippingFee)
+            setValuesRef.current?.(prev => ({
+              ...prev,
+              shippingFee: adjustedFee,
+            }))
+            const retryPayload = {
+              ...(orderPayload || {}),
+              shippingFee: adjustedFee,
+            }
+            const retryKey = idempotencyKey ? `${idempotencyKey}-auto` : `idempotency-${Date.now()}`
+            const retryResult = await createOrder(retryPayload, retryKey)
+            if (retryResult.success) {
+              await handlePaymentFlow(retryResult)
+              return
+            }
+          } catch (retryErr) {
+            console.error('Auto-retry checkout error:', retryErr)
+          }
+        }
+        if (error.errors && Array.isArray(error.errors)) {
+          const validationMsg = error.errors.map(err => `${err.field}: ${err.message}`).join(', ')
+          setOrderError(`Validasi Gagal - ${validationMsg}`)
+        } else {
+          setOrderError(error.message || 'Terjadi kesalahan saat checkout')
+        }
+        scrollToError()
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [
+      checkoutItems,
+      removeItemsByKeys,
+      navigate,
+      setAuth,
+      user?.name,
+      user?.phone,
+      scrollToError,
+      courierOptions,
+      values,
+    ]
+  )
+  onSubmitRef.current = onSubmit
 
   if (items.length === 0) {
     return (
