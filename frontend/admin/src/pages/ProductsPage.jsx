@@ -20,8 +20,10 @@ import SearchBar from '../components/common/SearchBar'
 import FilterSelect from '../components/common/FilterSelect'
 import { useConfirmDialog, useProducts } from '../hooks'
 import { logError, logDebug } from '../utils/logger'
+import { useAlertStore } from '../stores/alertStore'
 
 export default function ProductsPage() {
+  const { showAlert } = useAlertStore()
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
   const [searchTerm, setSearchTerm] = useState('')
@@ -166,11 +168,19 @@ export default function ProductsPage() {
     const validFiles = []
     for (const file of files) {
       if (!file.type.startsWith('image/')) {
-        alert(`File ${file.name} bukan gambar. Hanya file gambar yang diizinkan.`)
+        showAlert({
+          title: 'Format File Tidak Sesuai',
+          message: `File ${file.name} bukan gambar. Hanya file gambar (JPG, PNG, WebP) yang diizinkan.`,
+          type: 'warning',
+        })
         continue
       }
       if (file.size > 25 * 1024 * 1024) {
-        alert(`Ukuran file ${file.name} terlalu besar (maksimal 25MB).`)
+        showAlert({
+          title: 'Ukuran Gambar Terlalu Besar',
+          message: `Ukuran file ${file.name} melebihi batas maksimal 25MB.`,
+          type: 'warning',
+        })
         continue
       }
       validFiles.push(file)
@@ -189,11 +199,19 @@ export default function ProductsPage() {
         if (result.success && result.url) {
           uploadedUrls.push(result.url)
         } else {
-          alert(result.error || `Gagal mengupload ${file.name}`)
+          showAlert({
+            title: 'Gagal Mengunggah Gambar',
+            message: result.error || `Gagal mengupload ${file.name}`,
+            type: 'error',
+          })
         }
       } catch (err) {
         console.error('Upload compression error:', err)
-        alert(`Gagal memproses gambar ${file.name}`)
+        showAlert({
+          title: 'Gagal Memproses Gambar',
+          message: `Terjadi kendala saat memproses file ${file.name}`,
+          type: 'error',
+        })
       }
     }
 

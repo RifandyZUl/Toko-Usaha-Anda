@@ -21,6 +21,7 @@ import {
   updateContactStatus,
   deleteContactMessage,
 } from '../services/contacts'
+import { useAlertStore } from '../stores/alertStore'
 
 export default function ContactsPage() {
   const [messages, setMessages] = useState([])
@@ -57,6 +58,8 @@ export default function ContactsPage() {
     fetchMessages()
   }, [fetchMessages])
 
+  const { showAlert, showConfirm, showToast } = useAlertStore()
+
   const handleStatusChange = async (id, newStatus) => {
     setActionLoadingId(id)
     const res = await updateContactStatus(id, newStatus)
@@ -70,16 +73,28 @@ export default function ContactsPage() {
       if (newStatus === 'READ' && unreadCount > 0) {
         setUnreadCount((c) => Math.max(0, c - 1))
       }
+      showToast('Status pesan berhasil diperbarui', 'success')
     } else {
-      alert(res.error || 'Gagal mengubah status pesan')
+      showAlert({
+        title: 'Gagal Memperbarui Status',
+        message: res.error || 'Gagal mengubah status pesan',
+        type: 'error',
+      })
     }
     setActionLoadingId(null)
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus pesan ini secara permanen?')) {
-      return
-    }
+    const confirmed = await showConfirm({
+      title: 'Hapus Pesan Kontak?',
+      message: 'Apakah Anda yakin ingin menghapus pesan ini secara permanen? Tindakan ini tidak dapat dibatalkan.',
+      confirmText: 'Ya, Hapus Permanen',
+      cancelText: 'Batal',
+      isDestructive: true,
+      type: 'warning',
+    })
+
+    if (!confirmed) return
 
     setActionLoadingId(id)
     const res = await deleteContactMessage(id)
@@ -88,8 +103,13 @@ export default function ContactsPage() {
       if (selectedMessage && selectedMessage.id === id) {
         setSelectedMessage(null)
       }
+      showToast('Pesan kontak berhasil dihapus', 'success')
     } else {
-      alert(res.error || 'Gagal menghapus pesan')
+      showAlert({
+        title: 'Gagal Menghapus Pesan',
+        message: res.error || 'Gagal menghapus pesan kontak',
+        type: 'error',
+      })
     }
     setActionLoadingId(null)
   }

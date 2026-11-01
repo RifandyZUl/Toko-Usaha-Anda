@@ -12,11 +12,13 @@ import { useLocation as useLocationHook } from '../hooks/useLocation'
 import ProfileInfoTab from '../components/profile/ProfileInfoTab'
 import ProfileOrdersTab from '../components/profile/ProfileOrdersTab'
 import ProfileAddressTab from '../components/profile/ProfileAddressTab'
+import { useAlertStore } from '../stores/alertStore'
 
 /**
  * Profile Page - Modular, clean architecture for customer account management
  */
 function ProfilePage() {
+  const { showAlert, showConfirm, showToast } = useAlertStore()
   const navigate = useNavigate()
   const location = useLocation()
   const searchTab = new URLSearchParams(location.search).get('tab')
@@ -214,28 +216,39 @@ function ProfilePage() {
   // Customer manual confirmation that package was received
   const handleCompleteOrder = useCallback(
     async orderId => {
-      if (
-        !window.confirm(
-          'Konfirmasi bahwa paket telah Anda terima dengan baik? Pesanan akan ditandai selesai.'
-        )
-      ) {
-        return
-      }
+      const confirmed = await showConfirm({
+        title: 'Konfirmasi Pesanan Diterima',
+        message: 'Konfirmasi bahwa paket barang telah Anda terima dengan baik? Pesanan akan ditandai selesai.',
+        confirmText: 'Ya, Paket Diterima',
+        cancelText: 'Batal',
+        type: 'success',
+      })
+      if (!confirmed) return
+
       setCompletingOrderId(orderId)
       try {
         const result = await completeOrder(orderId)
         if (result.success) {
           fetchOrders(true)
+          showToast('Pesanan berhasil diselesaikan!', 'success')
         } else {
-          alert(`Gagal menyelesaikan pesanan: ${result.error || 'Terjadi kesalahan'}`)
+          showAlert({
+            title: 'Gagal Menyelesaikan Pesanan',
+            message: result.error || 'Terjadi kesalahan saat menyelesaikan pesanan',
+            type: 'error',
+          })
         }
-      } catch (err) {
-        alert('Terjadi kesalahan saat menyelesaikan pesanan')
+      } catch {
+        showAlert({
+          title: 'Kesalahan Sistem',
+          message: 'Terjadi kesalahan jaringan saat menyelesaikan pesanan.',
+          type: 'error',
+        })
       } finally {
         setCompletingOrderId(null)
       }
     },
-    [fetchOrders]
+    [fetchOrders, showConfirm, showAlert, showToast]
   )
 
   // Auto-fetch and real-time polling every 10 seconds while on orders tab
@@ -330,23 +343,36 @@ function ProfilePage() {
 
   // Cancel order directly from profile
   const handleCancelOrder = async orderId => {
-    if (
-      !window.confirm(
-        'Apakah Anda yakin ingin membatalkan pesanan ini? Stok produk akan dikembalikan ke inventaris.'
-      )
-    ) {
-      return
-    }
+    const confirmed = await showConfirm({
+      title: 'Batalkan Pesanan?',
+      message: 'Apakah Anda yakin ingin membatalkan pesanan ini? Stok produk akan dikembalikan ke inventaris.',
+      confirmText: 'Ya, Batalkan',
+      cancelText: 'Kembali',
+      isDestructive: true,
+      type: 'warning',
+    })
+
+    if (!confirmed) return
+
     setCancellingOrderId(orderId)
     try {
       const result = await cancelOrder(orderId)
       if (result.success) {
         await fetchOrders()
+        showToast('Pesanan berhasil dibatalkan.', 'info')
       } else {
-        alert(result.error || 'Gagal membatalkan pesanan')
+        showAlert({
+          title: 'Gagal Membatalkan Pesanan',
+          message: result.error || 'Gagal membatalkan pesanan',
+          type: 'error',
+        })
       }
-    } catch (err) {
-      alert('Terjadi kesalahan saat membatalkan pesanan')
+    } catch {
+      showAlert({
+        title: 'Kesalahan Sistem',
+        message: 'Terjadi kesalahan jaringan saat membatalkan pesanan.',
+        type: 'error',
+      })
     } finally {
       setCancellingOrderId(null)
     }
@@ -373,27 +399,48 @@ function ProfilePage() {
       if (result.success && result.user) {
         setAuth(result.user)
         setIsEditing(false)
+        showToast('Profil akun berhasil diperbarui!', 'success')
       } else {
-        alert(result.error || 'Gagal memperbarui profil')
+        showAlert({
+          title: 'Gagal Memperbarui Profil',
+          message: result.error || 'Gagal memperbarui profil',
+          type: 'error',
+        })
       }
     } catch (err) {
       logError('Error saving profile', err)
-      alert('Terjadi kesalahan saat memperbarui profil')
+      showAlert({
+        title: 'Kesalahan Sistem',
+        message: 'Terjadi kesalahan saat memperbarui profil.',
+        type: 'error',
+      })
     }
   }
 
   // Save Structured Shipping Address
   const handleSaveAddress = async () => {
     if (!addressForm.receiverName.trim()) {
-      alert('Nama penerima wajib diisi')
+      showAlert({
+        title: 'Validasi Alamat',
+        message: 'Nama penerima wajib diisi.',
+        type: 'warning',
+      })
       return
     }
     if (!addressForm.shippingPhone.trim()) {
-      alert('Nomor telepon penerima wajib diisi')
+      showAlert({
+        title: 'Validasi Alamat',
+        message: 'Nomor telepon penerima wajib diisi.',
+        type: 'warning',
+      })
       return
     }
     if (!addressForm.addressDetail.trim()) {
-      alert('Detail alamat wajib diisi')
+      showAlert({
+        title: 'Validasi Alamat',
+        message: 'Detail alamat wajib diisi.',
+        type: 'warning',
+      })
       return
     }
     if (
@@ -402,7 +449,11 @@ function ProfilePage() {
       !addressForm.subdistrict ||
       !addressForm.kelurahan
     ) {
-      alert('Harap lengkapi informasi wilayah (Provinsi, Kota, Kecamatan, Kelurahan)')
+      showAlert({
+        title: 'Wilayah Belum Lengkap',
+        message: 'Harap lengkapi informasi wilayah (Provinsi, Kota, Kecamatan, Kelurahan).',
+        type: 'warning',
+      })
       return
     }
 
@@ -417,13 +468,21 @@ function ProfilePage() {
       if (result.success && result.user) {
         setAuth(result.user)
         setIsEditingAddress(false)
-        alert('Alamat pengiriman berhasil diperbarui!')
+        showToast('Alamat pengiriman berhasil diperbarui!', 'success')
       } else {
-        alert(result.error || 'Gagal memperbarui alamat')
+        showAlert({
+          title: 'Gagal Menyimpan Alamat',
+          message: result.error || 'Gagal memperbarui alamat',
+          type: 'error',
+        })
       }
     } catch (err) {
       logError('Error saving address', err)
-      alert('Terjadi kesalahan saat memperbarui alamat')
+      showAlert({
+        title: 'Kesalahan Sistem',
+        message: 'Terjadi kesalahan saat memperbarui alamat.',
+        type: 'error',
+      })
     }
   }
 

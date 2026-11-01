@@ -14,6 +14,7 @@ import RegisterPage from './pages/RegisterPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import ErrorBoundary from '@shared/components/ErrorBoundary.jsx'
+import ModernAlertModal from './components/common/ModernAlertModal'
 import { useAuthStore } from './stores/authStore'
 
 /**
@@ -81,6 +82,8 @@ function App() {
           />
           <Route path="/" element={<Navigate to="/shop" replace />} />
         </Routes>
+        {/* Global Modern Alert & Toast Modal */}
+        <ModernAlertModal />
       </BrowserRouter>
     </ErrorBoundary>
   )

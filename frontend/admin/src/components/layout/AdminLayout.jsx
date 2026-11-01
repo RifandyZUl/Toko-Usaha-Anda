@@ -8,6 +8,7 @@ import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { LayoutDashboard, Package, ShoppingCart, MessageSquare, LogOut, Menu, X } from 'lucide-react'
 import { ROUTES } from '../../constants/routes'
+import ModernAlertModal from '../common/ModernAlertModal'
 
 export default function AdminLayout({ children }) {
   const location = useLocation()
@@ -129,6 +130,9 @@ export default function AdminLayout({ children }) {
         {/* Page Content */}
         <main className="p-4 lg:p-6">{children || <Outlet />}</main>
       </div>
+
+      {/* Global Modern Alert & Toast Modal */}
+      <ModernAlertModal />
     </div>
   )
 }

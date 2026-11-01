@@ -11,11 +11,13 @@ import { formatCurrency } from '../utils/format'
 import { loadMidtransSnap } from '../utils/checkoutHelpers'
 import { handleCopyFeedback } from '../utils/clipboard'
 import OrderSuccessPaymentInfo from '../components/order/OrderSuccessPaymentInfo'
+import { useAlertStore } from '../stores/alertStore'
 
 /**
  * Order Success Page - Clean, modular view for post-checkout order confirmation
  */
 function OrderSuccessPage() {
+  const { showAlert, showToast } = useAlertStore()
   const location = useLocation()
   const navigate = useNavigate()
   const user = useAuthStore(state => state.user)
@@ -41,8 +43,13 @@ function OrderSuccessPage() {
       if (updated.success && updated.order) {
         setOrder(updated.order)
       }
+      showToast('Simulasi pembayaran berhasil diverifikasi!', 'success')
     } else {
-      alert(`Gagal simulasi pembayaran: ${result.error}`)
+      showAlert({
+        title: 'Gagal Simulasi Pembayaran',
+        message: result.error || 'Terjadi kesalahan sistem',
+        type: 'error',
+      })
     }
     setIsSimulating(false)
   }
@@ -101,20 +108,29 @@ function OrderSuccessPage() {
 
     const isSnapLoaded = await loadMidtransSnap()
     if (!isSnapLoaded) {
-      alert('Gagal memuat sistem pembayaran Midtrans')
+      showAlert({
+        title: 'Gagal Memuat Pembayaran',
+        message: 'Gagal memuat sistem pembayaran Midtrans. Silakan periksa koneksi internet Anda.',
+        type: 'error',
+      })
       return
     }
 
     window.snap.pay(order.paymentId, {
       onSuccess: () => {
         fetchOrder()
+        showToast('Pembayaran berhasil dikonfirmasi!', 'success')
       },
       onPending: () => {
         fetchOrder()
       },
       onError: err => {
         console.error('Midtrans payment error:', err)
-        alert('Pembayaran gagal, silakan coba lagi.')
+        showAlert({
+          title: 'Pembayaran Gagal',
+          message: 'Proses pembayaran tidak berhasil atau dibatalkan. Silakan coba kembali.',
+          type: 'error',
+        })
       },
     })
   }

@@ -15,11 +15,13 @@ import OrderDetailPaymentCard from '../components/order/OrderDetailPaymentCard'
 import OrderDetailItemsCard from '../components/order/OrderDetailItemsCard'
 import OrderDetailShippingInfo from '../components/order/OrderDetailShippingInfo'
 import OrderDetailActionButtons from '../components/order/OrderDetailActionButtons'
+import { useAlertStore } from '../stores/alertStore'
 
 /**
  * Order Detail Page - Modular, maintainable customer view of single order
  */
 function OrderDetailPage() {
+  const { showAlert, showConfirm, showToast } = useAlertStore()
   const { id } = useParams()
   const navigate = useNavigate()
   const user = useAuthStore(state => state.user)
@@ -146,31 +148,48 @@ function OrderDetailPage() {
     const result = await simulateOrderPayment(id)
     if (result.success) {
       await fetchOrder(true)
+      showToast('Simulasi pembayaran berhasil diverifikasi!', 'success')
     } else {
-      alert(`Gagal simulasi pembayaran: ${result.error}`)
+      showAlert({
+        title: 'Gagal Simulasi Pembayaran',
+        message: result.error || 'Terjadi kesalahan sistem',
+        type: 'error',
+      })
     }
     setIsSimulating(false)
   }
 
   // Cancel Order
   const handleCancelOrder = async orderId => {
-    if (
-      !window.confirm(
-        'Apakah Anda yakin ingin membatalkan pesanan ini? Stok produk akan dikembalikan.'
-      )
-    ) {
-      return
-    }
+    const confirmed = await showConfirm({
+      title: 'Batalkan Pesanan?',
+      message: 'Apakah Anda yakin ingin membatalkan pesanan ini? Stok produk akan dikembalikan ke toko.',
+      confirmText: 'Ya, Batalkan',
+      cancelText: 'Kembali',
+      isDestructive: true,
+      type: 'warning',
+    })
+    if (!confirmed) return
+
     setCancellingOrderId(orderId)
     try {
       const result = await cancelOrder(orderId)
       if (result.success) {
         await fetchOrder(true)
+        showToast('Pesanan berhasil dibatalkan', 'info')
       } else {
-        alert(result.error || 'Gagal membatalkan pesanan')
+        showAlert({
+          title: 'Gagal Membatalkan Pesanan',
+          message: result.error || 'Gagal membatalkan pesanan',
+          type: 'error',
+        })
       }
-    } catch (err) {
-      alert('Terjadi kesalahan saat membatalkan pesanan')
+    } catch {
+      showAlert({
+        title: 'Kesalahan Jaringan',
+        message: 'Terjadi kesalahan saat membatalkan pesanan',
+        type: 'error',
+      })
     } finally {
       setCancellingOrderId(null)
     }
@@ -178,19 +197,34 @@ function OrderDetailPage() {
 
   // Confirm Received
   const handleCompleteOrder = async orderId => {
-    if (!window.confirm('Konfirmasi bahwa barang telah Anda terima dengan baik?')) {
-      return
-    }
+    const confirmed = await showConfirm({
+      title: 'Konfirmasi Pesanan Selesai',
+      message: 'Konfirmasi bahwa barang telah Anda terima dengan baik? Pesanan akan ditandai selesai.',
+      confirmText: 'Ya, Barang Diterima',
+      cancelText: 'Batal',
+      type: 'success',
+    })
+    if (!confirmed) return
+
     setCompletingOrderId(orderId)
     try {
       const result = await completeOrder(orderId)
       if (result.success) {
         await fetchOrder(true)
+        showToast('Pesanan berhasil diselesaikan!', 'success')
       } else {
-        alert(result.error || 'Gagal menyelesaikan pesanan')
+        showAlert({
+          title: 'Gagal Menyelesaikan Pesanan',
+          message: result.error || 'Gagal menyelesaikan pesanan',
+          type: 'error',
+        })
       }
-    } catch (err) {
-      alert('Terjadi kesalahan saat menyelesaikan pesanan')
+    } catch {
+      showAlert({
+        title: 'Kesalahan Sistem',
+        message: 'Terjadi kesalahan saat menyelesaikan pesanan',
+        type: 'error',
+      })
     } finally {
       setCompletingOrderId(null)
     }
@@ -202,20 +236,29 @@ function OrderDetailPage() {
 
     const isSnapLoaded = await loadMidtransSnap()
     if (!isSnapLoaded) {
-      alert('Gagal memuat sistem pembayaran Midtrans')
+      showAlert({
+        title: 'Gagal Memuat Pembayaran',
+        message: 'Gagal memuat sistem pembayaran Midtrans. Silakan periksa koneksi internet Anda.',
+        type: 'error',
+      })
       return
     }
 
     window.snap.pay(order.paymentId, {
       onSuccess: () => {
         fetchOrder(true)
+        showToast('Pembayaran berhasil dikonfirmasi!', 'success')
       },
       onPending: () => {
         fetchOrder(true)
       },
       onError: err => {
         console.error('Midtrans payment error:', err)
-        alert('Pembayaran gagal, silakan coba lagi.')
+        showAlert({
+          title: 'Pembayaran Gagal',
+          message: 'Proses pembayaran tidak berhasil atau dibatalkan. Silakan coba kembali.',
+          type: 'error',
+        })
       },
     })
   }
