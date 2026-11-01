@@ -16,6 +16,9 @@ import { logError } from '../utils/logger.js'
 export const register = async userData => {
   try {
     const response = await apiClient.post('/auth/register', userData)
+    if (response.token) {
+      apiClient.setToken(response.token)
+    }
     return {
       success: true,
       user: response.user,
@@ -39,6 +42,9 @@ export const register = async userData => {
 export const login = async credentials => {
   try {
     const response = await apiClient.post('/auth/login', credentials)
+    if (response.token) {
+      apiClient.setToken(response.token)
+    }
     return {
       success: true,
       user: response.user,
@@ -82,14 +88,12 @@ export const getCurrentUser = async () => {
 export const logout = async () => {
   try {
     await apiClient.post('/auth/logout')
-    return {
-      success: true,
-    }
   } catch (error) {
     logError('Error logging out', error)
+  } finally {
+    apiClient.setToken(null)
     return {
-      success: false,
-      error: error.message,
+      success: true,
     }
   }
 }

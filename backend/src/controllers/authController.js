@@ -39,7 +39,7 @@ const DUMMY_HASH = await bcrypt.hash('dummy-password-for-timing-safety', BCRYPT_
 const COOKIE_OPTIONS = {
   httpOnly: true, // Prevents JavaScript access (XSS protection)
   secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
-  sameSite: 'strict', // CSRF protection
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Support cross-origin between Vercel frontends and backend
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
 }
 

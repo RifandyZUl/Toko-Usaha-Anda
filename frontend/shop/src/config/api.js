@@ -13,26 +13,41 @@ class ApiClient {
   }
 
   /**
-   * Set authentication token (kept as a no-op for backward compatibility)
+   * Set authentication token and persist to localStorage
    */
   setToken(token) {
     this.token = token
+    if (typeof window !== 'undefined') {
+      if (token) {
+        window.localStorage.setItem('toko_auth_token', token)
+      } else {
+        window.localStorage.removeItem('toko_auth_token')
+      }
+    }
   }
 
   /**
-   * Get authentication token (kept for backward compatibility)
+   * Get authentication token from memory or localStorage
    */
   getToken() {
+    if (!this.token && typeof window !== 'undefined') {
+      this.token = window.localStorage.getItem('toko_auth_token')
+    }
     return this.token
   }
 
   /**
-   * Build headers
+   * Build headers with Bearer token if available
    */
   getHeaders() {
-    return {
+    const headers = {
       'Content-Type': 'application/json',
     }
+    const token = this.getToken()
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    return headers
   }
 
   /**

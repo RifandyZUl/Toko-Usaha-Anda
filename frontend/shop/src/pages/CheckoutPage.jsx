@@ -557,6 +557,14 @@ function CheckoutPage() {
             console.error('Auto-retry checkout error:', retryErr)
           }
         }
+        if (error.isAuthError || error.message?.includes('token') || error.message?.includes('authentication')) {
+          setOrderError('Sesi login Anda belum aktif atau telah berakhir. Mengarahkan ke halaman login...')
+          scrollToError()
+          setTimeout(() => {
+            navigate('/shop/login', { state: { from: { pathname: '/shop/checkout' } } })
+          }, 1500)
+          return
+        }
         if (error.errors && Array.isArray(error.errors)) {
           const validationMsg = error.errors.map(err => `${err.field}: ${err.message}`).join(', ')
           setOrderError(`Validasi Gagal - ${validationMsg}`)
@@ -622,6 +630,54 @@ function CheckoutPage() {
                   </Button>
                 </Link>
               )}
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // Require login before completing checkout
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#fafafa]">
+        <ShopNavigation />
+        <main className="container-custom py-16 md:py-24">
+          <div className="max-w-md mx-auto text-center bg-white rounded-3xl p-8 sm:p-10 border border-gray-100 shadow-sm">
+            <div className="w-20 h-20 mx-auto mb-6 bg-primary-50 rounded-full flex items-center justify-center text-primary-600">
+              <Icon name="Users" size={36} />
+            </div>
+            <h2 className="text-2xl font-heading font-medium text-gray-900 mb-3 tracking-tight">
+              Masuk untuk Melanjutkan Checkout
+            </h2>
+            <p className="text-sm font-body text-gray-500 mb-8 leading-relaxed">
+              Silakan masuk ke akun Anda agar pesanan dan riwayat transaksi tersimpan dengan aman di akun Anda.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                to="/shop/login"
+                state={{ from: { pathname: '/shop/checkout' } }}
+                className="w-full"
+              >
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full uppercase tracking-wider py-3 shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+                >
+                  <Icon name="Users" size={16} />
+                  <span>Masuk ke Akun</span>
+                </Button>
+              </Link>
+              <Link to="/shop" className="w-full">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full uppercase tracking-wider py-3 border-gray-300 text-gray-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Icon name="ArrowLeft" size={16} />
+                  <span>Kembali Belanja</span>
+                </Button>
+              </Link>
             </div>
           </div>
         </main>
