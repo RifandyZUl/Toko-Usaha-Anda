@@ -1,6 +1,16 @@
 import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
+const SUPABASE_DB_URL = 'postgresql://postgres.bmgvyczvqvvgiuxdgwma:Zul7!andra123@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres'
+const dbUrl = process.argv[2] === '--supabase' ? SUPABASE_DB_URL : (process.env.DATABASE_URL || SUPABASE_DB_URL)
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: dbUrl
+    }
+  }
+})
+console.log(`🔌 Connecting to DB: ${dbUrl.includes('supabase.com') ? 'Supabase Cloud Postgres' : 'Local Postgres'}`)
 
 function toSlug(text) {
   return text
@@ -8,6 +18,15 @@ function toSlug(text) {
     .replace(/[^\w\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-')
+}
+
+const SUPABASE_STORAGE_BASE = 'https://bmgvyczvqvvgiuxdgwma.supabase.co/storage/v1/object/public/product-images'
+
+function formatProductImage(imagePath) {
+  if (!imagePath) return null
+  if (imagePath.startsWith('http')) return imagePath
+  const clean = imagePath.replace(/^\/uploads\//, '')
+  return `${SUPABASE_STORAGE_BASE}/${clean}`
 }
 
 // 20 Master Products covering all 41 items from Daftar_Produk.xlsx
@@ -317,6 +336,8 @@ async function main() {
     const lowestPrice = Math.min(...item.variants.map(v => v.price))
     const totalStock = item.variants.reduce((acc, v) => acc + v.stock, 0)
 
+    const imageUrl = formatProductImage(item.image)
+
     // 2. Upsert Product
     const product = await prisma.product.upsert({
       where: { slug: item.slug },
@@ -325,8 +346,8 @@ async function main() {
         description: item.description,
         price: lowestPrice,
         stock: totalStock,
-        image: item.image,
-        images: [item.image],
+        image: imageUrl,
+        images: [imageUrl],
         categoryId: category.id,
         isActive: true,
         weight: item.baseWeight
@@ -337,8 +358,8 @@ async function main() {
         description: item.description,
         price: lowestPrice,
         stock: totalStock,
-        image: item.image,
-        images: [item.image],
+        image: imageUrl,
+        images: [imageUrl],
         categoryId: category.id,
         isActive: true,
         weight: item.baseWeight
@@ -365,7 +386,7 @@ async function main() {
             price: v.price,
             stock: v.stock,
             weight: v.weight,
-            image: item.image,
+            image: imageUrl,
             isActive: true,
             deletedAt: null
           }
@@ -379,7 +400,7 @@ async function main() {
             price: v.price,
             stock: v.stock,
             weight: v.weight,
-            image: item.image,
+            image: imageUrl,
             isActive: true
           }
         })
