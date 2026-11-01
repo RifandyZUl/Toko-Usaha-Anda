@@ -89,7 +89,11 @@ app.use(
       if (!origin && NODE_ENV === 'development') {
         return callback(null, true)
       }
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app')
+      ) {
         return callback(null, true)
       }
       logWarn('CORS blocked request from unknown origin', { origin })
