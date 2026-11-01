@@ -123,23 +123,22 @@ export default function OrderDetailActionButtons({
             <button
               type="button"
               onClick={() => onOpenReview(order)}
-              className="px-4 py-2 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors inline-flex items-center gap-1.5"
+              className="px-4 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors"
             >
-              <Icon name="Star" size={14} className="fill-amber-400 text-amber-500" />
-              <span>Beri Ulasan</span>
+              Beri Ulasan
             </button>
             <button
               type="button"
               onClick={() => onOpenTracking(order.id)}
-              className="px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 border border-blue-200 rounded-lg transition-colors inline-flex items-center gap-1.5"
+              className="px-4 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-colors inline-flex items-center gap-1.5"
             >
-              <Icon name="Truck" size={14} />
+              <Icon name="Truck" size={14} className="text-gray-500" />
               <span>Lacak Paket</span>
             </button>
             <button
               type="button"
               onClick={onNavigateShop}
-              className="px-5 py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors shadow-xs"
+              className="px-5 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-black rounded-lg transition-colors shadow-xs"
             >
               Beli Lagi
             </button>
@@ -151,7 +150,7 @@ export default function OrderDetailActionButtons({
           <button
             type="button"
             onClick={onNavigateShop}
-            className="px-5 py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors shadow-xs"
+            className="px-5 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-black rounded-lg transition-colors shadow-xs"
           >
             Beli Lagi
           </button>

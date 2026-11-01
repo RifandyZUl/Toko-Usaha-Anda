@@ -630,42 +630,62 @@ function ProductDetailPage() {
                     {expandedSections.reviews && (
                       <div className="pb-4 space-y-4">
                         {productReviews.length > 0 ? (
-                          productReviews.map(review => (
-                            <div key={review.id} className="border-b border-gray-100 pb-3 last:border-0">
-                              <div className="flex items-center justify-between mb-1.5">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-gray-900">
-                                    {review.user}
-                                  </span>
-                                  <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded font-medium">
-                                    Terverifikasi
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  {[...Array(5)].map((_, i) => (
-                                    <span
-                                      key={i}
-                                      className={`text-xs ${
-                                        i < review.rating ? 'text-yellow-400' : 'text-gray-300'
-                                      }`}
-                                    >
-                                      ★
+                          productReviews.map((review, idx) => {
+                            const reviewerName =
+                              review.reviewerName ||
+                              review.name ||
+                              review.userName ||
+                              review.user ||
+                              'Pelanggan'
+                            const rawDate = review.createdAt || review.date
+                            const parsedDate = rawDate ? new Date(rawDate) : null
+                            const formattedDate =
+                              parsedDate && !isNaN(parsedDate.getTime())
+                                ? parsedDate.toLocaleDateString('id-ID', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                  })
+                                : 'Baru saja'
+
+                            return (
+                              <div
+                                key={review.id || `${review.orderId || 'rev'}-${idx}`}
+                                className="border-b border-gray-100 pb-3 last:border-0"
+                              >
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-gray-900">
+                                      {reviewerName}
                                     </span>
-                                  ))}
+                                    <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                                      Terverifikasi
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    {[...Array(5)].map((_, i) => (
+                                      <span
+                                        key={i}
+                                        className={`text-xs ${
+                                          i < (Number(review.rating) || 5)
+                                            ? 'text-yellow-400'
+                                            : 'text-gray-300'
+                                        }`}
+                                      >
+                                        ★
+                                      </span>
+                                    ))}
+                                  </div>
                                 </div>
+                                <p className="text-xs text-gray-600 mb-1">{review.comment}</p>
+                                <p className="text-xs text-gray-400">{formattedDate}</p>
                               </div>
-                              <p className="text-xs text-gray-600 mb-1">{review.comment}</p>
-                              <p className="text-xs text-gray-400">
-                                {new Date(review.date).toLocaleDateString('id-ID', {
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric',
-                                })}
-                              </p>
-                            </div>
-                          ))
+                            )
+                          })
                         ) : (
-                          <p className="text-xs text-gray-500">Belum ada review untuk produk ini. Ulasan akan muncul setelah pembeli menyelesaikan pesanan.</p>
+                          <p className="text-xs text-gray-500">
+                            Belum ada review untuk produk ini. Ulasan akan muncul setelah pembeli menyelesaikan pesanan.
+                          </p>
                         )}
                       </div>
                     )}

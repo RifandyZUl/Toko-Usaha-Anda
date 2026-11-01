@@ -92,7 +92,9 @@ export const getProductReviews = async (req, res, next) => {
         items: { some: { productId } },
       },
       select: {
+        id: true,
         paymentDetails: true,
+        user: { select: { name: true } },
       },
       take: 100,
     })
@@ -102,7 +104,14 @@ export const getProductReviews = async (req, res, next) => {
       const details = order.paymentDetails
       if (details && Array.isArray(details.reviews)) {
         const matching = details.reviews.filter(r => r.productId === productId)
-        productReviews.push(...matching)
+        for (const r of matching) {
+          productReviews.push({
+            id: r.id || `${order.id}-${r.productId}`,
+            ...r,
+            reviewerName: r.reviewerName || r.name || r.user || order.user?.name || 'Pelanggan',
+            createdAt: r.createdAt || r.date || new Date().toISOString(),
+          })
+        }
       }
     }
 

@@ -230,17 +230,16 @@ export default function ProfileOrderCard({
               <button
                 type="button"
                 onClick={() => onOpenReview(order)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded transition-colors flex items-center gap-1"
+                className="px-3.5 py-1.5 text-xs font-medium text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-50 border border-gray-300 rounded transition-colors shadow-2xs"
               >
-                <Icon name="Star" size={13} className="fill-amber-400 text-amber-500" />
-                <span>Beri Ulasan</span>
+                Beri Ulasan
               </button>
               <button
                 type="button"
                 onClick={() => onOpenTracking(order.id)}
-                className="px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 border border-blue-200 rounded transition-colors flex items-center gap-1"
+                className="px-3 py-1.5 text-xs font-medium text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-50 border border-gray-300 rounded transition-colors flex items-center gap-1 shadow-2xs"
               >
-                <Icon name="Truck" size={12} />
+                <Icon name="Truck" size={13} className="text-gray-500" />
                 <span>Lacak</span>
               </button>
               {!order.paymentDetails?.disputeDetails?.isDisputed && (
@@ -255,7 +254,7 @@ export default function ProfileOrderCard({
               <button
                 type="button"
                 onClick={onNavigateShop}
-                className="px-3 py-1.5 text-xs font-medium text-primary-600 hover:bg-primary-50 border border-primary-300 rounded transition-colors"
+                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-gray-900 hover:bg-black rounded transition-colors shadow-2xs"
               >
                 Beli Lagi
               </button>
