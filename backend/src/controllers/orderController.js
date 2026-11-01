@@ -7,7 +7,7 @@ import { trackOrderShipping } from '../services/shippingTrackingService.js'
 import { validateCodEligibility } from '../services/codGuardService.js'
 import { isPhoneNumberVerified, normalizePhoneNumber } from '../services/otpService.js'
 import { calculateOrderShippingFee } from '../services/shippingService.js'
-import { logWarn, logError } from '../utils/logger.js'
+import { logInfo, logWarn, logError } from '../utils/logger.js'
 
 /**
  * Create order
