@@ -25,13 +25,13 @@ function Navigation() {
               to="/"
               className="text-sm font-body font-medium text-gray-600 hover:text-primary-600 transition-colors"
             >
-              🏠 Beranda
+              Beranda
             </Link>
             <Link
               to="/shop"
               className="text-sm font-body font-medium text-gray-600 hover:text-primary-600 transition-colors"
             >
-              🛍️ Belanja
+              Belanja
             </Link>
             <button
               onClick={toggleCart}

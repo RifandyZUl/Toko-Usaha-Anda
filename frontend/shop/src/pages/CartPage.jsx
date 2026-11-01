@@ -328,7 +328,7 @@ function CartPage() {
                         </p>
                       ) : currentStock <= 5 && currentStock > 0 ? (
                         <p className="text-xs text-amber-700 font-medium mb-2 font-body">
-                          ⚡ Sisa {currentStock} unit lagi di toko!
+                          Sisa {currentStock} unit lagi di toko
                         </p>
                       ) : null}
                     </div>
@@ -455,22 +455,6 @@ function CartPage() {
               >
                 Lanjutkan Belanja
               </Link>
-
-              {/* Security & Service Trust Badges */}
-              <div className="mt-6 pt-5 border-t border-gray-100 space-y-2.5">
-                <div className="flex items-center gap-2.5 text-[11px] text-gray-500 font-body">
-                  <span className="text-primary-600">🛡️</span>
-                  <span>Produk 100% Original & Berkualitas</span>
-                </div>
-                <div className="flex items-center gap-2.5 text-[11px] text-gray-500 font-body">
-                  <span className="text-primary-600">📦</span>
-                  <span>Packing Rapi & Pengiriman Terpercaya</span>
-                </div>
-                <div className="flex items-center gap-2.5 text-[11px] text-gray-500 font-body">
-                  <span className="text-primary-600">🔒</span>
-                  <span>Pembayaran Aman (QRIS, VA & Transfer Bank)</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
