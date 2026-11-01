@@ -52,3 +52,16 @@ export const updateStatus = asyncHandler(async (req, res) => {
     contact: updated,
   })
 })
+
+/**
+ * Admin handler for deleting a contact message
+ */
+export const deleteContact = asyncHandler(async (req, res) => {
+  const { id } = req.params
+  await contactService.deleteContactMessage(id)
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: 'Pesan kontak berhasil dihapus',
+  })
+})

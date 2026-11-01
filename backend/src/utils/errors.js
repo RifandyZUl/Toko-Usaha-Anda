@@ -56,6 +56,15 @@ export class NotFoundError extends AppError {
 }
 
 /**
+ * Method Not Allowed Error (405)
+ */
+export class MethodNotAllowedError extends AppError {
+  constructor(message = 'Method not allowed') {
+    super(message, HTTP_STATUS.METHOD_NOT_ALLOWED)
+  }
+}
+
+/**
  * Conflict Error (409)
  */
 export class ConflictError extends AppError {
@@ -65,12 +74,50 @@ export class ConflictError extends AppError {
 }
 
 /**
- * Validation Error (400)
+ * Validation Error / Unprocessable Entity (422)
  */
-export class ValidationError extends BadRequestError {
+export class ValidationError extends AppError {
   constructor(message = 'Validation failed', errors = {}) {
-    super(message)
+    super(message, HTTP_STATUS.UNPROCESSABLE_ENTITY)
     this.errors = errors
+  }
+}
+
+export class UnprocessableEntityError extends ValidationError {}
+
+/**
+ * Too Many Requests Error (429)
+ */
+export class TooManyRequestsError extends AppError {
+  constructor(message = 'Too many requests. Please slow down and try again later.') {
+    super(message, HTTP_STATUS.TOO_MANY_REQUESTS)
+  }
+}
+
+/**
+ * Bad Gateway Error (502)
+ */
+export class BadGatewayError extends AppError {
+  constructor(message = 'Bad gateway. Upstream service failed.') {
+    super(message, HTTP_STATUS.BAD_GATEWAY)
+  }
+}
+
+/**
+ * Service Unavailable Error (503)
+ */
+export class ServiceUnavailableError extends AppError {
+  constructor(message = 'Service temporarily unavailable. Please try again later.') {
+    super(message, HTTP_STATUS.SERVICE_UNAVAILABLE)
+  }
+}
+
+/**
+ * Gateway Timeout Error (504)
+ */
+export class GatewayTimeoutError extends AppError {
+  constructor(message = 'Gateway timeout. Upstream request timed out.') {
+    super(message, HTTP_STATUS.GATEWAY_TIMEOUT)
   }
 }
 

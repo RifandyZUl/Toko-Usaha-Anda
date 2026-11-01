@@ -8,6 +8,7 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   PRODUCTS: '/products',
   ORDERS: '/orders',
+  CONTACTS: '/contacts',
 }
 
 export const PUBLIC_ROUTES = [ROUTES.LOGIN]
@@ -16,5 +17,6 @@ export const PROTECTED_ROUTES = [
   ROUTES.DASHBOARD,
   ROUTES.PRODUCTS,
   ROUTES.ORDERS,
+  ROUTES.CONTACTS,
 ]
 

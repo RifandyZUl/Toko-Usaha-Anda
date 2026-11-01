@@ -13,6 +13,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import ProductsPage from './pages/ProductsPage'
 import OrdersPage from './pages/OrdersPage'
+import ContactsPage from './pages/ContactsPage'
 import { ROUTES } from './constants/routes'
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
             <Route path={ROUTES.PRODUCTS} element={<ProductsPage />} />
             <Route path={ROUTES.ORDERS} element={<OrdersPage />} />
+            <Route path={ROUTES.CONTACTS} element={<ContactsPage />} />
             <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
             <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
           </Route>

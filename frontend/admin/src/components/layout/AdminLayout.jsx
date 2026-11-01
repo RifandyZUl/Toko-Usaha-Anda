@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
-import { LayoutDashboard, Package, ShoppingCart, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingCart, MessageSquare, LogOut, Menu, X } from 'lucide-react'
 import { ROUTES } from '../../constants/routes'
 
 export default function AdminLayout({ children }) {
@@ -30,6 +30,7 @@ export default function AdminLayout({ children }) {
     { path: ROUTES.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard },
     { path: ROUTES.PRODUCTS, label: 'Produk', icon: Package },
     { path: ROUTES.ORDERS, label: 'Pesanan', icon: ShoppingCart },
+    { path: ROUTES.CONTACTS, label: 'Pesan Masuk', icon: MessageSquare },
   ]
 
   const isActive = path => location.pathname === path

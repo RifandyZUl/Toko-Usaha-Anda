@@ -33,11 +33,11 @@ export async function getContactMessages({ page = 1, limit = 20, status } = {}) 
   const skip = (pageNum - 1) * limitNum
 
   const where = {}
-  if (status && ['UNREAD', 'READ', 'ARCHIVED'].includes(status)) {
+  if (status && ['UNREAD', 'READ', 'REPLIED', 'ARCHIVED'].includes(status)) {
     where.status = status
   }
 
-  const [messages, total] = await Promise.all([
+  const [messages, total, unreadCount] = await Promise.all([
     prisma.contactMessage.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -45,10 +45,12 @@ export async function getContactMessages({ page = 1, limit = 20, status } = {}) 
       take: limitNum,
     }),
     prisma.contactMessage.count({ where }),
+    prisma.contactMessage.count({ where: { status: 'UNREAD' } }),
   ])
 
   return {
     messages,
+    unreadCount,
     pagination: {
       page: pageNum,
       limit: limitNum,
@@ -59,7 +61,7 @@ export async function getContactMessages({ page = 1, limit = 20, status } = {}) 
 }
 
 export async function updateContactStatus(id, status) {
-  if (!['UNREAD', 'READ', 'ARCHIVED'].includes(status)) {
+  if (!['UNREAD', 'READ', 'REPLIED', 'ARCHIVED'].includes(status)) {
     throw new BadRequestError('Status kontak tidak valid.')
   }
 
@@ -71,5 +73,16 @@ export async function updateContactStatus(id, status) {
   return prisma.contactMessage.update({
     where: { id },
     data: { status },
+  })
+}
+
+export async function deleteContactMessage(id) {
+  const existing = await prisma.contactMessage.findUnique({ where: { id } })
+  if (!existing) {
+    throw new NotFoundError('Pesan kontak tidak ditemukan.')
+  }
+
+  return prisma.contactMessage.delete({
+    where: { id },
   })
 }

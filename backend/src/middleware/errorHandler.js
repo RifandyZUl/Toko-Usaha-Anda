@@ -97,7 +97,7 @@ export const errorHandler = (err, req, res, next) => {
 
   // Handle validation errors
   if (err.name === 'ValidationError' || err.name === 'ZodError') {
-    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+    return res.status(err.statusCode || HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
       error: 'Validation failed',
       message: err.message,
       ...(err.errors && { errors: err.errors }),
