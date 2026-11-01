@@ -296,12 +296,55 @@ export const getMe = asyncHandler(async (req, res) => {
 export const updateProfile = asyncHandler(async (req, res) => {
   const { name, phone, address } = req.body
 
+  const currentUser = await prisma.user.findUnique({
+    where: { id: req.userId },
+    select: { id: true, phone: true },
+  })
+
+  let normalizedPhone = currentUser?.phone
+  if (phone !== undefined) {
+    if (phone?.trim()) {
+      const cleanPhone = phone.trim()
+      normalizedPhone = normalizePhoneNumber(cleanPhone)
+
+      // Cek apakah nomor baru sudah dipakai oleh user lain
+      const existingUserWithPhone = await prisma.user.findFirst({
+        where: {
+          id: { not: req.userId },
+          OR: [
+            { phone: cleanPhone },
+            { phone: normalizedPhone },
+            ...(normalizedPhone.startsWith('62') ? [{ phone: '0' + normalizedPhone.slice(2) }] : []),
+          ],
+        },
+      })
+
+      if (existingUserWithPhone) {
+        return res.status(HTTP_STATUS.CONFLICT).json({
+          error: 'Nomor WhatsApp/telepon ini sudah digunakan oleh akun lain.',
+        })
+      }
+    } else {
+      normalizedPhone = null
+    }
+
+    // Jika nomor berubah, bersihkan sesi reset password lama terkait nomor sebelumnya
+    if (currentUser?.phone && currentUser.phone !== normalizedPhone) {
+      await prisma.passwordResetSession.deleteMany({
+        where: {
+          channel: 'WHATSAPP',
+          identifier: { in: [currentUser.phone, normalizePhoneNumber(currentUser.phone)] },
+        },
+      }).catch(() => {})
+    }
+  }
+
   const updatedUser = await prisma.user.update({
     where: { id: req.userId },
     data: {
-      name,
-      phone,
-      address,
+      ...(name !== undefined && { name: name.trim() }),
+      ...(phone !== undefined && { phone: normalizedPhone }),
+      ...(address !== undefined && { address: address?.trim() || null }),
     },
     select: {
       id: true,
@@ -395,7 +438,7 @@ export const verifyResetOtp = asyncHandler(async (req, res) => {
     })
   }
 
-  const result = verifyPasswordResetOtp(cleanId, channel, cleanOtp)
+  const result = await verifyPasswordResetOtp(cleanId, channel, cleanOtp)
   if (!result.success) {
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       error: result.message,
@@ -428,7 +471,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
     })
   }
 
-  const session = consumeResetToken(resetToken)
+  const session = await consumeResetToken(resetToken)
   if (!session) {
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       error: 'Sesi reset kata sandi tidak valid atau telah kedaluwarsa. Silakan ulangi proses lupa kata sandi.',

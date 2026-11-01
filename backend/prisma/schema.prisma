@@ -30,6 +30,7 @@ model User {
   cartItems CartItem[]
   orders    Order[]
   
+  @@index([phone])
   @@map("users")
 }
 
@@ -44,6 +45,25 @@ model EmailVerificationOtp {
 
   @@index([email])
   @@map("email_verification_otps")
+}
+
+// Password Reset Session Model (Multi-instance / Cluster-safe)
+model PasswordResetSession {
+  id          String   @id @default(uuid())
+  identifier  String   // Normalized Email or Phone
+  channel     String   // 'EMAIL' | 'WHATSAPP'
+  otpHash     String?  // Hashed 6-digit OTP during verification phase
+  resetToken  String?  @unique // Secure 64-char hex token issued after OTP verified
+  isVerified  Boolean  @default(false)
+  attempts    Int      @default(0)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([identifier, channel])
+  @@index([resetToken])
+  @@index([expiresAt])
+  @@map("password_reset_sessions")
 }
 
 enum UserRole {
@@ -89,6 +109,8 @@ model Product {
   
   @@index([isActive])
   @@index([categoryId])
+  @@index([categoryId, isActive])
+  @@index([createdAt])
   @@map("products")
 }
 

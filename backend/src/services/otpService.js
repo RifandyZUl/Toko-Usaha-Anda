@@ -506,18 +506,15 @@ export async function verifyEmailVerificationOtp(rawEmail, submittedCode) {
 }
 
 // ==========================================
-// PASSWORD RESET OTP & SESSION FUNCTIONS
+// PASSWORD RESET OTP & SESSION FUNCTIONS (Cluster & Multi-instance Safe)
 // ==========================================
-
-const passwordResetOtpCache = new Map() // Key: identifier (clean email or normalized phone)
-const passwordResetSessionCache = new Map() // Key: resetSessionToken, Value: { identifier, userId, expiresAt }
 
 export const RESET_OTP_TTL_MS = 15 * 60 * 1000 // 15 minutes validity
 export const RESET_SESSION_TTL_MS = 15 * 60 * 1000 // 15 minutes validity for reset token
 
 /**
  * Send Password Reset OTP to Email or WhatsApp
- * Generic safe response is returned by the controller to prevent user enumeration
+ * Cluster-safe: Persisted in database (password_reset_sessions)
  */
 export async function sendPasswordResetOtp(targetIdentifier, channel = 'EMAIL') {
   const isEmail = channel === 'EMAIL'
@@ -525,25 +522,40 @@ export async function sendPasswordResetOtp(targetIdentifier, channel = 'EMAIL') 
     ? targetIdentifier.trim().toLowerCase()
     : normalizePhoneNumber(targetIdentifier)
 
-  // Rate limit / resend cooldown check (60s)
-  const existing = passwordResetOtpCache.get(key)
-  if (existing && Date.now() - existing.createdAt < RESEND_COOLDOWN_MS) {
-    const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - existing.createdAt)) / 1000)
-    const err = new Error(`Mohon tunggu ${remainingSeconds} detik sebelum meminta kode baru.`)
-    err.statusCode = 429
-    throw err
+  // Rate limit / resend cooldown check (60s) from database
+  const existing = await prisma.passwordResetSession.findFirst({
+    where: { identifier: key, channel },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  if (existing) {
+    const timeSinceLast = Date.now() - new Date(existing.createdAt).getTime()
+    if (timeSinceLast < RESEND_COOLDOWN_MS) {
+      const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - timeSinceLast) / 1000)
+      const err = new Error(`Mohon tunggu ${remainingSeconds} detik sebelum meminta kode baru.`)
+      err.statusCode = 429
+      throw err
+    }
   }
 
   // Generate 6-digit cryptographic OTP
   const otp = crypto.randomInt(100000, 999999).toString()
   const otpHash = hashOtp(otp)
+  const expiresAt = new Date(Date.now() + RESET_OTP_TTL_MS)
 
-  passwordResetOtpCache.set(key, {
-    otpHash,
-    otp, // Used in simulation mode
-    expiresAt: Date.now() + RESET_OTP_TTL_MS,
-    attempts: 0,
-    createdAt: Date.now(),
+  // Clean up any stale sessions for this identifier
+  await prisma.passwordResetSession.deleteMany({
+    where: { identifier: key, channel },
+  })
+
+  // Create new session in PostgreSQL database
+  await prisma.passwordResetSession.create({
+    data: {
+      identifier: key,
+      channel,
+      otpHash,
+      expiresAt,
+    },
   })
 
   if (isEmail) {
@@ -610,33 +622,37 @@ export async function sendPasswordResetOtp(targetIdentifier, channel = 'EMAIL') 
 
 /**
  * Verify Password Reset OTP
- * If valid, issues a single-use cryptographically random reset token
+ * Cluster-safe: Verifies against database record and atomically issues resetToken
  */
-export function verifyPasswordResetOtp(targetIdentifier, channel = 'EMAIL', submittedCode) {
+export async function verifyPasswordResetOtp(targetIdentifier, channel = 'EMAIL', submittedCode) {
   const isEmail = channel === 'EMAIL'
   const key = isEmail
     ? targetIdentifier.trim().toLowerCase()
     : normalizePhoneNumber(targetIdentifier)
   const cleanCode = (submittedCode || '').trim()
 
-  const record = passwordResetOtpCache.get(key)
-  if (!record) {
+  const session = await prisma.passwordResetSession.findFirst({
+    where: { identifier: key, channel },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  if (!session || !session.otpHash) {
     return {
       success: false,
       message: 'Kode OTP belum diminta atau sudah kedaluwarsa. Silakan minta kode baru.',
     }
   }
 
-  if (Date.now() > record.expiresAt) {
-    passwordResetOtpCache.delete(key)
+  if (new Date() > new Date(session.expiresAt)) {
+    await prisma.passwordResetSession.deleteMany({ where: { identifier: key, channel } })
     return {
       success: false,
       message: 'Kode OTP telah kedaluwarsa. Silakan minta kode baru.',
     }
   }
 
-  if (record.attempts >= MAX_VERIFY_ATTEMPTS) {
-    passwordResetOtpCache.delete(key)
+  if (session.attempts >= MAX_VERIFY_ATTEMPTS) {
+    await prisma.passwordResetSession.deleteMany({ where: { identifier: key, channel } })
     return {
       success: false,
       message: 'Batas percobaan verifikasi telah habis. Silakan minta kode OTP baru.',
@@ -645,27 +661,33 @@ export function verifyPasswordResetOtp(targetIdentifier, channel = 'EMAIL', subm
 
   const submittedHash = hashOtp(cleanCode)
   const isMatch = crypto.timingSafeEqual(
-    Buffer.from(record.otpHash, 'utf8'),
+    Buffer.from(session.otpHash, 'utf8'),
     Buffer.from(submittedHash, 'utf8')
   )
 
   if (!isMatch) {
-    record.attempts += 1
+    const updated = await prisma.passwordResetSession.update({
+      where: { id: session.id },
+      data: { attempts: { increment: 1 } },
+    })
     return {
       success: false,
-      message: `Kode OTP salah. Sisa kesempatan: ${MAX_VERIFY_ATTEMPTS - record.attempts} kali.`,
+      message: `Kode OTP salah. Sisa kesempatan: ${MAX_VERIFY_ATTEMPTS - updated.attempts} kali.`,
     }
   }
 
-  // OTP is valid! Delete it immediately to prevent replay attacks
-  passwordResetOtpCache.delete(key)
-
-  // Generate single-use reset token
+  // OTP is valid! Issue single-use reset token and expire OTP
   const resetToken = crypto.randomBytes(32).toString('hex')
-  passwordResetSessionCache.set(resetToken, {
-    identifier: key,
-    channel,
-    expiresAt: Date.now() + RESET_SESSION_TTL_MS,
+  const tokenExpiresAt = new Date(Date.now() + RESET_SESSION_TTL_MS)
+
+  await prisma.passwordResetSession.update({
+    where: { id: session.id },
+    data: {
+      otpHash: null, // Wipe OTP to prevent reuse
+      resetToken,
+      isVerified: true,
+      expiresAt: tokenExpiresAt,
+    },
   })
 
   return {
@@ -677,19 +699,29 @@ export function verifyPasswordResetOtp(targetIdentifier, channel = 'EMAIL', subm
 
 /**
  * Validate and consume single-use reset token
+ * Cluster-safe: Atomically verifies and deletes token from database
  */
-export function consumeResetToken(resetToken) {
+export async function consumeResetToken(resetToken) {
   if (!resetToken) return null
-  const session = passwordResetSessionCache.get(resetToken)
-  if (!session) return null
 
-  if (Date.now() > session.expiresAt) {
-    passwordResetSessionCache.delete(resetToken)
+  const session = await prisma.passwordResetSession.findUnique({
+    where: { resetToken },
+  })
+  if (!session || !session.isVerified) return null
+
+  if (new Date() > new Date(session.expiresAt)) {
+    await prisma.passwordResetSession.delete({ where: { id: session.id } }).catch(() => {})
     return null
   }
 
-  // Single-use: delete immediately
-  passwordResetSessionCache.delete(resetToken)
-  return session
+  // Single-use: delete immediately from DB to prevent replay
+  await prisma.passwordResetSession.delete({
+    where: { id: session.id },
+  })
+
+  return {
+    identifier: session.identifier,
+    channel: session.channel,
+  }
 }
 
