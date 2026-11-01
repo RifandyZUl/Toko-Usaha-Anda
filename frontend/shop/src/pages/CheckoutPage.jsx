@@ -93,9 +93,91 @@ function CheckoutPage() {
   }, [])
 
   const onSubmit = useCallback(
-    async values => {
+    async formValues => {
       setIsProcessing(true)
       setOrderError(null)
+
+      let orderPayload = null
+      let idempotencyKey = ''
+
+      const handlePaymentFlow = async (resultOrder) => {
+        // Save address to user profile dynamically
+        try {
+          const newAddressObj = {
+            receiverName: values.receiverName,
+            shippingPhone: values.shippingPhone,
+            addressDetail: values.addressDetail,
+            province: values.province,
+            city: values.city,
+            subdistrict: values.subdistrict,
+            kelurahan: values.kelurahan,
+            postalCode: values.postalCode,
+            latitude: values.latitude,
+            longitude: values.longitude,
+          }
+          const serializedAddress = JSON.stringify(newAddressObj)
+          const profileResult = await updateProfile({
+            name: user?.name || values.receiverName,
+            phone: user?.phone || values.shippingPhone,
+            address: serializedAddress,
+          })
+          if (profileResult.success && profileResult.user) {
+            setAuth(profileResult.user)
+          }
+        } catch (profileErr) {
+          console.error('Failed to auto-save address to user profile:', profileErr)
+        }
+
+        if (values.paymentMethod === 'midtrans' && resultOrder.snapToken) {
+          // 4. Trigger Midtrans Snap payment
+          const isSnapLoaded = await loadMidtransSnap()
+          if (!isSnapLoaded) {
+            setOrderError('Gagal memuat sistem pembayaran Midtrans. Silakan coba lagi.')
+            setIsProcessing(false)
+            scrollToError()
+            return
+          }
+
+          const clearPurchasedItems = () => {
+            const purchasedKeys = checkoutItems.map(it => getItemKey(it))
+            removeItemsByKeys(purchasedKeys)
+          }
+
+          window.snap.pay(resultOrder.snapToken, {
+            onSuccess: () => {
+              clearPurchasedItems()
+              navigate('/shop/order-success', {
+                state: { orderId: resultOrder.order.id },
+              })
+            },
+            onPending: () => {
+              clearPurchasedItems()
+              navigate('/shop/order-success', {
+                state: { orderId: resultOrder.order.id, isPending: true },
+              })
+            },
+            onError: err => {
+              console.error('Midtrans payment error:', err)
+              setOrderError('Pembayaran gagal atau dibatalkan.')
+              setIsProcessing(false)
+              scrollToError()
+            },
+            onClose: () => {
+              clearPurchasedItems()
+              navigate(`/shop/order/${resultOrder.order.id}`, {
+                state: { isPending: true },
+              })
+            },
+          })
+        } else {
+          // Cash / Virtual Account Transfer / QRIS success
+          const purchasedKeys = checkoutItems.map(it => getItemKey(it))
+          removeItemsByKeys(purchasedKeys)
+          navigate('/shop/order-success', {
+            state: { orderId: resultOrder.order.id },
+          })
+        }
+      }
 
       try {
         // 0. Ensure cart has items
@@ -119,7 +201,7 @@ function CheckoutPage() {
         const activeShippingFee = matchedCourier ? matchedCourier.fee : Number(values.shippingFee || 15000)
 
         // 2. Prepare structured order payload
-        const orderPayload = {
+        orderPayload = {
           receiverName: values.receiverName?.trim(),
           shippingPhone: values.shippingPhone?.trim(),
           addressDetail: values.addressDetail?.trim(),
@@ -139,89 +221,10 @@ function CheckoutPage() {
         }
 
         // 3. Create order with Idempotency Key protection
-        const idempotencyKey = window.crypto?.randomUUID
+        idempotencyKey = window.crypto?.randomUUID
           ? window.crypto.randomUUID()
           : `idempotency-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
         const orderResult = await createOrder(orderPayload, idempotencyKey)
-
-        const handlePaymentFlow = async (resultOrder) => {
-          // Save address to user profile dynamically
-          try {
-            const newAddressObj = {
-              receiverName: values.receiverName,
-              shippingPhone: values.shippingPhone,
-              addressDetail: values.addressDetail,
-              province: values.province,
-              city: values.city,
-              subdistrict: values.subdistrict,
-              kelurahan: values.kelurahan,
-              postalCode: values.postalCode,
-              latitude: values.latitude,
-              longitude: values.longitude,
-            }
-            const serializedAddress = JSON.stringify(newAddressObj)
-            const profileResult = await updateProfile({
-              name: user?.name || values.receiverName,
-              phone: user?.phone || values.shippingPhone,
-              address: serializedAddress,
-            })
-            if (profileResult.success && profileResult.user) {
-              setAuth(profileResult.user)
-            }
-          } catch (profileErr) {
-            console.error('Failed to auto-save address to user profile:', profileErr)
-          }
-
-          if (values.paymentMethod === 'midtrans' && resultOrder.snapToken) {
-            // 4. Trigger Midtrans Snap payment
-            const isSnapLoaded = await loadMidtransSnap()
-            if (!isSnapLoaded) {
-              setOrderError('Gagal memuat sistem pembayaran Midtrans. Silakan coba lagi.')
-              setIsProcessing(false)
-              scrollToError()
-              return
-            }
-
-            const clearPurchasedItems = () => {
-              const purchasedKeys = checkoutItems.map(it => getItemKey(it))
-              removeItemsByKeys(purchasedKeys)
-            }
-
-            window.snap.pay(resultOrder.snapToken, {
-              onSuccess: () => {
-                clearPurchasedItems()
-                navigate('/shop/order-success', {
-                  state: { orderId: resultOrder.order.id },
-                })
-              },
-              onPending: () => {
-                clearPurchasedItems()
-                navigate('/shop/order-success', {
-                  state: { orderId: resultOrder.order.id, isPending: true },
-                })
-              },
-              onError: err => {
-                console.error('Midtrans payment error:', err)
-                setOrderError('Pembayaran gagal atau dibatalkan.')
-                setIsProcessing(false)
-                scrollToError()
-              },
-              onClose: () => {
-                clearPurchasedItems()
-                navigate(`/shop/order/${resultOrder.order.id}`, {
-                  state: { isPending: true },
-                })
-              },
-            })
-          } else {
-            // Cash / Virtual Account Transfer / QRIS success
-            const purchasedKeys = checkoutItems.map(it => getItemKey(it))
-            removeItemsByKeys(purchasedKeys)
-            navigate('/shop/order-success', {
-              state: { orderId: resultOrder.order.id },
-            })
-          }
-        }
 
         if (orderResult.success) {
           await handlePaymentFlow(orderResult)
@@ -265,10 +268,11 @@ function CheckoutPage() {
               shippingFee: adjustedFee,
             }))
             const retryPayload = {
-              ...orderPayload,
+              ...(orderPayload || {}),
               shippingFee: adjustedFee,
             }
-            const retryResult = await createOrder(retryPayload, `${idempotencyKey}-auto`)
+            const retryKey = idempotencyKey ? `${idempotencyKey}-auto` : `idempotency-${Date.now()}`
+            const retryResult = await createOrder(retryPayload, retryKey)
             if (retryResult.success) {
               await handlePaymentFlow(retryResult)
               return
@@ -288,7 +292,30 @@ function CheckoutPage() {
         setIsProcessing(false)
       }
     },
-    [checkoutItems, removeItemsByKeys, navigate, setAuth, user?.name, user?.phone, scrollToError]
+    [
+      checkoutItems,
+      removeItemsByKeys,
+      navigate,
+      setAuth,
+      user?.name,
+      user?.phone,
+      scrollToError,
+      courierOptions,
+      values.addressDetail,
+      values.city,
+      values.kelurahan,
+      values.latitude,
+      values.longitude,
+      values.paymentMethod,
+      values.postalCode,
+      values.province,
+      values.receiverName,
+      values.selectedBank,
+      values.shippingCourier,
+      values.shippingFee,
+      values.shippingPhone,
+      values.subdistrict,
+    ]
   )
 
   const {
