@@ -372,24 +372,13 @@ function CheckoutPage() {
     fetchPostalCodeOptions,
   ])
 
-  // Calculate total weight of the cart in kilograms
+  // Calculate total weight of the checkout items in kilograms (aligned with backend weight rules)
   const totalWeight = useMemo(() => {
-    return items.reduce((sum, item) => {
-      const name = item.name?.toLowerCase() || ''
-      let weight = 1.0 // default 1 kg
-      if (
-        name.includes('perkakas') ||
-        name.includes('mesin') ||
-        name.includes('motor') ||
-        name.includes('bor')
-      ) {
-        weight = 2.0
-      } else if (name.includes('kecil') || name.includes('obeng')) {
-        weight = 0.5
-      }
-      return sum + item.quantity * weight
+    return checkoutItems.reduce((sum, item) => {
+      const itemWeight = Number(item.weight || item.product?.weight || 1000)
+      return sum + (itemWeight / 1000) * item.quantity
     }, 0)
-  }, [items])
+  }, [checkoutItems])
 
   // Fetch live shipping rates from backend API
   useEffect(() => {
@@ -439,27 +428,26 @@ function CheckoutPage() {
     const cityName = values.city.toUpperCase()
     const isTangerangArea = cityName.includes('TANGERANG')
 
+    // Exact matching with backend ZONE_RATES
     let jneRate = 35000
     let jntRate = 38000
     let posRate = 30000
 
-    if (cityName.includes('TANGERANG')) {
-      jneRate = 8000
-      jntRate = 9000
-      posRate = 7000
+    if (isTangerangArea) {
+      jneRate = 9000
+      jntRate = 10000
+      posRate = 8000
     } else if (
       prov.includes('BANTEN') ||
-      prov.includes('DKI JAKARTA') ||
-      prov.includes('JAWA BARAT')
+      prov.includes('JAKARTA') ||
+      cityName.includes('BEKASI') ||
+      cityName.includes('DEPOK') ||
+      cityName.includes('BOGOR')
     ) {
-      jneRate = 12000
-      jntRate = 13000
-      posRate = 11000
-    } else if (
-      prov.includes('JAWA TENGAH') ||
-      prov.includes('YOGYAKARTA') ||
-      prov.includes('JAWA TIMUR')
-    ) {
+      jneRate = 11000
+      jntRate = 12000
+      posRate = 10000
+    } else if (prov.includes('JAWA') || prov.includes('YOGYAKARTA')) {
       jneRate = 18000
       jntRate = 20000
       posRate = 16000
@@ -571,11 +559,28 @@ function CheckoutPage() {
         </div>
 
         {orderError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded">
-            <div className="flex items-center gap-2 text-red-600">
-              <Icon name="AlertCircle" size={20} />
-              <p className="text-sm font-medium">{orderError}</p>
+          <div className="mb-8 p-4 bg-red-50/90 border border-red-200/90 rounded-2xl shadow-sm flex items-start justify-between gap-3 animate-fadeIn">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
+                <Icon name="AlertCircle" size={18} />
+              </div>
+              <div>
+                <p className="text-xs font-heading font-bold text-red-900 uppercase tracking-wide">
+                  Gagal Memproses Pesanan
+                </p>
+                <p className="text-xs text-red-700 mt-0.5 leading-relaxed font-body">
+                  {orderError}
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setOrderError(null)}
+              className="text-red-400 hover:text-red-700 p-1 rounded-lg hover:bg-red-100/50 transition-colors"
+              aria-label="Tutup pesan"
+            >
+              <Icon name="X" size={16} />
+            </button>
           </div>
         )}
 

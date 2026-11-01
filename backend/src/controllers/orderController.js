@@ -92,21 +92,15 @@ export const createOrder = async (req, res, next) => {
       weight: totalWeight,
     })
 
-    // Strict integrity check: Verify that client shipping fee matches server-calculated fee
-    // Prevents checkout discrepancy if admin updated variant weight or rates while user was on checkout page
+    // Server-authoritative shipping fee: Always use verifiedShippingFee calculated securely by server
+    // Automatically corrects any client-side discrepancy so checkout proceeds smoothly without interruption
     const clientShippingFee = Number(shippingFee)
     if (!isNaN(clientShippingFee) && Math.abs(clientShippingFee - verifiedShippingFee) > 1) {
-      logWarn('Shipping fee discrepancy detected at checkout', {
+      logInfo('Shipping fee automatically adjusted to verified rate at checkout', {
         userId: req.userId,
         clientShippingFee,
         verifiedShippingFee,
         totalWeight,
-      })
-      return res.status(409).json({
-        error: `Tarif pengiriman telah diperbarui dari Rp${clientShippingFee.toLocaleString('id-ID')} menjadi Rp${verifiedShippingFee.toLocaleString('id-ID')} karena penyesuaian bobot atau kurir. Total pesanan telah disesuaikan. Silakan periksa kembali dan klik Bayar Sekarang.`,
-        code: 'SHIPPING_FEE_CHANGED',
-        oldShippingFee: clientShippingFee,
-        newShippingFee: verifiedShippingFee,
       })
     }
 

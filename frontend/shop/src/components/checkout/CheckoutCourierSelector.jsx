@@ -10,11 +10,14 @@ export default function CheckoutCourierSelector({
   error,
 }) {
   return (
-    <div className="pt-4 border-t border-gray-100">
-      <label className="block text-xs font-heading font-semibold text-gray-900 mb-4 uppercase tracking-wider">
-        Pilih Kurir Pengiriman
-      </label>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div className="pt-6 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-4">
+        <label className="block text-xs font-heading font-semibold text-gray-900 uppercase tracking-wider">
+          Pilih Kurir Pengiriman
+        </label>
+        <span className="text-[11px] text-gray-400 font-normal">Tarif otomatis dihitung per wilayah</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         {courierOptions.map(courier => {
           const isSelected = selectedCourier === courier.id
           return (
@@ -25,30 +28,45 @@ export default function CheckoutCourierSelector({
                   onSelectCourier(courier.id, courier.fee)
                 }
               }}
-              className={`flex flex-col justify-between p-4 border rounded-lg transition-all duration-200 ${
+              className={`group relative flex flex-col justify-between p-4 rounded-xl border transition-all duration-200 ${
                 !courier.available
-                  ? 'border-gray-100 bg-gray-50/50 opacity-40 cursor-not-allowed'
+                  ? 'border-gray-100 bg-gray-50/60 opacity-40 cursor-not-allowed'
                   : isSelected
-                    ? 'border-primary-500 bg-primary-50/20 ring-1 ring-primary-500 shadow-sm cursor-pointer'
-                    : 'border-gray-200 hover:border-gray-400 bg-white cursor-pointer'
+                    ? 'border-gray-900 bg-gray-900 text-white shadow-md cursor-pointer ring-2 ring-gray-900/10'
+                    : 'border-gray-200 hover:border-gray-900/40 bg-white hover:shadow-xs cursor-pointer'
               }`}
             >
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-heading font-semibold text-gray-900">
+                <div className="flex items-center justify-between gap-1 mb-1.5">
+                  <span
+                    className={`text-xs font-heading font-bold tracking-tight ${
+                      isSelected ? 'text-white' : 'text-gray-900'
+                    }`}
+                  >
                     {courier.name}
                   </span>
+                  {isSelected && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  )}
                 </div>
-                <p className="text-[10px] text-gray-500 font-body mb-3">
+                <p
+                  className={`text-[10px] font-body mb-3 leading-tight ${
+                    isSelected ? 'text-gray-300' : 'text-gray-500'
+                  }`}
+                >
                   {courier.desc}
                 </p>
               </div>
               {courier.available ? (
-                <p className="text-sm font-heading font-bold text-primary-600">
+                <p
+                  className={`text-sm font-heading font-bold tracking-tight ${
+                    isSelected ? 'text-white' : 'text-gray-900'
+                  }`}
+                >
                   {formatCurrency(courier.fee)}
                 </p>
               ) : (
-                <p className="text-[10px] font-heading font-semibold text-red-500 uppercase tracking-wider">
+                <p className="text-[9px] font-heading font-semibold text-rose-500 uppercase tracking-wider">
                   Tidak Tersedia
                 </p>
               )}
@@ -56,7 +74,7 @@ export default function CheckoutCourierSelector({
           )
         })}
       </div>
-      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+      {error && <p className="mt-2 text-xs text-rose-500 font-medium">{error}</p>}
     </div>
   )
 }
