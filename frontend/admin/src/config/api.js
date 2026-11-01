@@ -12,7 +12,8 @@ const resolveApiBaseUrl = () => {
     }
     return clean
   }
-  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+  // When building or running in production, always point to live backend
+  if (import.meta.env.PROD) {
     return 'https://toko-usaha-anda.vercel.app/api'
   }
   return 'http://localhost:5000/api'
@@ -65,8 +66,23 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
  */
 class ApiClient {
   constructor(baseURL) {
-    this.baseURL = baseURL
+    this._baseURL = baseURL
     this.token = null
+  }
+
+  get baseURL() {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+      const currentHost = window.location.hostname
+      // If configured URL is empty, localhost, or mistakenly points to the admin frontend itself
+      if (!this._baseURL || this._baseURL.includes('localhost') || this._baseURL.includes(currentHost)) {
+        return 'https://toko-usaha-anda.vercel.app/api'
+      }
+    }
+    return this._baseURL || 'http://localhost:5000/api'
+  }
+
+  set baseURL(url) {
+    this._baseURL = url
   }
 
   /**
