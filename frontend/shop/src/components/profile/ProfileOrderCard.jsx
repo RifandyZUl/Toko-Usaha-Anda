@@ -45,8 +45,8 @@ export default function ProfileOrderCard({
         </span>
       </div>
 
-      {/* Tracking Progress Stepper */}
-      {!stepInfo.isCancelled ? (
+      {/* Tracking Progress Stepper (Only show if active) */}
+      {!stepInfo.isCancelled && (
         <div className="my-4 py-3 px-3 bg-gray-50/70 rounded-lg border border-gray-100">
           <div className="relative flex items-center justify-between">
             {/* Progress Line */}
@@ -97,17 +97,6 @@ export default function ProfileOrderCard({
               )
             })}
           </div>
-        </div>
-      ) : (
-        <div className="my-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2.5 text-xs text-red-800">
-          <Icon name="AlertCircle" size={16} className="text-red-600 shrink-0" />
-          <span>
-            Pesanan dibatalkan (
-            {order.status === 'EXPIRED'
-              ? 'Batas waktu pembayaran habis'
-              : 'Dibatalkan oleh pembeli'}
-            ). Seluruh stok produk telah dikembalikan ke inventaris.
-          </span>
         </div>
       )}
 

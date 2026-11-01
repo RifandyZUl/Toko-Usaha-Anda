@@ -8,6 +8,7 @@ import {
   extractStreetName,
   geocodeWithFallbacks,
 } from '../../utils/checkoutHelpers'
+import { useAlertStore } from '../../stores/alertStore'
 
 /**
  * CheckoutMapPicker - Interactive Leaflet & Nominatim map picker component
@@ -141,7 +142,7 @@ export default function CheckoutMapPicker({ values, handleChange }) {
           initMap(result.lat, result.lng)
         }
       } else {
-        alert('Lokasi tidak ditemukan. Silakan coba cari dengan kata kunci lain.')
+        useAlertStore.getState().showToast('Lokasi tidak ditemukan. Silakan coba cari dengan kata kunci lain.', 'warning')
       }
     } catch (err) {
       console.error('Search location error:', err)

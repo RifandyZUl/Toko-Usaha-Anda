@@ -39,8 +39,8 @@ export default function OrderDetailHeader({ order, stepInfo }) {
         </span>
       </div>
 
-      {/* Tracking Progress Stepper */}
-      {!stepInfo.isCancelled ? (
+      {/* Tracking Progress Stepper (Only show if active) */}
+      {!stepInfo.isCancelled && (
         <div className="my-5 py-4 px-4 bg-white border border-gray-200 rounded-xl shadow-xs">
           <div className="relative flex items-center justify-between">
             {/* Progress Line */}
@@ -91,14 +91,6 @@ export default function OrderDetailHeader({ order, stepInfo }) {
               )
             })}
           </div>
-        </div>
-      ) : (
-        <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-xs text-red-800">
-          <Icon name="AlertCircle" size={18} className="text-red-600 shrink-0" />
-          <span>
-            Pesanan ini telah dibatalkan ({order.status === 'EXPIRED' ? 'Batas waktu pembayaran habis' : 'Dibatalkan oleh pembeli'}).
-            Seluruh stok produk telah dikembalikan ke inventaris.
-          </span>
         </div>
       )}
     </div>

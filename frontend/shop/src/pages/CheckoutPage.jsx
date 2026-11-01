@@ -699,31 +699,7 @@ function CheckoutPage() {
           </p>
         </div>
 
-        {orderError && (
-          <div className="mb-8 p-4 bg-red-50/90 border border-red-200/90 rounded-2xl shadow-sm flex items-start justify-between gap-3 animate-fadeIn">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
-                <Icon name="AlertCircle" size={18} />
-              </div>
-              <div>
-                <p className="text-xs font-heading font-bold text-red-900 uppercase tracking-wide">
-                  Gagal Memproses Pesanan
-                </p>
-                <p className="text-xs text-red-700 mt-0.5 leading-relaxed font-body">
-                  {orderError}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setOrderError(null)}
-              className="text-red-400 hover:text-red-700 p-1 rounded-lg hover:bg-red-100/50 transition-colors"
-              aria-label="Tutup pesan"
-            >
-              <Icon name="X" size={16} />
-            </button>
-          </div>
-        )}
+
 
         {isProcessing && (
           <div className="mb-6">

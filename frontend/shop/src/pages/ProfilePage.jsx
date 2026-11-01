@@ -345,7 +345,7 @@ function ProfilePage() {
   const handleCancelOrder = async orderId => {
     const confirmed = await showConfirm({
       title: 'Batalkan Pesanan?',
-      message: 'Apakah Anda yakin ingin membatalkan pesanan ini? Stok produk akan dikembalikan ke inventaris.',
+      message: 'Apakah Anda yakin ingin membatalkan pesanan ini?',
       confirmText: 'Ya, Batalkan',
       cancelText: 'Kembali',
       isDestructive: true,
