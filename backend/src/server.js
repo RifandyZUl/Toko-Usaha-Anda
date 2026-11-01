@@ -180,30 +180,34 @@ app.use(errorHandler)
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
 
-app.listen(PORT, async () => {
-  logInfo('🚀 Server started', {
-    port: PORT,
-    environment: NODE_ENV,
-    apiBaseUrl: `http://localhost:${PORT}/api`,
+if (!process.env.VERCEL) {
+  app.listen(PORT, async () => {
+    logInfo('🚀 Server started', {
+      port: PORT,
+      environment: NODE_ENV,
+      apiBaseUrl: `http://localhost:${PORT}/api`,
+    })
+
+    try {
+      const { isSupabaseConfigured } = await import('./config/supabase.js')
+      logInfo(
+        isSupabaseConfigured()
+          ? '☁️  Storage: Supabase (Cloud)'
+          : '💾 Storage: Local (public/uploads)'
+      )
+    } catch {
+      logWarn('Could not verify Supabase configuration on startup')
+    }
+
+    // Start background auto-expiry service for pending orders
+    startOrderExpiryCron(60 * 1000)
+
+    // Start background auto-complete service for shipped orders (2 days window)
+    startOrderAutoCompleteCron(5 * 60 * 1000)
+
+    // Start background cleaner for expired password reset sessions and stale OTPs (runs every 1 hour)
+    startResetSessionCleanupCron(60 * 60 * 1000)
   })
+}
 
-  try {
-    const { isSupabaseConfigured } = await import('./config/supabase.js')
-    logInfo(
-      isSupabaseConfigured()
-        ? '☁️  Storage: Supabase (Cloud)'
-        : '💾 Storage: Local (public/uploads)'
-    )
-  } catch {
-    logWarn('Could not verify Supabase configuration on startup')
-  }
-
-  // Start background auto-expiry service for pending orders
-  startOrderExpiryCron(60 * 1000)
-
-  // Start background auto-complete service for shipped orders (2 days window)
-  startOrderAutoCompleteCron(5 * 60 * 1000)
-
-  // Start background cleaner for expired password reset sessions and stale OTPs (runs every 1 hour)
-  startResetSessionCleanupCron(60 * 60 * 1000)
-})
+export default app
