@@ -131,11 +131,15 @@ export const handleNotification = async (req, res, next) => {
  */
 export const simulatePayment = async (req, res, next) => {
   try {
-    const { orderId } = req.body
-
-    if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
-      return res.status(HTTP_STATUS.FORBIDDEN).json({ error: 'Only allowed in development mode' })
+    // Allow simulation in Sandbox/Demo mode, only block when real live payments are active
+    const isLiveProduction = process.env.MIDTRANS_IS_PRODUCTION === 'true'
+    if (isLiveProduction) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
+        error: 'Simulasi pembayaran dinonaktifkan pada mode pembayaran Midtrans Production sungguhan.',
+      })
     }
+
+    const { orderId } = req.body
 
     if (!orderId) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: 'Order ID is required' })
