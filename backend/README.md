@@ -1,185 +1,195 @@
-# Backend API — Toko Usaha Anda (Production Ready)
+# Backend API Engine — Toko Usaha Anda (Production Ready)
 
-Backend RESTful API untuk platform e-commerce **Toko Usaha Anda** yang dibangun menggunakan **Node.js**, **Express**, **PostgreSQL**, dan **Prisma ORM**.
+The robust, production-grade RESTful API server for the **Toko Usaha Anda** e-commerce platform. Built on **Node.js**, **Express.js**, **PostgreSQL**, and **Prisma ORM**.
 
-Sistem ini dirancang untuk **keamanan tinggi**, **efisiensi kueri database (indexing & caching)**, serta **skalabilitas multi-instance / cluster**.
-
----
-
-## 🚀 Fitur Utama & Keamanan
-
-### 1. Autentikasi & Otorisasi Canggih
-- **Dual-Channel Registration**: Mendukung registrasi via Email (dengan validasi domain aktif via DNS MX dan strict Email OTP) dan WhatsApp-first registration via OTP WhatsApp (gateway Fonnte).
-- **Dual-Channel Login**: Pengguna dapat masuk menggunakan alamat email atau nomor WhatsApp resmi.
-- **Proteksi Brute Force & Rate Limiting**:
-  - `authLimiter` pada endpoint autentikasi.
-  - `generalLimiter` pada seluruh request publik.
-- **Timing-Attack Protection**:
-  - Menggunakan dummy hash jika akun tidak ditemukan saat login.
-  - Menggunakan `crypto.timingSafeEqual` pada komparasi OTP.
-
-### 2. Fitur Lupa Kata Sandi (Cluster-Safe)
-- **Anti User-Enumeration**: Memberikan respon generik dan delay acak tiruan jika akun tidak ditemukan.
-- **PostgreSQL-Backed Session**: Status OTP dan reset token disimpan di tabel `password_reset_sessions`, aman dijalankan di server multi-worker/cluster tanpa sticky session.
-- **Single-Use Cryptographic Reset Token**: Mencegah replay attack dengan konsumsi token atomik.
-- **Background Cleaner Cron**: Membersihkan sesi pemulihan kata sandi kedaluwarsa secara otomatis setiap 1 jam.
-
-### 3. Database Indexing & Optimasi Kueri
-- Indeks B-Tree pada kolom sensitif pencarian:
-  - `users`: `email` (unique), `phone`.
-  - `products`: `isActive`, `categoryId`, composite `[categoryId, isActive]`, dan `createdAt`.
-  - `product_variants`: composite `[productId, isActive, deletedAt]`.
-  - `orders`: `userId`, `status`, `paymentStatus`.
-  - `password_reset_sessions`: `[identifier, channel]`, `resetToken` (unique), `expiresAt`.
-
-### 4. Transaksi & Pembayaran Terintegrasi
-- **Midtrans Payment Gateway**: Mendukung Snap payment, GoPay, QRIS, Virtual Account Bank (BCA, BNI, BRI, Mandiri, Permata).
-- **Auto-Expiry Orders**: Background cron otomatis membatalkan pesanan pending yang melewati batas waktu pembayaran (24 jam) dan mengembalikan stok produk secara atomik.
-- **Auto-Complete Orders**: Background cron otomatis menandai pesanan selesai jika barang telah diterima/dikirim dalam jangka waktu tertentu.
-
-### 5. Pengiriman & Kode Pos
-- **Live Courier Tracking**: Integrasi BinderByte API dengan in-memory LRU cache (TTL 15 menit) untuk efisiensi kuota API.
-- **Postal Code Lookup**: Pencarian kode pos dan wilayah otomatis dengan caching 24 jam.
+Engineered from the ground up for high security, server-authoritative financial consistency, automated database indexing, cluster resilience, and real-time shipping/payment integrations.
 
 ---
 
-## 🛠️ Tech Stack & Dependencies
+## 🚀 Key Features & Architectural Highlights
 
-- **Runtime**: Node.js (v18+)
-- **Framework**: Express.js
-- **Database**: PostgreSQL
+### 1. Hardened Authentication & Authorization
+- **Dual-Channel Registration**:
+  - Direct Email verification via strict SMTP OTP with active DNS MX domain validation.
+  - WhatsApp-first registration via OTP delivered over the official Fonnte WhatsApp Gateway.
+- **Dual-Channel Login**: Seamless authentication with either registered email address or phone number.
+- **Timing-Attack Resilience**:
+  - Decoy cryptographic hashing cycles executed when requested accounts are non-existent to equalize response latency.
+  - Constant-time OTP comparisons using Node.js native `crypto.timingSafeEqual`.
+- **Brute-Force & Denial-of-Service Defense**:
+  - `authLimiter`: Strict rate limits on authentication endpoints (5 requests / 15 minutes per IP).
+  - `generalLimiter`: Anti-flooding rate limiter across all public API routes (100 requests / 15 minutes per IP).
+  - `helmet`: Comprehensive HTTP response header hardening (CSP, HSTS, X-Frame-Options).
+  - `hpp` & `express-mongo-sanitize`: Defense against HTTP parameter pollution and injection patterns.
+
+### 2. Multi-Worker & Cluster-Resilient Password Recovery
+- **Anti User-Enumeration**: Consistent generic response messages and synthetic random micro-delays prevent attackers from discovering registered customer emails or phone numbers.
+- **PostgreSQL Session Store**: OTP challenges and single-use password reset tokens are persisted in the `password_reset_sessions` table, eliminating in-memory state fragmentation across Node.js cluster workers or multi-instance load-balancers without requiring sticky sessions.
+- **Single-Use Cryptographic Tokens**: Reset tokens are generated with 32-byte cryptographically secure random values and marked consumed immediately upon use, preventing replay attacks.
+
+### 3. Database Indexing & High-Throughput Performance
+Optimized with dedicated B-Tree indexes across primary query and filter pathways:
+- `users`: Unique B-Tree index on `email`, index on `phone`.
+- `products`: Index on `isActive`, `categoryId`, composite index `[categoryId, isActive]`, and ordering index `createdAt`.
+- `product_variants`: Composite index `[productId, isActive, deletedAt]`.
+- `orders`: High-cardinality foreign key & status indexes on `userId`, `status`, and `paymentStatus`.
+- `password_reset_sessions`: Fast lookup indexes on `[identifier, channel]`, unique index on `resetToken`, and cleanup index on `expiresAt`.
+
+### 4. Financial Integrity & Atomic Order Processing
+- **Server-Authoritative Computations**: Item pricing, variant adjustments, tiered shipping rates, and order totals are calculated and validated strictly on the server. Client-submitted prices are rejected.
+- **Atomic Stock Management**: Inventory deductions during order creation and stock restorations upon cancellation or expiration are executed inside isolated Prisma transactions (`prisma.$transaction`).
+- **Midtrans Payment Gateway**: Seamless integration supporting Snap checkout, GoPay, QRIS, and Virtual Accounts (BCA, BNI, BRI, Mandiri, Permata) with SHA-512 webhook signature verification.
+
+### 5. Dynamic Logistics & Shipping
+- **Live Courier Tracking**: BinderByte API integration featuring an in-memory LRU cache (15-minute TTL) to safeguard API rate quotas and provide sub-millisecond status responses.
+- **Postal Code Lookup**: Rapid subdistrict and postal code validation with a 24-hour LRU caching layer.
+- **Tiered Shipping Fee Engine**: Weight-based matrix supporting JNE, J&T, SiCepat, and Pos Indonesia, with automatic fallback when regional pricing tables adjust.
+
+---
+
+## ⏱️ Autonomous Background Crons
+
+The Express application initializes three isolated background schedulers on server boot:
+1. **Order Expiry Cron** (`orderExpiryService.js`): Executes every 60 seconds to detect unpaid pending orders exceeding their 24-hour payment window, marks them as cancelled, and atomically restores reserved product stock.
+2. **Order Auto-Completion Cron** (`orderAutoCompleteService.js`): Runs every 5 minutes to automatically transition delivered shipments to `COMPLETED` status after their customer confirmation window closes.
+3. **Session & Auth Cleanup Cron** (`otpService.js`): Runs every hour to clean up expired reset sessions and orphaned verification OTP records, preventing database bloat.
+
+---
+
+## 🛠️ Technology Stack & Dependencies
+
+- **Runtime**: Node.js (v18.16.0+)
+- **Framework**: Express.js 4.21+ (ES Modules)
+- **Database**: PostgreSQL 14+
 - **ORM**: Prisma Client v5.22+
-- **Security**: Helmet, HPP, CORS, bcrypt (cost factor 12), express-validator
-- **Storage**: Supabase Cloud Storage (dengan fallback penyimpanan lokal)
-- **Email Service**: Nodemailer (Gmail SMTP dengan fallback mode simulasi)
-- **WhatsApp Gateway**: Fonnte API (dengan fallback mode simulasi dev)
-- **Payment Gateway**: Midtrans Client SDK
+- **Security & Crypto**: `bcrypt`, `crypto`, `helmet`, `hpp`, `express-rate-limit`, `cookie-parser`, `jsonwebtoken`
+- **File & Media Storage**: Supabase Cloud Storage with local disk fallback
+- **Messaging & Notifications**:
+  - WhatsApp: Fonnte API (with simulated mode for offline local development)
+  - Email: Nodemailer via Gmail SMTP (with simulated fallback mode)
+- **Payment Processing**: Midtrans Client SDK
 
 ---
 
-## 📋 Prerequisites & Setup
+## 📋 Environment Configuration (`.env`)
 
-### 1. Install Dependencies
-```bash
-cd backend
-npm install
-```
-
-### 2. Konfigurasi Environment Variables (`.env`)
-Salin atau sesuaikan file `.env` di folder `backend/`:
+Create or update your `.env` file in the `backend/` directory:
 
 ```env
+# Database Connection (PostgreSQL)
 DATABASE_URL="postgresql://postgres:password@localhost:5432/toko_usaha_anda?schema=public"
-JWT_SECRET="your-super-secure-jwt-secret-key"
+
+# Authentication & Security
+JWT_SECRET="your-super-secure-jwt-secret-key-at-least-32-chars"
 JWT_EXPIRES_IN="7d"
 PORT=5000
 NODE_ENV=development
 FRONTEND_URL="http://localhost:3000,http://localhost:3001"
 
-# Supabase Storage (Upload Gambar Produk)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
-SUPABASE_STORAGE_BUCKET=product-images
+# Supabase Storage (Product Image Uploads)
+SUPABASE_URL="https://your-project.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="your-supabase-service-role-key"
+SUPABASE_STORAGE_BUCKET="product-images"
 
-# Midtrans Configuration
+# Midtrans Payment Gateway
 MIDTRANS_SERVER_KEY="Mid-server-xxxx"
 MIDTRANS_CLIENT_KEY="Mid-client-xxxx"
 MIDTRANS_IS_PRODUCTION=false
 
-# Courier Tracking API (Opsional: https://binderbyte.com)
-BINDERBYTE_API_KEY=""
+# Courier Tracking API (https://binderbyte.com)
+BINDERBYTE_API_KEY="your-binderbyte-api-key"
 
-# WhatsApp OTP Gateway (Fonnte: https://fonnte.com)
+# WhatsApp OTP Gateway (https://fonnte.com)
 FONNTE_TOKEN="your-fonnte-token"
 
-# Email SMTP OTP (Gmail App Password)
+# Email SMTP OTP Service (Gmail App Password)
 SMTP_HOST="smtp.gmail.com"
 SMTP_PORT=465
 SMTP_SECURE=true
 SMTP_USER="your-email@gmail.com"
-SMTP_PASS="your-16-char-app-password"
+SMTP_PASS="your-16-character-app-password"
 SMTP_FROM="your-email@gmail.com"
 ```
 
-### 3. Migrasi & Sinkronisasi Database
+---
+
+## 🗄️ Database Setup & Migrations
+
 ```bash
-# Sinkronkan skema Prisma ke database PostgreSQL
+# Push Prisma schema definitions directly to PostgreSQL
 npm run prisma:push
 
-# Generate Prisma Client
+# Generate or update Prisma Client types
 npm run prisma:generate
 
-# (Opsional) Buka GUI Prisma Studio
+# (Optional) Launch Prisma Studio visual database editor
 npm run prisma:studio
+
+# (Optional) Seed initial product catalog
+npm run prisma:seed
 ```
 
-### 4. Menjalankan Server
+---
+
+## 📡 RESTful API Reference
+
+### Authentication (`/api/auth`)
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| `POST` | `/register` | Register new account (Email or WhatsApp channel) | Rate Limited |
+| `POST` | `/login` | Authenticate customer with Email or WhatsApp number | Rate Limited |
+| `POST` | `/logout` | Log out user and clear secure HTTP-only cookies | Public |
+| `GET` | `/me` | Retrieve profile data of the authenticated user | Authenticated |
+| `PUT` | `/profile` | Update profile information and serialized delivery address | Authenticated |
+| `POST` | `/forgot-password` | Request password reset verification code | Rate Limited |
+| `POST` | `/verify-reset-otp` | Verify reset code and receive single-use `resetToken` | Rate Limited |
+| `POST` | `/reset-password` | Set new password using verified `resetToken` | Rate Limited |
+| `POST` | `/send-email-otp` | Send registration verification code to target email | Rate Limited |
+| `POST` | `/send-register-wa-otp`| Send registration OTP via WhatsApp | Rate Limited |
+
+### Products & Categories (`/api/products`)
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| `GET` | `/` | Paginated product listing with search and category filtering | Public |
+| `GET` | `/:id` | Detailed product view including variant matrices | Public |
+| `GET` | `/featured` | Curated bestsellers and promotional featured products | Public |
+| `GET` | `/categories` | Official catalog product categories | Public |
+| `POST` | `/` | Create new product and associated variants | Admin |
+| `PUT` | `/:id` | Update product details, pricing, and variant stocks | Admin |
+| `DELETE` | `/:id` | Soft delete or archive product | Admin |
+
+### Cart (`/api/cart`)
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| `GET` | `/` | Fetch all cart items for active customer session | Authenticated |
+| `POST` | `/` | Add product variant to cart | Authenticated |
+| `PUT` | `/:id` | Update item quantity in cart | Authenticated |
+| `DELETE` | `/:id` | Remove specific item from cart | Authenticated |
+| `DELETE` | `/` | Clear entire shopping cart | Authenticated |
+
+### Orders & Checkout (`/api/orders`)
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| `POST` | `/` | Create new order from selected cart items (Server-Authoritative) | Authenticated |
+| `GET` | `/` | Retrieve order history for authenticated customer | Authenticated |
+| `GET` | `/:id` | Detailed order summary, item list, and shipping details | Authenticated |
+| `PUT` | `/:id/status` | Update fulfillment or shipping status | Admin |
+
+### Payments & Webhooks (`/api/payment` & `/api/webhook`)
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| `POST` | `/payment/create-transaction` | Generate Midtrans Snap payment token | Authenticated |
+| `POST` | `/webhook/midtrans` | Handle Midtrans webhook status updates (SHA-512 verified) | Public (Signed) |
+
+---
+
+## 🏃 Running the Server
+
 ```bash
-# Mode Development
+# Development mode with Nodemon live reloading
 npm run dev
 
-# Mode Production
+# Production execution
 npm start
 ```
-Server berjalan default di `http://localhost:5000`.
-
----
-
-## 📡 Ringkasan API Endpoints
-
-### 1. Autentikasi (`/api/auth`)
-| Method | Endpoint | Deskripsi | Proteksi |
-|---|---|---|---|
-| `POST` | `/register` | Mendaftar akun baru (Email/WhatsApp jalur terpisah) | Rate Limited |
-| `POST` | `/login` | Masuk akun menggunakan Email atau No. WhatsApp | Rate Limited |
-| `POST` | `/logout` | Keluar dan membersihkan cookie JWT | Publik |
-| `GET` | `/me` | Mendapatkan data profil akun saat ini | Bearer Token |
-| `PUT` | `/profile` | Memperbarui nama, no. HP, dan alamat pelanggan | Bearer Token |
-| `POST` | `/forgot-password` | Meminta kode OTP pemulihan kata sandi | Rate Limited |
-| `POST` | `/verify-reset-otp`| Verifikasi OTP reset & terbitkan `resetToken` | Rate Limited |
-| `POST` | `/reset-password` | Mengatur ulang password dengan `resetToken` | Rate Limited |
-| `POST` | `/send-email-otp` | Mengirim OTP verifikasi pendaftaran email | Rate Limited |
-| `POST` | `/send-register-wa-otp` | Mengirim OTP registrasi via WhatsApp | Rate Limited |
-
-### 2. Produk & Kategori (`/api/products`)
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `GET` | `/` | Daftar semua produk aktif (Pagination, Filter Kategori, Search) |
-| `GET` | `/:id` | Detail produk beserta varian aktifnya |
-| `GET` | `/featured` | Produk terlaris/unggulan untuk landing & etalase |
-| `GET` | `/categories` | Kategori produk resmi toko |
-| `POST` | `/` | Tambah produk baru (Admin only) |
-| `PUT` | `/:id` | Perbarui data produk & matriks varian (Admin only) |
-| `DELETE` | `/:id` | Hapus produk (Admin only) |
-
-### 3. Keranjang Belanja (`/api/cart`)
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `GET` | `/` | Mengambil isi keranjang belanja user aktif |
-| `POST` | `/` | Menambahkan item/varian produk ke keranjang |
-| `PUT` | `/:id` | Mengubah kuantitas item keranjang |
-| `DELETE` | `/:id` | Menghapus 1 item dari keranjang |
-| `DELETE` | `/` | Mengosongkan keranjang |
-
-### 4. Pesanan & Checkout (`/api/orders`)
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `POST` | `/` | Membuat pesanan baru dari checkout item terpilih |
-| `GET` | `/` | Riwayat pesanan pelanggan aktif |
-| `GET` | `/:id` | Detail lengkap pesanan, kurir, dan item yang dibeli |
-| `PUT` | `/:id/status` | Update status pengiriman pesanan (Admin only) |
-
-### 5. Pembayaran (`/api/payment` & `/api/webhook`)
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `POST` | `/payment/create-transaction` | Membuat transaksi Snap token Midtrans |
-| `POST` | `/webhook/midtrans` | Webhook notifikasi Midtrans (verifikasi signature SHA-512) |
-
----
-
-## ⏱️ Background Cron Services
-
-Server Express menjalankan 3 background cron terisolasi saat startup:
-1. **Order Expiry Cron**: Berjalan setiap 60 detik (`orderExpiryService.js`).
-2. **Order Auto-Complete Cron**: Berjalan setiap 5 menit (`orderAutoCompleteService.js`).
-3. **Auth Session Cleanup Cron**: Berjalan setiap 1 jam (`otpService.js`), menghapus sesi reset dan OTP yang telah lewat batas waktu kedaluwarsa.
+By default, the server initializes on `http://localhost:5000`.

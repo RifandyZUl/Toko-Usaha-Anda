@@ -1,5 +1,6 @@
 import Icon from '@shared/components/Icon.jsx'
 import { formatCurrency, formatDateTime } from '../../utils/format'
+import { formatImageUrl, handleImageError } from '../../utils/imageUtils'
 
 /**
  * ProfileOrderCard - Renders a single customer order with tracking progress and actions
@@ -114,11 +115,13 @@ export default function ProfileOrderCard({
       <div className="divide-y divide-gray-100 my-3">
         {order.items?.map((item, idx) => {
           const productName = item.product?.name || item.name || 'Produk'
-          const productImage =
-            item.product?.images?.[0] ||
+          const rawImage =
+            item.variant?.image ||
             item.product?.image ||
+            item.product?.images?.[0] ||
             item.image ||
-            '/placeholder-product.png'
+            '/placeholder.jpg'
+          const productImage = formatImageUrl(rawImage)
 
           return (
             <div key={idx} className="py-2.5 flex items-center gap-3">
@@ -127,10 +130,7 @@ export default function ProfileOrderCard({
                   src={productImage}
                   alt={productName}
                   className="w-full h-full object-cover"
-                  onError={e => {
-                    e.target.onerror = null
-                    e.target.src = '/placeholder-product.png'
-                  }}
+                  onError={e => handleImageError(e, item.product, '/placeholder.jpg')}
                 />
               </div>
               <div className="flex-1 min-w-0">

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Icon from '@shared/components/Icon.jsx'
 import { createOrderReview } from '../../services/orders'
+import { formatImageUrl, handleImageError } from '../../utils/imageUtils'
 
 /**
  * ReviewModal Component
@@ -103,9 +104,10 @@ export default function ReviewModal({ orderId, product, onClose, onSuccess }) {
             <div className="flex items-center gap-3.5 p-3 bg-gray-50/80 rounded-xl border border-gray-100">
               {product.image && (
                 <img
-                  src={product.image}
+                  src={formatImageUrl(product.image)}
                   alt={product.name}
                   className="w-14 h-14 object-cover rounded-lg border border-gray-200 shrink-0 shadow-2xs"
+                  onError={e => handleImageError(e, product, '/placeholder.jpg')}
                 />
               )}
               <div className="min-w-0 flex-1">

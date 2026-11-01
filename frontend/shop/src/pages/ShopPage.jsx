@@ -135,7 +135,6 @@ function ShopPage() {
     }
 
     fetchProducts()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories.length, categoriesLoading, searchQuery, selectedCategory])
 
   // Combine loading and error states

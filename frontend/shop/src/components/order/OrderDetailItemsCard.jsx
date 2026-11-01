@@ -1,4 +1,5 @@
 import { formatCurrency } from '../../utils/format'
+import { formatImageUrl, handleImageError } from '../../utils/imageUtils'
 
 /**
  * OrderDetailItemsCard - Order items list and pricing summary
@@ -15,11 +16,13 @@ export default function OrderDetailItemsCard({ order, shippingFee = 0 }) {
       <div className="divide-y divide-gray-100">
         {order.items?.map((item, index) => {
           const productName = item.product?.name || item.name || 'Produk'
-          const productImage =
-            item.product?.images?.[0] ||
+          const rawImage =
+            item.variant?.image ||
             item.product?.image ||
+            item.product?.images?.[0] ||
             item.image ||
-            '/placeholder-product.png'
+            '/placeholder.jpg'
+          const productImage = formatImageUrl(rawImage)
 
           return (
             <div key={index} className="py-3 flex items-center gap-4">
@@ -28,10 +31,7 @@ export default function OrderDetailItemsCard({ order, shippingFee = 0 }) {
                   src={productImage}
                   alt={productName}
                   className="w-full h-full object-cover"
-                  onError={e => {
-                    e.target.onerror = null
-                    e.target.src = '/placeholder-product.png'
-                  }}
+                  onError={e => handleImageError(e, item.product, '/placeholder.jpg')}
                 />
               </div>
 
