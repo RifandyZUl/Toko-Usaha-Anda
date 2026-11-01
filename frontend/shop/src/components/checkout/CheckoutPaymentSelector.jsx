@@ -27,105 +27,75 @@ export default function CheckoutPaymentSelector({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         {/* Bank Transfer (Virtual Account) */}
         <label
-          className={`group flex flex-col p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+          className={`flex flex-col p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
             paymentMethod === 'transfer'
-              ? 'border-gray-900 bg-gray-900 text-white shadow-md ring-2 ring-gray-900/10'
-              : 'border-gray-200 hover:border-gray-900/40 bg-white hover:shadow-xs'
+              ? 'border-primary-700 bg-white ring-1 ring-primary-700 shadow-xs'
+              : 'border-gray-200 hover:border-gray-300 bg-white'
           }`}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="transfer"
-                checked={paymentMethod === 'transfer'}
-                onChange={onChange}
-                className="w-4 h-4 accent-white focus:ring-0 cursor-pointer"
-                disabled={disabled}
-              />
-              <span
-                className={`text-sm font-heading font-bold tracking-tight ${
-                  paymentMethod === 'transfer' ? 'text-white' : 'text-gray-900'
-                }`}
-              >
-                Transfer Bank (VA)
-              </span>
-            </div>
-            {paymentMethod === 'transfer' && (
-              <span className="text-[10px] font-mono uppercase bg-white/15 px-2 py-0.5 rounded text-gray-200">
-                Otomatis
-              </span>
-            )}
+          <div className="flex items-center gap-3 mb-2">
+            <input
+              type="radio"
+              name="paymentMethod"
+              value="transfer"
+              checked={paymentMethod === 'transfer'}
+              onChange={onChange}
+              className="w-4 h-4 text-primary-600 focus:ring-primary-500 cursor-pointer"
+              disabled={disabled}
+            />
+            <span className="text-sm font-heading font-semibold text-gray-900">
+              Transfer Bank (VA)
+            </span>
           </div>
-          <p
-            className={`text-[11px] font-body pl-7 leading-relaxed ${
-              paymentMethod === 'transfer' ? 'text-gray-300' : 'text-gray-500'
-            }`}
-          >
-            Verifikasi otomatis tanpa perlu upload bukti. Dapatkan Virtual Account unik dari BCA, Mandiri, BNI, BRI, dll.
+          <p className="text-[11px] font-body text-gray-500 pl-7 leading-relaxed">
+            Verifikasi otomatis. Dapatkan Virtual Account unik dari BCA, Mandiri, BNI, BRI, dll.
           </p>
         </label>
 
         {/* QRIS */}
         <label
-          className={`group flex flex-col p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+          className={`flex flex-col p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
             paymentMethod === 'qris'
-              ? 'border-gray-900 bg-gray-900 text-white shadow-md ring-2 ring-gray-900/10'
-              : 'border-gray-200 hover:border-gray-900/40 bg-white hover:shadow-xs'
+              ? 'border-primary-700 bg-white ring-1 ring-primary-700 shadow-xs'
+              : 'border-gray-200 hover:border-gray-300 bg-white'
           }`}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="qris"
-                checked={paymentMethod === 'qris'}
-                onChange={onChange}
-                className="w-4 h-4 accent-white focus:ring-0 cursor-pointer"
-                disabled={disabled}
-              />
-              <span
-                className={`text-sm font-heading font-bold tracking-tight ${
-                  paymentMethod === 'qris' ? 'text-white' : 'text-gray-900'
-                }`}
-              >
-                QRIS (E-Wallet)
-              </span>
-            </div>
-            {paymentMethod === 'qris' && (
-              <span className="text-[10px] font-mono uppercase bg-white/15 px-2 py-0.5 rounded text-gray-200">
-                Real-Time
-              </span>
-            )}
+          <div className="flex items-center gap-3 mb-2">
+            <input
+              type="radio"
+              name="paymentMethod"
+              value="qris"
+              checked={paymentMethod === 'qris'}
+              onChange={onChange}
+              className="w-4 h-4 text-primary-600 focus:ring-primary-500 cursor-pointer"
+              disabled={disabled}
+            />
+            <span className="text-sm font-heading font-semibold text-gray-900">
+              QRIS (E-Wallet)
+            </span>
           </div>
-          <p
-            className={`text-[11px] font-body pl-7 leading-relaxed ${
-              paymentMethod === 'qris' ? 'text-gray-300' : 'text-gray-500'
-            }`}
-          >
-            Bayar instan dengan scan kode QRIS menggunakan GoPay, OVO, Dana, ShopeePay, LinkAja, atau Mobile Banking.
+          <p className="text-[11px] font-body text-gray-500 pl-7 leading-relaxed">
+            Bayar instan dengan scan kode QRIS menggunakan GoPay, OVO, Dana, ShopeePay, dll.
           </p>
         </label>
       </div>
 
       {/* Sub-panel for Bank Transfer Selection */}
       {paymentMethod === 'transfer' && (
-        <div className="mt-4 p-5 border border-gray-200 bg-gray-50/70 rounded-xl transition-all duration-300">
+        <div className="mt-4 p-4 border border-primary-100 bg-primary-50/10 rounded-lg transition-all duration-300">
           <p className="text-xs font-heading font-semibold text-gray-900 mb-3 uppercase tracking-wider">
             Pilih Bank Virtual Account
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {bankOptions.map(bank => {
               const isBankSelected = selectedBank === bank.id
               return (
                 <label
                   key={bank.id}
-                  className={`flex flex-col items-center justify-center p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
+                  className={`flex flex-col items-center justify-center p-3 border rounded-lg cursor-pointer transition-all duration-200 ${
                     isBankSelected
-                      ? 'border-gray-900 bg-white shadow-sm ring-1 ring-gray-900 text-gray-900'
-                      : 'border-gray-200 bg-white hover:border-gray-400 text-gray-600'
+                      ? 'border-primary-700 bg-white ring-1 ring-primary-700 font-semibold shadow-xs text-gray-900'
+                      : 'border-gray-200 bg-white hover:border-gray-300 text-gray-600'
                   }`}
                 >
                   <input

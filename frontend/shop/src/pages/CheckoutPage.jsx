@@ -115,6 +115,9 @@ function CheckoutPage() {
           return
         }
 
+        const matchedCourier = courierOptions.find(o => o.id === values.shippingCourier && o.available)
+        const activeShippingFee = matchedCourier ? matchedCourier.fee : Number(values.shippingFee || 15000)
+
         // 2. Prepare structured order payload
         const orderPayload = {
           receiverName: values.receiverName?.trim(),
@@ -128,7 +131,7 @@ function CheckoutPage() {
           latitude: values.latitude ? String(values.latitude).trim() : null,
           longitude: values.longitude ? String(values.longitude).trim() : null,
           shippingCourier: values.shippingCourier,
-          shippingFee: Number(values.shippingFee),
+          shippingFee: activeShippingFee,
           paymentMethod:
             values.paymentMethod === 'transfer'
               ? `TRANSFER_${values.selectedBank.toUpperCase()}`
@@ -141,7 +144,7 @@ function CheckoutPage() {
           : `idempotency-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
         const orderResult = await createOrder(orderPayload, idempotencyKey)
 
-        if (orderResult.success) {
+        const handlePaymentFlow = async (resultOrder) => {
           // Save address to user profile dynamically
           try {
             const newAddressObj = {
@@ -169,7 +172,7 @@ function CheckoutPage() {
             console.error('Failed to auto-save address to user profile:', profileErr)
           }
 
-          if (values.paymentMethod === 'midtrans' && orderResult.snapToken) {
+          if (values.paymentMethod === 'midtrans' && resultOrder.snapToken) {
             // 4. Trigger Midtrans Snap payment
             const isSnapLoaded = await loadMidtransSnap()
             if (!isSnapLoaded) {
@@ -184,17 +187,17 @@ function CheckoutPage() {
               removeItemsByKeys(purchasedKeys)
             }
 
-            window.snap.pay(orderResult.snapToken, {
+            window.snap.pay(resultOrder.snapToken, {
               onSuccess: () => {
                 clearPurchasedItems()
                 navigate('/shop/order-success', {
-                  state: { orderId: orderResult.order.id },
+                  state: { orderId: resultOrder.order.id },
                 })
               },
               onPending: () => {
                 clearPurchasedItems()
                 navigate('/shop/order-success', {
-                  state: { orderId: orderResult.order.id, isPending: true },
+                  state: { orderId: resultOrder.order.id, isPending: true },
                 })
               },
               onError: err => {
@@ -205,7 +208,7 @@ function CheckoutPage() {
               },
               onClose: () => {
                 clearPurchasedItems()
-                navigate(`/shop/order/${orderResult.order.id}`, {
+                navigate(`/shop/order/${resultOrder.order.id}`, {
                   state: { isPending: true },
                 })
               },
@@ -215,17 +218,33 @@ function CheckoutPage() {
             const purchasedKeys = checkoutItems.map(it => getItemKey(it))
             removeItemsByKeys(purchasedKeys)
             navigate('/shop/order-success', {
-              state: { orderId: orderResult.order.id },
+              state: { orderId: resultOrder.order.id },
             })
           }
+        }
+
+        if (orderResult.success) {
+          await handlePaymentFlow(orderResult)
+        } else if (orderResult.code === 'SHIPPING_FEE_CHANGED' && orderResult.newShippingFee) {
+          // Auto-adjust shipping fee and immediately auto-retry without showing red error message
+          const adjustedFee = Number(orderResult.newShippingFee)
+          setValuesRef.current?.(prev => ({
+            ...prev,
+            shippingFee: adjustedFee,
+          }))
+          const retryPayload = {
+            ...orderPayload,
+            shippingFee: adjustedFee,
+          }
+          const retryResult = await createOrder(retryPayload, `${idempotencyKey}-retry`)
+          if (retryResult.success) {
+            await handlePaymentFlow(retryResult)
+          } else {
+            setOrderError(retryResult.error || 'Gagal membuat pesanan')
+            scrollToError()
+          }
         } else {
-          if (orderResult.code === 'SHIPPING_FEE_CHANGED' && orderResult.newShippingFee) {
-            setValuesRef.current?.(prev => ({
-              ...prev,
-              shippingFee: Number(orderResult.newShippingFee),
-            }))
-            setOrderError(orderResult.error)
-          } else if (orderResult.errors && Array.isArray(orderResult.errors)) {
+          if (orderResult.errors && Array.isArray(orderResult.errors)) {
             const validationMsg = orderResult.errors
               .map(err => `${err.field}: ${err.message}`)
               .join(', ')
@@ -238,12 +257,27 @@ function CheckoutPage() {
       } catch (error) {
         logError('Checkout error', error)
         if (error.code === 'SHIPPING_FEE_CHANGED' && error.data?.newShippingFee) {
-          setValuesRef.current?.(prev => ({
-            ...prev,
-            shippingFee: Number(error.data.newShippingFee),
-          }))
-          setOrderError(error.message)
-        } else if (error.errors && Array.isArray(error.errors)) {
+          // Auto-adjust and auto-retry without blocking user with error message
+          try {
+            const adjustedFee = Number(error.data.newShippingFee)
+            setValuesRef.current?.(prev => ({
+              ...prev,
+              shippingFee: adjustedFee,
+            }))
+            const retryPayload = {
+              ...orderPayload,
+              shippingFee: adjustedFee,
+            }
+            const retryResult = await createOrder(retryPayload, `${idempotencyKey}-auto`)
+            if (retryResult.success) {
+              await handlePaymentFlow(retryResult)
+              return
+            }
+          } catch (retryErr) {
+            console.error('Auto-retry checkout error:', retryErr)
+          }
+        }
+        if (error.errors && Array.isArray(error.errors)) {
           const validationMsg = error.errors.map(err => `${err.field}: ${err.message}`).join(', ')
           setOrderError(`Validasi Gagal - ${validationMsg}`)
         } else {
