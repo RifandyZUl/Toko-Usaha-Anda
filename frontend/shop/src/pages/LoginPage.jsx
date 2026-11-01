@@ -130,12 +130,20 @@ function LoginPage() {
 
             {/* Password */}
             <div>
-              <label
-                htmlFor="password"
-                className="block text-xs font-body font-medium text-gray-900 mb-2 uppercase tracking-wider"
-              >
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label
+                  htmlFor="password"
+                  className="block text-xs font-body font-medium text-gray-900 uppercase tracking-wider"
+                >
+                  Password
+                </label>
+                <Link
+                  to="/shop/forgot-password"
+                  className="text-xs font-body text-gray-500 hover:text-gray-900 underline underline-offset-2 transition-colors"
+                >
+                  Lupa kata sandi?
+                </Link>
+              </div>
               <input
                 type="password"
                 id="password"

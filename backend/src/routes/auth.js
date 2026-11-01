@@ -4,7 +4,16 @@
  */
 
 import express from 'express'
-import { register, login, getMe, logout, updateProfile } from '../controllers/authController.js'
+import {
+  register,
+  login,
+  getMe,
+  logout,
+  updateProfile,
+  forgotPassword,
+  verifyResetOtp,
+  resetPassword,
+} from '../controllers/authController.js'
 import {
   sendOtp,
   verifyOtp,
@@ -37,5 +46,10 @@ router.get('/check-phone', checkPhoneStatus)
 router.post('/send-email-otp', sendEmailOtp)
 router.post('/verify-email-otp', verifyEmailOtp)
 router.post('/send-register-wa-otp', sendRegisterWaOtp)
+
+// Forgot & Reset Password endpoints
+router.post('/forgot-password', forgotPassword)
+router.post('/verify-reset-otp', verifyResetOtp)
+router.post('/reset-password', resetPassword)
 
 export default router

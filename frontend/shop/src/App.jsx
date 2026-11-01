@@ -11,6 +11,7 @@ import OrderDetailPage from './pages/OrderDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import ErrorBoundary from '@shared/components/ErrorBoundary.jsx'
 import { useAuthStore } from './stores/authStore'
@@ -45,6 +46,7 @@ function App() {
           <Route path="/shop/cart" element={<CartPage />} />
           <Route path="/shop/login" element={<LoginPage />} />
           <Route path="/shop/register" element={<RegisterPage />} />
+          <Route path="/shop/forgot-password" element={<ForgotPasswordPage />} />
           <Route
             path="/shop/checkout"
             element={

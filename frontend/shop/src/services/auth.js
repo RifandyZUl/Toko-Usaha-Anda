@@ -231,5 +231,66 @@ export const sendRegisterWaOtp = async phone => {
   }
 }
 
+/**
+ * Request password reset OTP (Email or WhatsApp)
+ * @param {string} identifier - Email address or Phone number
+ * @param {'EMAIL'|'WHATSAPP'} channel - Verification channel
+ */
+export const requestPasswordReset = async (identifier, channel = 'EMAIL') => {
+  try {
+    const response = await apiClient.post('/auth/forgot-password', { identifier, channel })
+    return {
+      success: true,
+      ...response,
+    }
+  } catch (error) {
+    logError('Error requesting password reset', error)
+    return {
+      success: false,
+      error: error.message || 'Gagal mengirim kode reset kata sandi.',
+    }
+  }
+}
 
+/**
+ * Verify password reset OTP and obtain single-use reset token
+ * @param {string} identifier - Email address or Phone number
+ * @param {'EMAIL'|'WHATSAPP'} channel - Verification channel
+ * @param {string} otp - 6-digit OTP code
+ */
+export const verifyPasswordResetOtp = async (identifier, channel = 'EMAIL', otp) => {
+  try {
+    const response = await apiClient.post('/auth/verify-reset-otp', { identifier, channel, otp })
+    return {
+      success: true,
+      ...response,
+    }
+  } catch (error) {
+    logError('Error verifying reset OTP', error)
+    return {
+      success: false,
+      error: error.message || 'Kode OTP reset kata sandi tidak valid atau kedaluwarsa.',
+    }
+  }
+}
 
+/**
+ * Reset password using single-use reset token
+ * @param {string} resetToken - Temporary single-use reset token from OTP verification
+ * @param {string} newPassword - New password
+ */
+export const resetPasswordWithToken = async (resetToken, newPassword) => {
+  try {
+    const response = await apiClient.post('/auth/reset-password', { resetToken, newPassword })
+    return {
+      success: true,
+      ...response,
+    }
+  } catch (error) {
+    logError('Error resetting password', error)
+    return {
+      success: false,
+      error: error.message || 'Gagal mengatur ulang kata sandi.',
+    }
+  }
+}

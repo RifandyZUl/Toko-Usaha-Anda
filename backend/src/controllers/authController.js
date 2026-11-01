@@ -21,6 +21,9 @@ import {
   verifyOtpCode,
   normalizePhoneNumber,
   validateEmailDomain,
+  sendPasswordResetOtp,
+  verifyPasswordResetOtp,
+  consumeResetToken,
 } from '../services/otpService.js'
 
 // Bcrypt cost factor — 12 is the current industry recommendation
@@ -317,3 +320,155 @@ export const updateProfile = asyncHandler(async (req, res) => {
     user: updatedUser,
   })
 })
+
+/**
+ * POST /api/auth/forgot-password
+ * Rate-limited. Returns generic response to prevent user enumeration.
+ */
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { identifier, channel = 'EMAIL' } = req.body
+  const cleanId = (identifier || '').trim()
+
+  if (!cleanId) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: 'Email atau nomor WhatsApp wajib diisi.',
+    })
+  }
+
+  const isEmail = channel === 'EMAIL'
+  let user = null
+
+  if (isEmail) {
+    const cleanEmail = cleanId.toLowerCase()
+    user = await prisma.user.findUnique({ where: { email: cleanEmail } })
+  } else {
+    const normalizedPhone = normalizePhoneNumber(cleanId)
+    user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: cleanId },
+          { phone: normalizedPhone },
+          ...(normalizedPhone.startsWith('62') ? [{ phone: '0' + normalizedPhone.slice(2) }] : []),
+        ],
+      },
+    })
+  }
+
+  // To prevent user enumeration / account harvesting:
+  // If user is not found, we delay slightly to mimic processing time and return a generic success message
+  if (!user) {
+    await new Promise((resolve) => setTimeout(resolve, 350))
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: isEmail
+        ? 'Jika akun terdaftar, kode verifikasi reset kata sandi telah dikirim ke email Anda.'
+        : 'Jika akun terdaftar, kode verifikasi reset kata sandi telah dikirim ke WhatsApp Anda.',
+      cooldownSeconds: 60,
+    })
+  }
+
+  const target = isEmail ? user.email : user.phone
+  const result = await sendPasswordResetOtp(target, channel)
+
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: result.message,
+    simulated: result.simulated,
+    devOtp: result.devOtp,
+    cooldownSeconds: result.cooldownSeconds || 60,
+    expiresInSeconds: result.expiresInSeconds || 900,
+  })
+})
+
+/**
+ * POST /api/auth/verify-reset-otp
+ * Verifies OTP code and issues single-use reset token
+ */
+export const verifyResetOtp = asyncHandler(async (req, res) => {
+  const { identifier, channel = 'EMAIL', otp } = req.body
+  const cleanId = (identifier || '').trim()
+  const cleanOtp = (otp || '').trim()
+
+  if (!cleanId || !cleanOtp) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: 'Identitas akun dan kode OTP wajib diisi.',
+    })
+  }
+
+  const result = verifyPasswordResetOtp(cleanId, channel, cleanOtp)
+  if (!result.success) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: result.message,
+    })
+  }
+
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: 'Kode OTP terverifikasi.',
+    resetToken: result.resetToken,
+  })
+})
+
+/**
+ * POST /api/auth/reset-password
+ * Consumes single-use reset token and securely updates password
+ */
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { resetToken, newPassword } = req.body
+
+  if (!resetToken || !newPassword) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: 'Token reset dan kata sandi baru wajib diisi.',
+    })
+  }
+
+  if (newPassword.length < 6 || !/\d/.test(newPassword)) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: 'Kata sandi minimal 6 karakter dan wajib mengandung angka.',
+    })
+  }
+
+  const session = consumeResetToken(resetToken)
+  if (!session) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: 'Sesi reset kata sandi tidak valid atau telah kedaluwarsa. Silakan ulangi proses lupa kata sandi.',
+    })
+  }
+
+  // Find user by identifier
+  let user = null
+  if (session.channel === 'EMAIL') {
+    user = await prisma.user.findUnique({ where: { email: session.identifier } })
+  } else {
+    user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: session.identifier },
+          ...(session.identifier.startsWith('62') ? [{ phone: '0' + session.identifier.slice(2) }] : []),
+        ],
+      },
+    })
+  }
+
+  if (!user) {
+    return res.status(HTTP_STATUS.NOT_FOUND).json({
+      error: 'Pengguna tidak ditemukan.',
+    })
+  }
+
+  // Hash new password using bcrypt cost factor 12
+  const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS)
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { password: hashedPassword },
+  })
+
+  logWarn('Password successfully reset for user', { userId: user.id, email: user.email })
+
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: 'Kata sandi berhasil diperbarui. Silakan masuk menggunakan kata sandi baru Anda.',
+  })
+})
+

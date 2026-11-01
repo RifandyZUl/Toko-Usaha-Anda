@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import dns from 'dns/promises'
 import prisma from '../config/database.js'
-import { sendEmailOtp } from './emailService.js'
+import { sendEmailOtp, sendPasswordResetEmail } from './emailService.js'
 import { logInfo, logError, logWarn } from '../utils/logger.js'
 
 /**
@@ -504,3 +504,192 @@ export async function verifyEmailVerificationOtp(rawEmail, submittedCode) {
     message: 'Email berhasil diverifikasi!',
   }
 }
+
+// ==========================================
+// PASSWORD RESET OTP & SESSION FUNCTIONS
+// ==========================================
+
+const passwordResetOtpCache = new Map() // Key: identifier (clean email or normalized phone)
+const passwordResetSessionCache = new Map() // Key: resetSessionToken, Value: { identifier, userId, expiresAt }
+
+export const RESET_OTP_TTL_MS = 15 * 60 * 1000 // 15 minutes validity
+export const RESET_SESSION_TTL_MS = 15 * 60 * 1000 // 15 minutes validity for reset token
+
+/**
+ * Send Password Reset OTP to Email or WhatsApp
+ * Generic safe response is returned by the controller to prevent user enumeration
+ */
+export async function sendPasswordResetOtp(targetIdentifier, channel = 'EMAIL') {
+  const isEmail = channel === 'EMAIL'
+  const key = isEmail
+    ? targetIdentifier.trim().toLowerCase()
+    : normalizePhoneNumber(targetIdentifier)
+
+  // Rate limit / resend cooldown check (60s)
+  const existing = passwordResetOtpCache.get(key)
+  if (existing && Date.now() - existing.createdAt < RESEND_COOLDOWN_MS) {
+    const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - existing.createdAt)) / 1000)
+    const err = new Error(`Mohon tunggu ${remainingSeconds} detik sebelum meminta kode baru.`)
+    err.statusCode = 429
+    throw err
+  }
+
+  // Generate 6-digit cryptographic OTP
+  const otp = crypto.randomInt(100000, 999999).toString()
+  const otpHash = hashOtp(otp)
+
+  passwordResetOtpCache.set(key, {
+    otpHash,
+    otp, // Used in simulation mode
+    expiresAt: Date.now() + RESET_OTP_TTL_MS,
+    attempts: 0,
+    createdAt: Date.now(),
+  })
+
+  if (isEmail) {
+    const emailResult = await sendPasswordResetEmail(key, otp)
+    return {
+      success: true,
+      message: 'Kode reset kata sandi telah dikirim ke email.',
+      simulated: emailResult.simulated,
+      devOtp: emailResult.devOtp,
+      cooldownSeconds: 60,
+      expiresInSeconds: 900,
+    }
+  } else {
+    // Send via WhatsApp
+    const fonnteToken = process.env.FONNTE_TOKEN?.trim()
+    if (fonnteToken && fonnteToken !== 'your_fonnte_token_here') {
+      try {
+        const response = await fetch('https://api.fonnte.com/send', {
+          method: 'POST',
+          headers: {
+            Authorization: fonnteToken,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            target: key,
+            message: `[Toko Usaha Anda] Kode reset kata sandi akun Anda adalah: *${otp}*.\n\nKode berlaku selama 15 menit. Jangan berikan kode ini kepada siapa pun demi keamanan Anda.`,
+          }),
+        })
+
+        const result = await response.json()
+        if (result.status === true) {
+          logInfo(`Password reset WhatsApp OTP sent to ${key}`)
+          return {
+            success: true,
+            message: `Kode reset kata sandi telah dikirim ke WhatsApp (${key}).`,
+            simulated: false,
+            cooldownSeconds: 60,
+            expiresInSeconds: 900,
+          }
+        }
+      } catch (err) {
+        logError('Error sending reset WA OTP:', err)
+      }
+    }
+
+    // WhatsApp simulation mode
+    console.log(`\n======================================================`)
+    console.log(`[SIMULASI OTP WHATSAPP RESET KATA SANDI]`)
+    console.log(`Nomor Tujuan : ${key}`)
+    console.log(`Kode OTP     : ${otp}`)
+    console.log(`Masa Berlaku : 15 Menit`)
+    console.log(`======================================================\n`)
+
+    return {
+      success: true,
+      message: `Kode reset kata sandi telah dikirim ke WhatsApp (${key}) [Mode Simulasi].`,
+      simulated: true,
+      devOtp: otp,
+      cooldownSeconds: 60,
+      expiresInSeconds: 900,
+    }
+  }
+}
+
+/**
+ * Verify Password Reset OTP
+ * If valid, issues a single-use cryptographically random reset token
+ */
+export function verifyPasswordResetOtp(targetIdentifier, channel = 'EMAIL', submittedCode) {
+  const isEmail = channel === 'EMAIL'
+  const key = isEmail
+    ? targetIdentifier.trim().toLowerCase()
+    : normalizePhoneNumber(targetIdentifier)
+  const cleanCode = (submittedCode || '').trim()
+
+  const record = passwordResetOtpCache.get(key)
+  if (!record) {
+    return {
+      success: false,
+      message: 'Kode OTP belum diminta atau sudah kedaluwarsa. Silakan minta kode baru.',
+    }
+  }
+
+  if (Date.now() > record.expiresAt) {
+    passwordResetOtpCache.delete(key)
+    return {
+      success: false,
+      message: 'Kode OTP telah kedaluwarsa. Silakan minta kode baru.',
+    }
+  }
+
+  if (record.attempts >= MAX_VERIFY_ATTEMPTS) {
+    passwordResetOtpCache.delete(key)
+    return {
+      success: false,
+      message: 'Batas percobaan verifikasi telah habis. Silakan minta kode OTP baru.',
+    }
+  }
+
+  const submittedHash = hashOtp(cleanCode)
+  const isMatch = crypto.timingSafeEqual(
+    Buffer.from(record.otpHash, 'utf8'),
+    Buffer.from(submittedHash, 'utf8')
+  )
+
+  if (!isMatch) {
+    record.attempts += 1
+    return {
+      success: false,
+      message: `Kode OTP salah. Sisa kesempatan: ${MAX_VERIFY_ATTEMPTS - record.attempts} kali.`,
+    }
+  }
+
+  // OTP is valid! Delete it immediately to prevent replay attacks
+  passwordResetOtpCache.delete(key)
+
+  // Generate single-use reset token
+  const resetToken = crypto.randomBytes(32).toString('hex')
+  passwordResetSessionCache.set(resetToken, {
+    identifier: key,
+    channel,
+    expiresAt: Date.now() + RESET_SESSION_TTL_MS,
+  })
+
+  return {
+    success: true,
+    message: 'Verifikasi kode berhasil.',
+    resetToken,
+  }
+}
+
+/**
+ * Validate and consume single-use reset token
+ */
+export function consumeResetToken(resetToken) {
+  if (!resetToken) return null
+  const session = passwordResetSessionCache.get(resetToken)
+  if (!session) return null
+
+  if (Date.now() > session.expiresAt) {
+    passwordResetSessionCache.delete(resetToken)
+    return null
+  }
+
+  // Single-use: delete immediately
+  passwordResetSessionCache.delete(resetToken)
+  return session
+}
+

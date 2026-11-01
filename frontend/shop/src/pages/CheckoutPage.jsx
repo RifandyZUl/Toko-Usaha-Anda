@@ -26,7 +26,7 @@ import CheckoutOrderSummary from '../components/checkout/CheckoutOrderSummary'
  */
 function CheckoutPage() {
   const navigate = useNavigate()
-  const { items, getSelectedItems, removeItemsByKeys, clearCart } = useCartStore()
+  const { items, getSelectedItems, removeItemsByKeys } = useCartStore()
   const { user, setAuth } = useAuthStore()
   const [orderError, setOrderError] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -257,11 +257,16 @@ function CheckoutPage() {
     [checkoutItems, removeItemsByKeys, navigate, setAuth, user?.name, user?.phone, scrollToError]
   )
 
-  const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit, setValues } = useForm(
-    initialValues,
-    validateCheckoutForm,
-    onSubmit
-  )
+  const {
+    values,
+    errors,
+    touched,
+    isSubmitting,
+    handleChange,
+    handleBlur,
+    handleSubmit,
+    setValues,
+  } = useForm(initialValues, validateCheckoutForm, onSubmit)
   setValuesRef.current = setValues
 
   const {
@@ -854,7 +859,9 @@ function CheckoutPage() {
                   {isLoadingPostalCodes ? (
                     <div className="flex items-center gap-2 px-4 py-3 border border-gray-300 bg-gray-50 text-gray-600 text-xs font-body">
                       <Icon name="Loader2" size={16} className="animate-spin text-gray-600" />
-                      <span>Mencari kode pos wilayah {values.kelurahan || values.subdistrict}...</span>
+                      <span>
+                        Mencari kode pos wilayah {values.kelurahan || values.subdistrict}...
+                      </span>
                     </div>
                   ) : !isManualPostalCode ? (
                     <select
@@ -935,7 +942,9 @@ function CheckoutPage() {
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3 text-amber-800 text-sm mt-6">
                     <Icon name="AlertCircle" size={20} className="shrink-0 mt-0.5 text-amber-600" />
                     <div>
-                      <p className="font-semibold text-amber-900">Periksa Kembali Data Pengiriman</p>
+                      <p className="font-semibold text-amber-900">
+                        Periksa Kembali Data Pengiriman
+                      </p>
                       <p className="mt-0.5 text-xs text-amber-700">
                         Mohon lengkapi kolom yang bertanda merah sebelum melanjutkan checkout.
                       </p>
