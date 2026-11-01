@@ -403,9 +403,15 @@ function ProfilePage() {
       }
 
       if (isWhatsAppUser) {
-        if (formData.email?.trim()) {
-          payload.email = formData.email.trim()
+        if (!formData.email?.trim()) {
+          showAlert({
+            title: 'Email Wajib Diisi',
+            message: 'Alamat email wajib diisi agar akun Anda dapat melakukan transaksi pemesanan barang.',
+            type: 'warning',
+          })
+          return
         }
+        payload.email = formData.email.trim()
         payload.phone = activeUser?.phone
       } else {
         payload.phone = formData.phone

@@ -366,10 +366,24 @@ function CheckoutPage() {
     [handleChange]
   )
 
+  const activeUser = user?.user || user
+  const isEmailMissing = Boolean(
+    !activeUser?.email || activeUser?.email?.endsWith('@whatsapp.user')
+  )
+
   const onSubmit = useCallback(
     async formValues => {
       setIsProcessing(true)
       setOrderError(null)
+
+      if (isEmailMissing) {
+        setOrderError(
+          'Harap lengkapi alamat email Anda pada menu profil akun terlebih dahulu sebelum melakukan transaksi.'
+        )
+        setIsProcessing(false)
+        scrollToError()
+        return
+      }
 
       let orderPayload = null
       let idempotencyKey = ''
@@ -676,6 +690,53 @@ function CheckoutPage() {
                 >
                   <Icon name="ArrowLeft" size={16} />
                   <span>Kembali Belanja</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // Require completed email profile before completing checkout
+  if (user && isEmailMissing) {
+    return (
+      <div className="min-h-screen bg-[#fafafa]">
+        <ShopNavigation />
+        <main className="container-custom py-16 md:py-24">
+          <div className="max-w-md mx-auto text-center bg-white rounded-3xl p-8 sm:p-10 border border-amber-200 shadow-sm">
+            <div className="w-20 h-20 mx-auto mb-6 bg-amber-50 rounded-full flex items-center justify-center text-amber-600">
+              <Icon name="Mail" size={36} />
+            </div>
+            <span className="inline-block px-3 py-1 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full mb-3 uppercase tracking-wider">
+              Lengkapi Profil Terlebih Dahulu
+            </span>
+            <h2 className="text-2xl font-heading font-medium text-gray-900 mb-3 tracking-tight">
+              Email Wajib Ditambahkan
+            </h2>
+            <p className="text-sm font-body text-gray-600 mb-8 leading-relaxed">
+              Akun Anda belum memiliki alamat email yang terdaftar. Demi keamanan bukti transaksi dan pengiriman invoice pesanan, Anda diwajibkan melengkapi alamat email di profil akun sebelum dapat melakukan transaksi.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Link to="/shop/profile" className="w-full">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full uppercase tracking-wider py-3.5 shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+                >
+                  <Icon name="Users" size={16} />
+                  <span>Lengkapi Profil Sekarang</span>
+                </Button>
+              </Link>
+              <Link to="/shop/cart" className="w-full">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full uppercase tracking-wider py-3 border-gray-300 text-gray-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Icon name="ArrowLeft" size={16} />
+                  <span>Kembali ke Keranjang</span>
                 </Button>
               </Link>
             </div>

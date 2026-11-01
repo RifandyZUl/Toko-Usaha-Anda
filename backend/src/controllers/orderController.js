@@ -32,6 +32,19 @@ export const createOrder = async (req, res, next) => {
 
     const shippingAddress = `${receiverName} | ${addressDetail}, ${kelurahan}, ${subdistrict}, ${city}, ${province} ${postalCode}`
 
+    // Validasi profil: Pastikan pengguna sudah melengkapi email asli (bukan placeholder @whatsapp.user)
+    const orderUser = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, email: true },
+    })
+
+    if (!orderUser || !orderUser.email || orderUser.email.endsWith('@whatsapp.user')) {
+      return res.status(400).json({
+        error: 'Harap lengkapi alamat email Anda pada profil akun terlebih dahulu sebelum melakukan transaksi.',
+        code: 'PROFILE_EMAIL_REQUIRED',
+      })
+    }
+
     // Get user cart
     const cartItems = await prisma.cartItem.findMany({
       where: { userId: req.userId },

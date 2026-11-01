@@ -5,6 +5,7 @@ import Icon from '@shared/components/Icon.jsx'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCartStore } from '../stores/cartStore'
 import { useAuthStore } from '../stores/authStore'
+import { useAlertStore } from '../stores/alertStore'
 import { getProductById, getProductReviews } from '../services/products'
 import ShopNavigation from '../components/navigation/ShopNavigation'
 import Loading from '../components/common/Loading'
@@ -20,7 +21,8 @@ function ProductDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { addItem } = useCartStore()
-  const { isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated } = useAuthStore()
+  const { showAlert } = useAlertStore()
   const [quantity, setQuantity] = useState(1)
   const [selectedVariant, setSelectedVariant] = useState(null)
   const [variantError, setVariantError] = useState(null)
@@ -172,10 +174,26 @@ function ProductDetailPage() {
       return
     }
 
+    const activeUser = user?.user || user
+    const isEmailMissing = Boolean(
+      !activeUser?.email || activeUser?.email?.endsWith('@whatsapp.user')
+    )
+    if (isEmailMissing) {
+      showAlert({
+        title: 'Lengkapi Profil Akun',
+        message:
+          'Anda belum menambahkan alamat email di akun Anda. Anda diwajibkan melengkapi alamat email di profil terlebih dahulu sebelum dapat melanjutkan transaksi pemesanan.',
+        type: 'warning',
+        confirmText: 'Lengkapi Profil Sekarang',
+        onConfirm: () => navigate('/shop/profile'),
+      })
+      return
+    }
+
     // Add to cart and go to checkout
     addItem(cartProduct, quantity)
     navigate('/shop/checkout')
-  }, [product, selectedVariant, cartProduct, effectiveStock, quantity, addItem, navigate, isAuthenticated])
+  }, [product, selectedVariant, cartProduct, effectiveStock, quantity, addItem, navigate, isAuthenticated, user, showAlert])
 
   const handleQuantityChange = useCallback(
     delta => {

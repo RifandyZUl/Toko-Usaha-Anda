@@ -55,7 +55,6 @@ export default function ProfileInfoTab({
               name="name"
               value={formData.name}
               onChange={handleInputChange}
-              placeholder="Masukkan nama lengkap"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
             />
           ) : (
@@ -65,11 +64,18 @@ export default function ProfileInfoTab({
 
         {/* Email */}
         <div>
-          <label className="block text-sm font-body font-medium text-gray-700 mb-2">
-            Email
-          </label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-sm font-body font-medium text-gray-700">
+              Email
+            </label>
+            {isWhatsAppUser && (!formData.email || formData.email.endsWith('@whatsapp.user')) && (
+              <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                Wajib untuk transaksi
+              </span>
+            )}
+          </div>
           {isWhatsAppUser ? (
-            // Akun WhatsApp: Email dapat diisi/diubah
+            // Akun WhatsApp: Email wajib ditambahkan untuk transaksi
             isEditing ? (
               <>
                 <input
@@ -77,11 +83,10 @@ export default function ProfileInfoTab({
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  placeholder="contoh: nama@email.com"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Email digunakan untuk menerima invoice dan notifikasi pesanan.
+                <p className="text-xs text-amber-600 mt-1 font-medium">
+                  Email wajib diisi agar Anda dapat melakukan transaksi pesanan.
                 </p>
               </>
             ) : (
@@ -94,7 +99,7 @@ export default function ProfileInfoTab({
                 <p className="text-xs text-gray-500 mt-1">
                   {formData.email && !formData.email.endsWith('@whatsapp.user')
                     ? 'Klik Edit Profil untuk mengubah email.'
-                    : 'Klik Edit Profil untuk menambahkan email Anda.'}
+                    : 'Klik Edit Profil untuk menambahkan email (wajib untuk transaksi).'}
                 </p>
               </>
             )
@@ -128,7 +133,6 @@ export default function ProfileInfoTab({
                 name="phone"
                 value={formData.phone}
                 onChange={handleInputChange}
-                placeholder="contoh: 08123456789"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
               />
             ) : (

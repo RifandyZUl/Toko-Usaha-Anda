@@ -4,6 +4,7 @@ import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
 import { useCartStore, getItemKey } from '../stores/cartStore'
 import { useAuthStore } from '../stores/authStore'
+import { useAlertStore } from '../stores/alertStore'
 import ShopNavigation from '../components/navigation/ShopNavigation'
 import { formatCurrency } from '../utils/format'
 import { formatImageUrl, handleImageError } from '../utils/imageUtils'
@@ -26,7 +27,8 @@ function CartPage() {
     removeItem,
     removeItemsByKeys,
   } = useCartStore()
-  const { isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated } = useAuthStore()
+  const { showAlert } = useAlertStore()
 
   const [productStocks, setProductStocks] = useState({})
   const [loadingStocks, setLoadingStocks] = useState(false)
@@ -133,8 +135,25 @@ function CartPage() {
       navigate('/shop/login', { state: { from: { pathname: '/shop/checkout' } } })
       return
     }
+
+    const activeUser = user?.user || user
+    const isEmailMissing = Boolean(
+      !activeUser?.email || activeUser?.email?.endsWith('@whatsapp.user')
+    )
+    if (isEmailMissing) {
+      showAlert({
+        title: 'Lengkapi Profil Akun',
+        message:
+          'Anda belum menambahkan alamat email di akun Anda. Anda diwajibkan melengkapi alamat email di profil terlebih dahulu sebelum dapat melanjutkan transaksi pemesanan.',
+        type: 'warning',
+        confirmText: 'Lengkapi Profil Sekarang',
+        onConfirm: () => navigate('/shop/profile'),
+      })
+      return
+    }
+
     navigate('/shop/checkout')
-  }, [selectedCount, isAuthenticated, navigate])
+  }, [selectedCount, isAuthenticated, user, navigate, showAlert])
 
   if (items.length === 0) {
     return (
