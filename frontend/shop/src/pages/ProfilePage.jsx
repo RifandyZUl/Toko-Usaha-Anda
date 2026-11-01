@@ -70,9 +70,10 @@ function ProfilePage() {
   useEffect(() => {
     const activeUser = user?.user || user
     if (activeUser) {
+      const isDummyEmail = activeUser.email?.endsWith('@whatsapp.user')
       setFormData({
         name: activeUser.name || '',
-        email: activeUser.email || '',
+        email: isDummyEmail ? '' : (activeUser.email || ''),
         phone: activeUser.phone || '',
         address: activeUser.address || '',
       })
@@ -391,11 +392,27 @@ function ProfilePage() {
   // Save Account Profile Changes
   const handleSaveProfile = async () => {
     try {
-      const result = await updateProfile({
-        name: formData.name,
-        phone: formData.phone,
+      const activeUser = user?.user || user
+      const isWhatsAppUser = Boolean(
+        activeUser?.isPhoneVerified || activeUser?.email?.endsWith('@whatsapp.user')
+      )
+
+      const payload = {
+        name: formData.name?.trim(),
         address: formData.address,
-      })
+      }
+
+      if (isWhatsAppUser) {
+        if (formData.email?.trim()) {
+          payload.email = formData.email.trim()
+        }
+        payload.phone = activeUser?.phone
+      } else {
+        payload.phone = formData.phone
+        payload.email = activeUser?.email
+      }
+
+      const result = await updateProfile(payload)
       if (result.success && result.user) {
         setAuth(result.user)
         setIsEditing(false)

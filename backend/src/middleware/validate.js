@@ -243,6 +243,12 @@ export const validateUpdateProfile = [
     .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters')
     .escape(),
 
+  body('email')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isEmail().withMessage('Format email tidak valid')
+    .normalizeEmail(),
+
   body('phone')
     .optional({ nullable: true, checkFalsy: true })
     .trim()

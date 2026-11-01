@@ -279,6 +279,8 @@ export const getMe = asyncHandler(async (req, res) => {
       phone: true,
       address: true,
       role: true,
+      isEmailVerified: true,
+      isPhoneVerified: true,
       createdAt: true,
     },
   })
@@ -294,48 +296,121 @@ export const getMe = asyncHandler(async (req, res) => {
  * PUT /api/auth/profile
  */
 export const updateProfile = asyncHandler(async (req, res) => {
-  const { name, phone, address } = req.body
+  const { name, email, phone, address } = req.body
 
   const currentUser = await prisma.user.findUnique({
     where: { id: req.userId },
-    select: { id: true, phone: true },
+    select: {
+      id: true,
+      email: true,
+      phone: true,
+      isPhoneVerified: true,
+      isEmailVerified: true,
+    },
   })
 
-  let normalizedPhone = currentUser?.phone
-  if (phone !== undefined) {
-    if (phone?.trim()) {
+  if (!currentUser) {
+    return res.status(HTTP_STATUS.NOT_FOUND).json({ error: 'User tidak ditemukan.' })
+  }
+
+  // Deteksi jenis registrasi akun:
+  // Akun WhatsApp ditandai oleh isPhoneVerified = true, atau email default @whatsapp.user
+  const isWhatsAppUser = Boolean(
+    currentUser.isPhoneVerified || currentUser.email?.endsWith('@whatsapp.user')
+  )
+
+  let finalEmail = currentUser.email
+  let normalizedPhone = currentUser.phone
+
+  if (isWhatsAppUser) {
+    // ── AKUN JALUR WHATSAPP ──
+    // 1. Nomor telepon adalah identitas utama (login credential), TIDAK DAPAT DIUBAH
+    if (phone !== undefined && phone !== null) {
       const cleanPhone = phone.trim()
-      normalizedPhone = normalizePhoneNumber(cleanPhone)
-
-      // Cek apakah nomor baru sudah dipakai oleh user lain
-      const existingUserWithPhone = await prisma.user.findFirst({
-        where: {
-          id: { not: req.userId },
-          OR: [
-            { phone: cleanPhone },
-            { phone: normalizedPhone },
-            ...(normalizedPhone.startsWith('62') ? [{ phone: '0' + normalizedPhone.slice(2) }] : []),
-          ],
-        },
-      })
-
-      if (existingUserWithPhone) {
-        return res.status(HTTP_STATUS.CONFLICT).json({
-          error: 'Nomor WhatsApp/telepon ini sudah digunakan oleh akun lain.',
+      const reqNormalized = normalizePhoneNumber(cleanPhone)
+      const currentNormalized = normalizePhoneNumber(currentUser.phone)
+      if (reqNormalized && currentNormalized && reqNormalized !== currentNormalized) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
+          error: 'Nomor WhatsApp merupakan identitas utama akun Anda dan tidak dapat diubah.',
         })
       }
-    } else {
-      normalizedPhone = null
     }
 
-    // Jika nomor berubah, bersihkan sesi reset password lama terkait nomor sebelumnya
-    if (currentUser?.phone && currentUser.phone !== normalizedPhone) {
-      await prisma.passwordResetSession.deleteMany({
-        where: {
-          channel: 'WHATSAPP',
-          identifier: { in: [currentUser.phone, normalizePhoneNumber(currentUser.phone)] },
-        },
-      }).catch(() => {})
+    // 2. Email dapat diisi/diperbarui dengan email asli pengguna
+    if (email !== undefined && email !== null) {
+      const cleanEmail = email.trim().toLowerCase()
+      if (cleanEmail && cleanEmail !== currentUser.email.toLowerCase()) {
+        const domainCheck = await validateEmailDomain(cleanEmail)
+        if (!domainCheck.valid) {
+          return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: domainCheck.message })
+        }
+
+        const existingUserWithEmail = await prisma.user.findFirst({
+          where: {
+            id: { not: req.userId },
+            email: cleanEmail,
+          },
+        })
+
+        if (existingUserWithEmail) {
+          return res.status(HTTP_STATUS.CONFLICT).json({
+            error: 'Email ini sudah terdaftar pada akun lain. Silakan gunakan email lain.',
+          })
+        }
+
+        finalEmail = cleanEmail
+      }
+    }
+  } else {
+    // ── AKUN JALUR EMAIL ──
+    // 1. Email adalah identitas utama, TIDAK DAPAT DIUBAH
+    if (email !== undefined && email !== null) {
+      const cleanEmail = email.trim().toLowerCase()
+      if (cleanEmail && cleanEmail !== currentUser.email.toLowerCase()) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
+          error: 'Email merupakan identitas utama akun Anda dan tidak dapat diubah.',
+        })
+      }
+    }
+
+    // 2. Nomor telepon dapat diisi / diubah
+    if (phone !== undefined) {
+      if (phone?.trim()) {
+        const cleanPhone = phone.trim()
+        normalizedPhone = normalizePhoneNumber(cleanPhone)
+
+        // Cek apakah nomor baru sudah dipakai oleh user lain
+        const existingUserWithPhone = await prisma.user.findFirst({
+          where: {
+            id: { not: req.userId },
+            OR: [
+              { phone: cleanPhone },
+              { phone: normalizedPhone },
+              ...(normalizedPhone.startsWith('62') ? [{ phone: '0' + normalizedPhone.slice(2) }] : []),
+            ],
+          },
+        })
+
+        if (existingUserWithPhone) {
+          return res.status(HTTP_STATUS.CONFLICT).json({
+            error: 'Nomor WhatsApp/telepon ini sudah digunakan oleh akun lain.',
+          })
+        }
+      } else {
+        normalizedPhone = null
+      }
+
+      // Jika nomor berubah, bersihkan sesi reset password lama terkait nomor sebelumnya
+      if (currentUser?.phone && currentUser.phone !== normalizedPhone) {
+        await prisma.passwordResetSession
+          .deleteMany({
+            where: {
+              channel: 'WHATSAPP',
+              identifier: { in: [currentUser.phone, normalizePhoneNumber(currentUser.phone)] },
+            },
+          })
+          .catch(() => {})
+      }
     }
   }
 
@@ -343,7 +418,8 @@ export const updateProfile = asyncHandler(async (req, res) => {
     where: { id: req.userId },
     data: {
       ...(name !== undefined && { name: name.trim() }),
-      ...(phone !== undefined && { phone: normalizedPhone }),
+      email: finalEmail,
+      phone: normalizedPhone,
       ...(address !== undefined && { address: address?.trim() || null }),
     },
     select: {
@@ -353,6 +429,8 @@ export const updateProfile = asyncHandler(async (req, res) => {
       phone: true,
       address: true,
       role: true,
+      isEmailVerified: true,
+      isPhoneVerified: true,
       createdAt: true,
     },
   })

@@ -10,6 +10,22 @@ export default function ProfileInfoTab({
   handleSaveProfile,
   setFormData,
 }) {
+  const activeUser = user?.user || user
+  const isWhatsAppUser = Boolean(
+    activeUser?.isPhoneVerified || activeUser?.email?.endsWith('@whatsapp.user')
+  )
+  const isDummyEmail = activeUser?.email?.endsWith('@whatsapp.user')
+
+  const resetForm = () => {
+    setIsEditing(false)
+    setFormData({
+      name: activeUser?.name || '',
+      email: isDummyEmail ? '' : (activeUser?.email || ''),
+      phone: activeUser?.phone || '',
+      address: activeUser?.address || '',
+    })
+  }
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-xs">
       <div className="flex items-center justify-between mb-6">
@@ -28,6 +44,7 @@ export default function ProfileInfoTab({
       </div>
 
       <div className="space-y-6 max-w-xl">
+        {/* Nama Lengkap */}
         <div>
           <label className="block text-sm font-body font-medium text-gray-700 mb-2">
             Nama Lengkap
@@ -38,6 +55,7 @@ export default function ProfileInfoTab({
               name="name"
               value={formData.name}
               onChange={handleInputChange}
+              placeholder="Masukkan nama lengkap"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
             />
           ) : (
@@ -45,30 +63,77 @@ export default function ProfileInfoTab({
           )}
         </div>
 
+        {/* Email */}
         <div>
           <label className="block text-sm font-body font-medium text-gray-700 mb-2">
             Email
           </label>
-          <p className="text-gray-900 text-sm font-medium">{formData.email || '-'}</p>
-          <p className="text-xs text-gray-500 mt-1">
-            Email tidak dapat diubah
-          </p>
+          {isWhatsAppUser ? (
+            // Akun WhatsApp: Email dapat diisi/diubah
+            isEditing ? (
+              <>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="contoh: nama@email.com"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Email digunakan untuk menerima invoice dan notifikasi pesanan.
+                </p>
+              </>
+            ) : (
+              <>
+                {formData.email && !formData.email.endsWith('@whatsapp.user') ? (
+                  <p className="text-gray-900 text-sm font-medium">{formData.email}</p>
+                ) : (
+                  <p className="text-gray-400 text-sm italic">Belum ditambahkan</p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  {formData.email && !formData.email.endsWith('@whatsapp.user')
+                    ? 'Klik Edit Profil untuk mengubah email.'
+                    : 'Klik Edit Profil untuk menambahkan email Anda.'}
+                </p>
+              </>
+            )
+          ) : (
+            // Akun Email: Email adalah kredensial login utama, tidak dapat diubah
+            <>
+              <p className="text-gray-900 text-sm font-medium">{formData.email || '-'}</p>
+              <p className="text-xs text-gray-500 mt-1">Email tidak dapat diubah</p>
+            </>
+          )}
         </div>
 
+        {/* Nomor Telepon / WhatsApp */}
         <div>
           <label className="block text-sm font-body font-medium text-gray-700 mb-2">
-            Nomor Telepon
+            Nomor Telepon {isWhatsAppUser ? '(WhatsApp)' : ''}
           </label>
-          {isEditing ? (
-            <input
-              type="tel"
-              name="phone"
-              value={formData.phone}
-              onChange={handleInputChange}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-            />
+          {isWhatsAppUser ? (
+            // Akun WhatsApp: Nomor WhatsApp adalah kredensial login utama, tidak dapat diubah
+            <>
+              <p className="text-gray-900 text-sm font-medium">{formData.phone || '-'}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Nomor WhatsApp merupakan identitas utama akun Anda dan tidak dapat diubah
+              </p>
+            </>
           ) : (
-            <p className="text-gray-900 text-sm font-medium">{formData.phone || '-'}</p>
+            // Akun Email: Nomor telepon opsional & dapat diisi/diubah
+            isEditing ? (
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                placeholder="contoh: 08123456789"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+              />
+            ) : (
+              <p className="text-gray-900 text-sm font-medium">{formData.phone || '-'}</p>
+            )
           )}
         </div>
 
@@ -83,15 +148,7 @@ export default function ProfileInfoTab({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setIsEditing(false)
-                setFormData({
-                  name: user?.name || '',
-                  email: user?.email || '',
-                  phone: user?.phone || '',
-                  address: user?.address || '',
-                })
-              }}
+              onClick={resetForm}
               className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-body font-medium hover:bg-gray-50 transition-colors text-sm"
             >
               Batal
