@@ -158,7 +158,7 @@ function ProductDetailPage() {
     navigate('/shop/cart')
   }, [product, selectedVariant, cartProduct, effectiveStock, quantity, addItem, navigate])
 
-  const handleBuyNow = useCallback(() => {
+  const handleBuyNow = useCallback(async () => {
     if (!product) return
     if (product.variants && product.variants.length > 0 && !selectedVariant) {
       setVariantError('Silakan pilih salah satu varian produk terlebih dahulu')
@@ -179,14 +179,14 @@ function ProductDetailPage() {
       !activeUser?.email || activeUser?.email?.endsWith('@whatsapp.user')
     )
     if (isEmailMissing) {
-      showAlert({
-        title: 'Lengkapi Profil Akun',
+      await showAlert({
+        title: 'Lengkapi Profil Terlebih Dahulu',
         message:
-          'Anda belum menambahkan alamat email di akun Anda. Anda diwajibkan melengkapi alamat email di profil terlebih dahulu sebelum dapat melanjutkan transaksi pemesanan.',
+          'Anda belum menambahkan alamat email di akun Anda. Anda diwajibkan melengkapi email di profil terlebih dahulu sebelum dapat melanjutkan transaksi pemesanan.',
         type: 'warning',
         confirmText: 'Lengkapi Profil Sekarang',
-        onConfirm: () => navigate('/shop/profile'),
       })
+      navigate('/shop/profile')
       return
     }
 

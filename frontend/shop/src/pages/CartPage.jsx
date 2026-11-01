@@ -129,7 +129,7 @@ function CartPage() {
     })
   }, [selectedItems, productStocks])
 
-  const handleCheckout = useCallback(() => {
+  const handleCheckout = useCallback(async () => {
     if (selectedCount === 0) return
     if (!isAuthenticated()) {
       navigate('/shop/login', { state: { from: { pathname: '/shop/checkout' } } })
@@ -141,14 +141,14 @@ function CartPage() {
       !activeUser?.email || activeUser?.email?.endsWith('@whatsapp.user')
     )
     if (isEmailMissing) {
-      showAlert({
-        title: 'Lengkapi Profil Akun',
+      await showAlert({
+        title: 'Lengkapi Profil Terlebih Dahulu',
         message:
-          'Anda belum menambahkan alamat email di akun Anda. Anda diwajibkan melengkapi alamat email di profil terlebih dahulu sebelum dapat melanjutkan transaksi pemesanan.',
+          'Anda belum menambahkan alamat email di akun Anda. Anda diwajibkan melengkapi email di profil terlebih dahulu sebelum dapat melanjutkan transaksi pemesanan.',
         type: 'warning',
         confirmText: 'Lengkapi Profil Sekarang',
-        onConfirm: () => navigate('/shop/profile'),
       })
+      navigate('/shop/profile')
       return
     }
 
@@ -168,10 +168,15 @@ function CartPage() {
               Keranjang Belanja Masih Kosong
             </h2>
             <p className="text-sm font-body text-gray-500 mb-8 leading-relaxed">
-              Jelajahi berbagai kebutuhan rumah tangga, perkakas tukang, dan alat motor pilihan kami untuk mulai berbelanja.
+              Jelajahi berbagai kebutuhan rumah tangga, perkakas tukang, dan alat motor pilihan kami
+              untuk mulai berbelanja.
             </p>
             <Link to="/shop">
-              <Button variant="primary" size="lg" className="w-full uppercase tracking-wider py-3 shadow-md hover:shadow-lg transition-all">
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full uppercase tracking-wider py-3 shadow-md hover:shadow-lg transition-all"
+              >
                 Mulai Belanja Sekarang
               </Button>
             </Link>
@@ -189,7 +194,9 @@ function CartPage() {
         {/* Breadcrumb & Header */}
         <div className="mb-6">
           <nav className="flex items-center gap-2 text-xs text-gray-400 mb-3 font-body">
-            <Link to="/shop" className="hover:text-primary-600 transition-colors">Toko</Link>
+            <Link to="/shop" className="hover:text-primary-600 transition-colors">
+              Toko
+            </Link>
             <span>/</span>
             <span className="text-gray-700 font-medium">Keranjang Belanja</span>
           </nav>
@@ -200,7 +207,9 @@ function CartPage() {
                 Keranjang Belanja
               </h1>
               <p className="text-xs md:text-sm font-body text-gray-500 mt-1">
-                Ada <span className="font-semibold text-gray-800">{items.length} jenis produk</span> ({items.reduce((acc, it) => acc + (it.quantity || 1), 0)} total item) di keranjang Anda
+                Ada <span className="font-semibold text-gray-800">{items.length} jenis produk</span>{' '}
+                ({items.reduce((acc, it) => acc + (it.quantity || 1), 0)} total item) di keranjang
+                Anda
               </p>
             </div>
 
@@ -252,7 +261,8 @@ function CartPage() {
             {/* List of items */}
             {items.map(item => {
               const itemKey = getItemKey(item)
-              const currentStock = productStocks[itemKey] !== undefined ? productStocks[itemKey] : item.stock || 0
+              const currentStock =
+                productStocks[itemKey] !== undefined ? productStocks[itemKey] : item.stock || 0
               const isOutOfStock = currentStock === 0
               const isQuantityExceeded = item.quantity > currentStock
               const maxQuantity = Math.max(0, currentStock)
@@ -264,7 +274,9 @@ function CartPage() {
                 <div
                   key={itemKey}
                   className={`bg-white rounded-2xl p-4 sm:p-5 border transition-all flex flex-col sm:flex-row gap-4 sm:gap-5 ${
-                    isSelected ? 'border-gray-300 shadow-xs ring-1 ring-gray-900/5' : 'border-gray-100 shadow-2xs opacity-90'
+                    isSelected
+                      ? 'border-gray-300 shadow-xs ring-1 ring-gray-900/5'
+                      : 'border-gray-100 shadow-2xs opacity-90'
                   }`}
                 >
                   {/* Select Checkbox */}
@@ -423,17 +435,19 @@ function CartPage() {
                     Estimasi Ongkir
                     <span className="text-[11px] text-gray-400">(Standar)</span>
                   </span>
-                  <span className="font-medium text-gray-900">
-                    {formatCurrency(shippingFee)}
-                  </span>
+                  <span className="font-medium text-gray-900">{formatCurrency(shippingFee)}</span>
                 </div>
               </div>
 
               {/* Total Payment Amount */}
               <div className="flex justify-between items-baseline mb-6">
                 <div>
-                  <span className="text-sm font-heading font-medium text-gray-900 block">Total Tagihan</span>
-                  <span className="text-[11px] text-gray-400 font-body">Sudah termasuk ongkir estimasi</span>
+                  <span className="text-sm font-heading font-medium text-gray-900 block">
+                    Total Tagihan
+                  </span>
+                  <span className="text-[11px] text-gray-400 font-body">
+                    Sudah termasuk ongkir estimasi
+                  </span>
                 </div>
                 <span className="text-xl sm:text-2xl font-heading font-bold text-primary-600">
                   {formatCurrency(finalTotal)}
@@ -453,12 +467,12 @@ function CartPage() {
                   size="lg"
                   className="uppercase tracking-wider py-3.5 flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
                 >
-                  <span>
-                    {selectedCount === 0
-                      ? 'Pilih Produk Dulu'
-                      : `Lanjut ke Pembayaran (${selectedTotalItemsCount})`}
-                  </span>
-                  <Icon name="ArrowRight" size={16} className="transition-transform group-hover:translate-x-1" />
+                  <span>{selectedCount === 0 ? 'Pilih Produk Dulu' : `Lanjut ke Pembayaran`}</span>
+                  <Icon
+                    name="ArrowRight"
+                    size={16}
+                    className="transition-transform group-hover:translate-x-1"
+                  />
                 </Button>
               </button>
 
