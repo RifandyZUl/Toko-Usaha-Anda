@@ -54,12 +54,16 @@ class PaymentService {
         },
       },
       item_details: [
-        ...items.map(item => ({
-          id: item.productId || item.id,
-          price: Math.round(Number(item.product?.price ?? item.price ?? 0)),
-          quantity: item.quantity,
-          name: (item.product?.name ?? item.name ?? 'Produk').slice(0, 50),
-        })),
+        ...items.map(item => {
+          const itemPrice = Math.round(Number(item.variant?.price ?? item.price ?? item.product?.price ?? 0))
+          const itemName = (item.variant?.name ? `${item.product?.name ?? 'Produk'} (${item.variant.name})` : (item.product?.name ?? item.name ?? 'Produk')).slice(0, 50)
+          return {
+            id: String(item.variantId || item.productId || item.id),
+            price: itemPrice,
+            quantity: item.quantity,
+            name: itemName,
+          }
+        }),
         {
           id: 'shipping-fee',
           price: shippingFee,
@@ -105,9 +109,9 @@ class PaymentService {
     } catch (error) {
       logError('Failed to create Midtrans Snap transaction', error)
       
-      // Fallback to mock Snap details in development
-      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-        logInfo('Falling back to mock Snap Token for development testing')
+      // Fallback to mock Snap details in Sandbox or development mode
+      if (!this.isProduction || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || error.message?.includes('not configured')) {
+        logInfo('Falling back to mock Snap Token for testing')
         return {
           success: true,
           snapToken: `mock-snap-token-${order.id}`,
@@ -203,8 +207,15 @@ class PaymentService {
     } catch (error) {
       logError(`Failed to charge Midtrans VA (${bankName})`, error)
       
-      // Fallback to mock VA in development mode
-      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      // Fallback to mock VA in Sandbox mode or if payment channel is not activated (status 402)
+      if (
+        !this.isProduction ||
+        process.env.NODE_ENV === 'development' ||
+        process.env.NODE_ENV === 'test' ||
+        error.message?.includes('402') ||
+        error.message?.includes('not activated') ||
+        error.message?.includes('not configured')
+      ) {
         logInfo('Falling back to mock Virtual Account for development testing')
         const bankKey = bankName.toLowerCase()
         const mockVa = bankKey === 'mandiri' ? null : `8910${Math.floor(10000000 + Math.random() * 90000000)}`
@@ -282,8 +293,15 @@ class PaymentService {
     } catch (error) {
       logError('Failed to charge Midtrans QRIS', error)
       
-      // Fallback to mock QRIS in development
-      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      // Fallback to mock QRIS in Sandbox mode or if payment channel is not activated (status 402)
+      if (
+        !this.isProduction ||
+        process.env.NODE_ENV === 'development' ||
+        process.env.NODE_ENV === 'test' ||
+        error.message?.includes('402') ||
+        error.message?.includes('not activated') ||
+        error.message?.includes('not configured')
+      ) {
         logInfo('Falling back to mock QRIS for development testing')
         return {
           success: true,

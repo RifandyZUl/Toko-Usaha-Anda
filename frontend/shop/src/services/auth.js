@@ -92,9 +92,9 @@ export const logout = async () => {
     logError('Error logging out', error)
   } finally {
     apiClient.setToken(null)
-    return {
-      success: true,
-    }
+  }
+  return {
+    success: true,
   }
 }
 
