@@ -582,20 +582,47 @@ function CheckoutPage() {
   )
   onSubmitRef.current = onSubmit
 
-  if (items.length === 0) {
+  if (items.length === 0 || checkoutItems.length === 0) {
     return (
       <div className="min-h-screen bg-[#fafafa]">
         <ShopNavigation />
-        <main className="container-custom py-20">
-          <div className="max-w-md mx-auto text-center">
-            <h2 className="text-2xl font-heading font-medium text-gray-900 mb-4">
-              Your Cart is Empty
+        <main className="container-custom py-16 md:py-24">
+          <div className="max-w-md mx-auto text-center bg-white rounded-3xl p-8 sm:p-10 border border-gray-100 shadow-sm">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center text-gray-700">
+              <Icon name="ShoppingCart" size={36} />
+            </div>
+            <h2 className="text-2xl font-heading font-medium text-gray-900 mb-3 tracking-tight">
+              Keranjang Belanja Masih Kosong
             </h2>
-            <Link to="/shop">
-              <Button variant="primary" size="lg" className="uppercase tracking-wider">
-                Start Shopping
-              </Button>
-            </Link>
+            <p className="text-sm font-body text-gray-500 mb-8 leading-relaxed">
+              {items.length === 0
+                ? 'Belum ada produk di dalam keranjang Anda. Silakan jelajahi katalog toko kami untuk mulai berbelanja.'
+                : 'Anda belum memilih produk untuk di-checkout. Silakan buka keranjang belanja dan centang produk yang ingin Anda beli.'}
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link to="/shop" className="w-full">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full uppercase tracking-wider py-3 shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+                >
+                  <Icon name="ArrowLeft" size={16} />
+                  <span>Mulai Belanja</span>
+                </Button>
+              </Link>
+              {items.length > 0 && (
+                <Link to="/shop/cart" className="w-full">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="w-full uppercase tracking-wider py-3 border-gray-300 text-gray-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Icon name="ShoppingCart" size={16} />
+                    <span>Lihat Keranjang</span>
+                  </Button>
+                </Link>
+              )}
+            </div>
           </div>
         </main>
       </div>
