@@ -97,26 +97,37 @@ function FeaturedProducts() {
     async function fetchFeatured() {
       try {
         setLoading(true)
-        // First try /products/featured
-        let res = await fetch(`${API_BASE_URL}/products/featured?limit=4`)
-        let data = null
+        const endpoints = [
+          `${API_BASE_URL}/products/featured?limit=4`,
+          '/api/products/featured?limit=4',
+          `${API_BASE_URL}/products?limit=4`,
+        ]
 
-        if (res.ok) {
-          data = await res.json()
-        } else {
-          // Fallback to standard /products endpoint
-          res = await fetch(`${API_BASE_URL}/products?limit=4`)
-          if (res.ok) {
-            data = await res.json()
+        let items = null
+        for (const endpoint of endpoints) {
+          try {
+            const res = await fetch(endpoint)
+            if (res.ok) {
+              const contentType = res.headers.get('content-type') || ''
+              if (contentType.includes('application/json')) {
+                const data = await res.json()
+                const candidate = data?.products || (Array.isArray(data) ? data : null)
+                if (Array.isArray(candidate) && candidate.length > 0) {
+                  items = candidate
+                  break
+                }
+              }
+            }
+          } catch {
+            // Lanjut ke endpoint berikutnya
           }
         }
 
-        const items = data?.products || (Array.isArray(data) ? data : null)
         if (isMounted && Array.isArray(items) && items.length > 0) {
           setProducts(items.slice(0, 4))
         }
-      } catch {
-        // Fallback to initial products if backend is not reachable
+      } catch (err) {
+        console.warn('Gagal memuat produk unggulan dari backend:', err)
       } finally {
         if (isMounted) {
           setLoading(false)
@@ -181,7 +192,8 @@ function FeaturedProducts() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {products.map((product, index) => {
               const imageUrl = resolveImageUrl(product)
-              const productLink = product.id && product.id.length > 10
+              const isRealId = product.id && String(product.id).length > 5 && !['sapu', 'wajan', 'palu', 'gergaji'].includes(String(product.id).toLowerCase())
+              const productLink = isRealId
                 ? `${SHOP_URL}/shop/product/${product.id}`
                 : `${SHOP_URL}/shop`
               const badgeText = product.badge || (index === 0 ? 'Terlaris' : null)

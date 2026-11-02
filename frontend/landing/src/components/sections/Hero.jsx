@@ -54,7 +54,7 @@ function Hero() {
             style={{ transitionDelay: '800ms' }}
           >
             <a
-              href={SHOP_URL}
+              href={`${SHOP_URL}/shop`}
               target="_blank"
               rel="noopener noreferrer"
               className="bg-griya-secondary text-white px-6 md:px-8 py-3 md:py-3.5 font-sans font-medium text-[13px] tracking-wider uppercase hover:bg-[#b09268] transition-colors duration-300"
