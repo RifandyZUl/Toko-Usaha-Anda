@@ -27,7 +27,7 @@ function CartPage() {
     removeItemsByKeys,
   } = useCartStore()
   const { user, isAuthenticated } = useAuthStore()
-  const { showAlert } = useAlertStore()
+  const { showAlert, showConfirm } = useAlertStore()
 
   const [productStocks, setProductStocks] = useState({})
   const [loadingStocks, setLoadingStocks] = useState(false)
@@ -146,6 +146,20 @@ function CartPage() {
     navigate('/shop/checkout')
   }, [selectedCount, isAuthenticated, user, navigate, showAlert])
 
+  const handleRemoveSelected = useCallback(async () => {
+    const confirmed = await showConfirm({
+      title: 'Hapus Produk Terpilih?',
+      message: `${selectedCount} produk terpilih akan dihapus dari keranjang belanja Anda.`,
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      isDestructive: true,
+      type: 'warning',
+    })
+    if (confirmed) {
+      removeItemsByKeys(selectedItemKeys)
+    }
+  }, [selectedCount, selectedItemKeys, removeItemsByKeys, showConfirm])
+
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-[#f8f9fa]">
@@ -237,11 +251,7 @@ function CartPage() {
               {selectedCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (window.confirm(`Hapus ${selectedCount} produk terpilih dari keranjang?`)) {
-                      removeItemsByKeys(selectedItemKeys)
-                    }
-                  }}
+                  onClick={handleRemoveSelected}
                   className="text-xs text-red-600 hover:text-red-700 font-medium transition-colors cursor-pointer"
                 >
                   Hapus Terpilih ({selectedCount})
