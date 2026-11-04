@@ -11,6 +11,7 @@ export default function ModernAlertModal() {
     cancelText,
     isConfirm,
     isDestructive,
+    showIcon,
     handleConfirm,
     handleCancel,
     toast,
@@ -88,9 +89,9 @@ export default function ModernAlertModal() {
             role="dialog"
             aria-modal="true"
           >
-            {/* Header: Icon & Close */}
-            <div className="flex items-start justify-between">
-              {getIcon()}
+            {/* Header: Icon & Close (close button floats top-right when the icon is hidden) */}
+            <div className={showIcon ? 'flex items-start justify-between' : 'absolute top-4 right-4'}>
+              {showIcon && getIcon()}
               <button
                 onClick={handleCancel}
                 className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
@@ -101,7 +102,7 @@ export default function ModernAlertModal() {
 
             {/* Content */}
             <div className="space-y-2">
-              <h3 className="text-lg font-bold text-gray-900 tracking-tight">
+              <h3 className={`text-lg font-bold text-gray-900 tracking-tight ${showIcon ? '' : 'pr-8'}`}>
                 {title}
               </h3>
               <p className="text-sm text-gray-600 leading-relaxed break-words whitespace-pre-wrap">

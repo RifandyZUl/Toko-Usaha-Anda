@@ -9,6 +9,7 @@ export const useAlertStore = create((set, get) => ({
   cancelText: 'Batal',
   isConfirm: false,
   isDestructive: false,
+  showIcon: true,
   resolvePromise: null,
 
   // Toast state
@@ -25,6 +26,7 @@ export const useAlertStore = create((set, get) => ({
         cancelText: '',
         isConfirm: false,
         isDestructive: false,
+        showIcon: true,
         resolvePromise: resolve,
       })
     })
@@ -37,6 +39,7 @@ export const useAlertStore = create((set, get) => ({
     confirmText = 'Lanjutkan',
     cancelText = 'Batal',
     isDestructive = false,
+    showIcon = true,
   }) => {
     return new Promise((resolve) => {
       set({
@@ -48,6 +51,7 @@ export const useAlertStore = create((set, get) => ({
         cancelText,
         isConfirm: true,
         isDestructive,
+        showIcon,
         resolvePromise: resolve,
       })
     })

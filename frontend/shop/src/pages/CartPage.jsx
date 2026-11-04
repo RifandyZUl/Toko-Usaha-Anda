@@ -153,7 +153,7 @@ function CartPage() {
       confirmText: 'Ya, Hapus',
       cancelText: 'Batal',
       isDestructive: true,
-      type: 'warning',
+      showIcon: false,
     })
     if (confirmed) {
       removeItemsByKeys(selectedItemKeys)
