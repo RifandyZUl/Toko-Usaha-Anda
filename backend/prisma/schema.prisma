@@ -260,3 +260,19 @@ enum ContactStatus {
   ARCHIVED
 }
 
+
+// Idempotency Key -- mencegah order duplikat di multi-instance (Vercel serverless)
+// Menggantikan in-memory Map yang tidak di-share antar instance
+model IdempotencyKey {
+  id         String   @id @default(uuid())
+  cacheKey   String   @unique // format: userId:idempotencyKey
+  status     String   // PROCESSING | COMPLETED
+  statusCode Int?
+  body       Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([cacheKey])
+  @@index([createdAt])
+  @@map("idempotency_keys")
+}

@@ -35,6 +35,7 @@ import locationRoutes from './routes/location.js'
 import shippingRoutes from './routes/shipping.js'
 import webhookRoutes from './routes/webhook.js'
 import contactRoutes from './routes/contact.js'
+import cronRoutes from './routes/cron.js'
 import { startOrderExpiryCron } from './services/orderExpiryService.js'
 import { startOrderAutoCompleteCron } from './services/orderAutoCompleteService.js'
 import { startResetSessionCleanupCron } from './services/otpService.js'
@@ -164,6 +165,7 @@ app.use('/api/location', locationRoutes)
 app.use('/api/shipping', shippingRoutes)
 app.use('/api/webhook', webhookRoutes)
 app.use('/api/contact', contactRoutes)
+app.use('/api/cron', cronRoutes)
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 

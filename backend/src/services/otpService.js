@@ -702,6 +702,12 @@ export async function cleanupExpiredResetSessions() {
 }
 
 /**
+ * Alias used by the Vercel Cron endpoint (/api/cron/cleanup).
+ * Delegates to cleanupExpiredResetSessions.
+ */
+export const cleanupExpiredOtpSessions = cleanupExpiredResetSessions
+
+/**
  * Start background cron interval for cleaning expired auth sessions
  * @param {number} intervalMs - Check interval in milliseconds (default: 1 hour)
  */
