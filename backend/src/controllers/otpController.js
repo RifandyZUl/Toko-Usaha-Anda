@@ -38,7 +38,7 @@ export async function verifyOtp(req, res) {
       return res.status(400).json({ error: 'Nomor telepon dan kode OTP wajib diisi.' })
     }
 
-    const result = verifyOtpCode(phone, otp)
+    const result = await verifyOtpCode(phone, otp)
     if (!result.success) {
       return res.status(400).json({ error: result.message })
     }
@@ -71,7 +71,7 @@ export async function verifyOtp(req, res) {
  */
 export async function checkPhoneStatus(req, res) {
   const phone = req.query.phone || ''
-  const verified = isPhoneNumberVerified(phone)
+  const verified = await isPhoneNumberVerified(phone)
   return res.status(200).json({ verified })
 }
 

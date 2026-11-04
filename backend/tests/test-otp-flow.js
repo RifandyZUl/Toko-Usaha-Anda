@@ -24,13 +24,13 @@ async function runOtpTests() {
     }
 
     // Test wrong OTP
-    const wrongWa = verifyOtpCode(testPhone, '000000')
+    const wrongWa = await verifyOtpCode(testPhone, '000000')
     if (wrongWa.success) throw new Error('Wrong WhatsApp OTP should fail')
     console.log('   ✅ Wrong WhatsApp OTP rejected correctly:', wrongWa.message)
 
     // Test correct OTP (if devOtp available in simulation mode)
     if (waResult.devOtp) {
-      const correctWa = verifyOtpCode(testPhone, waResult.devOtp)
+      const correctWa = await verifyOtpCode(testPhone, waResult.devOtp)
       if (!correctWa.success) throw new Error('Correct WhatsApp OTP verification failed')
       console.log('   ✅ Correct WhatsApp OTP verified successfully:', correctWa.message)
     }
@@ -69,7 +69,7 @@ async function runOtpTests() {
     }
 
     if (registerWaResult.devOtp) {
-      const verifyWa = verifyOtpCode(registerWaPhone, registerWaResult.devOtp)
+      const verifyWa = await verifyOtpCode(registerWaPhone, registerWaResult.devOtp)
       if (!verifyWa.success) throw new Error('Failed to verify OTP received via WhatsApp registration')
       console.log('   ✅ OTP from WhatsApp verified registration successfully:', verifyWa.message)
     }
@@ -86,6 +86,9 @@ async function runOtpTests() {
           contains: 'tester_',
         },
       },
+    })
+    await prisma.phoneVerificationOtp.deleteMany({
+      where: { phone: { in: ['6281299887766', '6281299887755'] } },
     })
     await prisma.$disconnect()
   }

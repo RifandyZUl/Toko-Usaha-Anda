@@ -19,6 +19,18 @@ const getTransporter = () => {
 }
 
 /**
+ * Simulation (OTP printed to console and returned as devOtp) is only allowed in local development.
+ * Outside development a missing SMTP config must fail loudly instead of leaking the OTP in the response.
+ */
+const assertSimulationAllowed = () => {
+  if (process.env.NODE_ENV === 'development') return
+  logError('SMTP_USER / SMTP_PASS not configured — email OTP cannot be sent')
+  const err = new Error('Layanan email sedang tidak tersedia. Silakan hubungi admin toko.')
+  err.statusCode = 503
+  throw err
+}
+
+/**
  * Template HTML email kode verifikasi OTP
  */
 const buildOtpEmailHtml = (otp) => {
@@ -80,7 +92,8 @@ export const sendEmailOtp = async (email, otp) => {
     }
   }
 
-  // Fallback mode simulasi jika belum di-setting kredensial SMTP
+  // Fallback mode simulasi jika belum di-setting kredensial SMTP (hanya development)
+  assertSimulationAllowed()
   console.log(`\n======================================================`)
   console.log(`[SIMULASI EMAIL OTP GMAIL]`)
   console.log(`Email Tujuan : ${email}`)
@@ -159,7 +172,8 @@ export const sendPasswordResetEmail = async (email, otp) => {
     }
   }
 
-  // Fallback mode simulasi jika belum di-setting kredensial SMTP
+  // Fallback mode simulasi jika belum di-setting kredensial SMTP (hanya development)
+  assertSimulationAllowed()
   console.log(`\n======================================================`)
   console.log(`[SIMULASI EMAIL RESET PASSWORD]`)
   console.log(`Email Tujuan : ${email}`)

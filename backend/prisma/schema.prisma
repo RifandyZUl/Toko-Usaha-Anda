@@ -47,6 +47,21 @@ model EmailVerificationOtp {
   @@map("email_verification_otps")
 }
 
+// WhatsApp OTP & verified phone status (persisted so it works across serverless instances)
+model PhoneVerificationOtp {
+  id         String    @id @default(uuid())
+  phone      String    // Normalized 628... format
+  otpHash    String?   // Null once verified (prevents reuse)
+  expiresAt  DateTime  // OTP expiry, or verification validity after verifiedAt is set
+  attempts   Int       @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone])
+  @@index([expiresAt])
+  @@map("phone_verification_otps")
+}
+
 // Password Reset Session Model (Multi-instance / Cluster-safe)
 model PasswordResetSession {
   id          String   @id @default(uuid())

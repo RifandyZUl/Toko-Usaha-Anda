@@ -1060,7 +1060,7 @@ export const checkCodEligibility = async (req, res, next) => {
       totalAmount: amount,
     })
 
-    let isVerified = isPhoneNumberVerified(phone)
+    let isVerified = await isPhoneNumberVerified(phone)
     if (!isVerified && req.userId && phone) {
       const userRecord = await prisma.user.findUnique({
         where: { id: req.userId },

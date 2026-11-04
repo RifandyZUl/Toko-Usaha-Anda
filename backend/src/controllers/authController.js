@@ -112,8 +112,8 @@ export const register = asyncHandler(async (req, res) => {
       })
     }
 
-    // Verifikasi OTP WhatsApp secara strict dari waOtpCache
-    const otpVerification = verifyOtpCode(normalized, otp)
+    // Verifikasi OTP WhatsApp secara strict (tabel phone_verification_otps)
+    const otpVerification = await verifyOtpCode(normalized, otp)
     if (!otpVerification.success) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
         error: otpVerification.message,
