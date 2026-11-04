@@ -190,9 +190,9 @@ function ProductDetailPage() {
       return
     }
 
-    // Checkout only this product (other cart items are left unselected)
+    // Checkout only this product, without adding it to the cart
     if (buyNow(cartProduct, quantity)) {
-      navigate('/shop/checkout')
+      navigate('/shop/checkout', { state: { buyNow: true } })
     }
   }, [product, selectedVariant, cartProduct, effectiveStock, quantity, buyNow, navigate, isAuthenticated, user, showAlert])
 

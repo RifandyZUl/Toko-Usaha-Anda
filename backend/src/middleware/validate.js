@@ -241,6 +241,17 @@ export const validateCreateOrder = [
     .optional({ nullable: true })
     .isUUID().withMessage('ID varian tidak valid'),
 
+  // Only used for Buy Now (cart checkout takes quantity from the server cart)
+  body('items.*.quantity')
+    .optional()
+    .isInt({ min: 1, max: 1000 }).withMessage('Jumlah produk harus antara 1 sampai 1000')
+    .toInt(),
+
+  body('buyNow')
+    .optional()
+    .isBoolean({ strict: true }).withMessage('Nilai buyNow tidak valid')
+    .toBoolean(true),
+
   handleValidationErrors,
 ]
 

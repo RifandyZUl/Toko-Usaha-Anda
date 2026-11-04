@@ -27,7 +27,69 @@ export const pickSelectedCartItems = (cartItems, selectedItems) => {
 }
 
 /**
- * Create order (only from the cart items selected in req.body.items)
+ * Build a cart-row-shaped item for Buy Now straight from the DB product (cart is not used).
+ * `product` must include its `variants`. Returns { item } or { error }.
+ */
+export const buildBuyNowItem = (product, variantId, quantity) => {
+  if (!product || !product.isActive) {
+    return { error: 'Produk tidak tersedia atau sudah tidak aktif.' }
+  }
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return { error: 'Jumlah produk tidak valid.' }
+  }
+
+  const activeVariants = (product.variants || []).filter(v => v.isActive && v.deletedAt === null)
+  const variant = variantId ? activeVariants.find(v => v.id === variantId) : null
+  if (variantId && !variant) {
+    return { error: 'Varian produk tidak tersedia atau telah dihapus dari katalog.' }
+  }
+  if (!variantId && activeVariants.length > 0) {
+    return { error: 'Silakan pilih varian produk terlebih dahulu.' }
+  }
+
+  return { item: { productId: product.id, variantId: variant?.id || null, quantity, product, variant } }
+}
+
+/**
+ * Load the items to checkout: either the single Buy Now product, or the selected server cart rows.
+ * Returns { items } or { error, code? }.
+ */
+const loadCheckoutItems = async (userId, selectedItems, isBuyNow) => {
+  if (isBuyNow) {
+    if (selectedItems.length !== 1) {
+      return { error: 'Beli Sekarang hanya dapat dilakukan untuk satu produk.' }
+    }
+    const { productId, variantId, quantity } = selectedItems[0]
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      include: { variants: true },
+    })
+    const result = buildBuyNowItem(product, variantId || null, quantity)
+    return result.error ? result : { items: [result.item] }
+  }
+
+  const userCartItems = await prisma.cartItem.findMany({
+    where: { userId },
+    include: { product: true, variant: true },
+  })
+  if (userCartItems.length === 0) {
+    return { error: 'Cart is empty' }
+  }
+
+  const cartItems = pickSelectedCartItems(userCartItems, selectedItems)
+  if (!cartItems) {
+    return {
+      error:
+        'Sebagian produk yang dipilih tidak ada di keranjang atau stoknya habis. Silakan muat ulang keranjang dan pilih kembali produk Anda.',
+      code: 'CART_SELECTION_MISMATCH',
+    }
+  }
+  return { items: cartItems }
+}
+
+/**
+ * Create order from the cart items selected in req.body.items,
+ * or (buyNow=true) directly from a single product without touching the cart
  */
 export const createOrder = async (req, res, next) => {
   try {
@@ -46,6 +108,7 @@ export const createOrder = async (req, res, next) => {
       shippingFee,
       paymentMethod,
       items: selectedItems,
+      buyNow: isBuyNow = false,
     } = req.body
 
     const shippingAddress = `${receiverName} | ${addressDetail}, ${kelurahan}, ${subdistrict}, ${city}, ${province} ${postalCode}`
@@ -63,27 +126,12 @@ export const createOrder = async (req, res, next) => {
       })
     }
 
-    // Get user cart, then keep only the items selected for checkout
-    const userCartItems = await prisma.cartItem.findMany({
-      where: { userId: req.userId },
-      include: {
-        product: true,
-        variant: true,
-      },
-    })
-
-    if (userCartItems.length === 0) {
-      return res.status(400).json({ error: 'Cart is empty' })
+    // Items to checkout (Buy Now product or selected cart rows); price & stock are re-checked below
+    const checkout = await loadCheckoutItems(req.userId, selectedItems, isBuyNow)
+    if (checkout.error) {
+      return res.status(400).json({ error: checkout.error, ...(checkout.code && { code: checkout.code }) })
     }
-
-    const cartItems = pickSelectedCartItems(userCartItems, selectedItems)
-    if (!cartItems) {
-      return res.status(400).json({
-        error:
-          'Sebagian produk yang dipilih tidak ada di keranjang atau stoknya habis. Silakan muat ulang keranjang dan pilih kembali produk Anda.',
-        code: 'CART_SELECTION_MISMATCH',
-      })
-    }
+    const cartItems = checkout.items
 
     // Calculate total and validate stock
     let totalAmount = 0
@@ -237,10 +285,12 @@ export const createOrder = async (req, res, next) => {
         }
       }
 
-      // 3. Remove only the purchased items from the cart (unselected items stay)
-      await tx.cartItem.deleteMany({
-        where: { userId: req.userId, id: { in: cartItems.map(item => item.id) } },
-      })
+      // 3. Remove only the purchased items from the cart (unselected items stay; Buy Now never used the cart)
+      if (!isBuyNow) {
+        await tx.cartItem.deleteMany({
+          where: { userId: req.userId, id: { in: cartItems.map(item => item.id) } },
+        })
+      }
 
       return newOrder
     })

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation as useRouterLocation } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
 import { useCartStore, getItemKey, filterSelectedItems } from '../stores/cartStore'
@@ -26,7 +26,8 @@ import CheckoutOrderSummary from '../components/checkout/CheckoutOrderSummary'
  */
 function CheckoutPage() {
   const navigate = useNavigate()
-  const { items, selectedItemKeys, removeItemsByKeys } = useCartStore()
+  const routerLocation = useRouterLocation()
+  const { items, selectedItemKeys, removeItemsByKeys, buyNowItem, clearBuyNow } = useCartStore()
   const { user, setAuth } = useAuthStore()
   const [orderError, setOrderError] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -37,10 +38,11 @@ function CheckoutPage() {
   const setValuesRef = useRef(null)
   const onSubmitRef = useRef(null)
 
-  // Only checkout items explicitly selected (CartPage checkbox or Buy Now) — never fall back to the whole cart
+  // Buy Now checks out only its own product (not in the cart); otherwise only the CartPage selection
+  const isBuyNow = Boolean(routerLocation.state?.buyNow && buyNowItem)
   const checkoutItems = useMemo(
-    () => filterSelectedItems(items, selectedItemKeys || []),
-    [items, selectedItemKeys]
+    () => (isBuyNow ? [buyNowItem] : filterSelectedItems(items, selectedItemKeys || [])),
+    [isBuyNow, buyNowItem, items, selectedItemKeys]
   )
 
   const totalPrice = useMemo(() => {
@@ -376,6 +378,14 @@ function CheckoutPage() {
 
       const currentValues = formValues || values
 
+      const clearPurchasedItems = () => {
+        if (isBuyNow) {
+          clearBuyNow()
+        } else {
+          removeItemsByKeys(checkoutItems.map(it => getItemKey(it)))
+        }
+      }
+
       const handlePaymentFlow = async (resultOrder) => {
         // Save address to user profile dynamically
         try {
@@ -414,11 +424,6 @@ function CheckoutPage() {
             return
           }
 
-          const clearPurchasedItems = () => {
-            const purchasedKeys = checkoutItems.map(it => getItemKey(it))
-            removeItemsByKeys(purchasedKeys)
-          }
-
           window.snap.pay(resultOrder.snapToken, {
             onSuccess: () => {
               clearPurchasedItems()
@@ -447,8 +452,7 @@ function CheckoutPage() {
           })
         } else {
           // Cash / Virtual Account Transfer / QRIS success
-          const purchasedKeys = checkoutItems.map(it => getItemKey(it))
-          removeItemsByKeys(purchasedKeys)
+          clearPurchasedItems()
           navigate('/shop/order-success', {
             state: { orderId: resultOrder.order.id },
           })
@@ -464,13 +468,16 @@ function CheckoutPage() {
           return
         }
 
-        // 1. Sync the FULL local cart so unselected items are never dropped from the server cart
-        const syncResult = await syncCartToBackend(items)
-        if (!syncResult.success) {
-          setOrderError(syncResult.error || 'Gagal menyinkronkan keranjang belanja ke server.')
-          setIsProcessing(false)
-          scrollToError()
-          return
+        // 1. Cart checkout: sync the FULL local cart so unselected items are never dropped from the server cart
+        //    (Buy Now does not use the cart, so no sync is needed)
+        if (!isBuyNow) {
+          const syncResult = await syncCartToBackend(items)
+          if (!syncResult.success) {
+            setOrderError(syncResult.error || 'Gagal menyinkronkan keranjang belanja ke server.')
+            setIsProcessing(false)
+            scrollToError()
+            return
+          }
         }
 
         const matchedCourier = courierOptions.find(o => o.id === currentValues.shippingCourier && o.available)
@@ -494,11 +501,14 @@ function CheckoutPage() {
             currentValues.paymentMethod === 'transfer'
               ? `TRANSFER_${currentValues.selectedBank.toUpperCase()}`
               : currentValues.paymentMethod.toUpperCase(),
-          // Server builds the order only from these cart items (price & stock re-checked server-side)
+          // Server builds the order only from these items (price & stock re-checked server-side).
+          // Cart checkout takes quantity from the server cart; Buy Now sends it explicitly.
           items: checkoutItems.map(it => ({
             productId: String(it.id),
             variantId: it.variantId || null,
+            ...(isBuyNow && { quantity: it.quantity }),
           })),
+          ...(isBuyNow && { buyNow: true }),
         }
 
         // 3. Create order with Idempotency Key protection
@@ -583,7 +593,9 @@ function CheckoutPage() {
     },
     [
       items,
+      isBuyNow,
       checkoutItems,
+      clearBuyNow,
       removeItemsByKeys,
       navigate,
       setAuth,
@@ -596,7 +608,7 @@ function CheckoutPage() {
   )
   onSubmitRef.current = onSubmit
 
-  if (items.length === 0 || checkoutItems.length === 0) {
+  if (checkoutItems.length === 0) {
     return (
       <div className="min-h-screen bg-[#fafafa]">
         <ShopNavigation />
