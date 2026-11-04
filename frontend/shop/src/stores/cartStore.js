@@ -11,6 +11,37 @@ export const getItemKey = (item) => {
 }
 
 /**
+ * Filter cart items down to those selected for checkout
+ */
+export const filterSelectedItems = (items = [], selectedKeys = []) => {
+  const keySet = new Set(selectedKeys)
+  return items.filter(item => keySet.has(getItemKey(item)))
+}
+
+/**
+ * Insert or update a cart item, clamped to available stock.
+ * - replaceQuantity=false: adds `quantity` on top of the existing quantity (Add to Cart)
+ * - replaceQuantity=true: sets the quantity exactly to `quantity` (Buy Now)
+ * Returns null when the product is out of stock.
+ */
+const upsertItem = (items, product, quantity, { replaceQuantity = false } = {}) => {
+  const maxStock = typeof product.stock === 'number' ? product.stock : 9999
+  if (maxStock <= 0) return null
+
+  const cartKey = getItemKey(product)
+  const existingItem = items.find(item => getItemKey(item) === cartKey)
+  const baseQty = existingItem && !replaceQuantity ? existingItem.quantity : 0
+  const finalQty = Math.min(Math.max(1, baseQty + quantity), maxStock)
+  const updatedItem = { ...existingItem, ...product, cartKey, quantity: finalQty }
+
+  const updatedItems = existingItem
+    ? items.map(item => (getItemKey(item) === cartKey ? updatedItem : item))
+    : [...items, updatedItem]
+
+  return { cartKey, updatedItems }
+}
+
+/**
  * Helper to automatically sync cart changes to backend database if user is logged in
  */
 const syncIfAuthenticated = (items) => {
@@ -42,35 +73,23 @@ export const useCartStore = create(
       isOpen: false,
 
       // Actions
+      // Adds to cart without touching the checkout selection (user picks manually in CartPage)
       addItem: (product, quantity = 1) => {
-        const items = get().items
-        const cartKey = getItemKey(product)
-        const existingItem = items.find(item => getItemKey(item) === cartKey)
-        const maxStock = typeof product.stock === 'number' ? product.stock : 9999
+        const result = upsertItem(get().items, product, quantity)
+        if (!result) return
 
-        if (maxStock <= 0) return // Don't add out of stock products
+        set({ items: result.updatedItems })
+        syncIfAuthenticated(result.updatedItems)
+      },
 
-        let updatedItems = []
-        if (existingItem) {
-          const newQty = Math.min(existingItem.quantity + quantity, maxStock)
-          updatedItems = items.map(item =>
-            getItemKey(item) === cartKey
-              ? { ...item, ...product, cartKey, quantity: newQty }
-              : item
-          )
-        } else {
-          const initialQty = Math.min(Math.max(1, quantity), maxStock)
-          updatedItems = [...items, { ...product, cartKey, quantity: initialQty }]
-        }
+      // Buy Now: put the product in the cart with the exact quantity and select ONLY it for checkout
+      buyNow: (product, quantity = 1) => {
+        const result = upsertItem(get().items, product, quantity, { replaceQuantity: true })
+        if (!result) return false
 
-        // Auto-select newly added item
-        const currentSelected = get().selectedItemKeys || []
-        const updatedSelected = currentSelected.includes(cartKey)
-          ? currentSelected
-          : [...currentSelected, cartKey]
-
-        set({ items: updatedItems, selectedItemKeys: updatedSelected })
-        syncIfAuthenticated(updatedItems)
+        set({ items: result.updatedItems, selectedItemKeys: [result.cartKey] })
+        syncIfAuthenticated(result.updatedItems)
+        return true
       },
 
       removeItem: cartKeyOrId => {
@@ -126,11 +145,11 @@ export const useCartStore = create(
         }
       },
 
+      // Replace cart items (e.g. after login sync) while keeping only still-valid selections
       setItems: (newItems = []) => {
-        set({
-          items: newItems,
-          selectedItemKeys: newItems.map(it => getItemKey(it)),
-        })
+        const validKeys = new Set(newItems.map(it => getItemKey(it)))
+        const keptSelection = (get().selectedItemKeys || []).filter(k => validKeys.has(k))
+        set({ items: newItems, selectedItemKeys: keptSelection })
       },
 
       // Selection actions for selective checkout
@@ -152,55 +171,13 @@ export const useCartStore = create(
         }
       },
 
-      setSelectedKeys: (keys = []) => {
-        set({ selectedItemKeys: keys })
-      },
-
       toggleCart: () => {
         set({ isOpen: !get().isOpen })
-      },
-
-      openCart: () => {
-        set({ isOpen: true })
-      },
-
-      closeCart: () => {
-        set({ isOpen: false })
       },
 
       // Getters
       getTotalItems: () => {
         return get().items.reduce((total, item) => total + item.quantity, 0)
-      },
-
-      getTotalPrice: () => {
-        return get().items.reduce(
-          (total, item) => total + item.price * item.quantity,
-          0
-        )
-      },
-
-      getSelectedItems: () => {
-        const items = get().items
-        const selected = get().selectedItemKeys
-        // If not initialized or empty, default to all items
-        if (!selected || selected.length === 0) {
-          return []
-        }
-        return items.filter(it => selected.includes(getItemKey(it)))
-      },
-
-      getSelectedTotalPrice: () => {
-        const selectedItems = get().getSelectedItems()
-        return selectedItems.reduce(
-          (total, item) => total + Number(item.price) * item.quantity,
-          0
-        )
-      },
-
-      getSelectedTotalItems: () => {
-        const selectedItems = get().getSelectedItems()
-        return selectedItems.reduce((total, item) => total + item.quantity, 0)
       },
     }),
     {

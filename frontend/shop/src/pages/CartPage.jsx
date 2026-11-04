@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
-import { useCartStore, getItemKey } from '../stores/cartStore'
+import { useCartStore, getItemKey, filterSelectedItems } from '../stores/cartStore'
 import { useAuthStore } from '../stores/authStore'
 import { useAlertStore } from '../stores/alertStore'
 import ShopNavigation from '../components/navigation/ShopNavigation'
@@ -22,7 +22,6 @@ function CartPage() {
     selectedItemKeys,
     toggleSelectItem,
     selectAllItems,
-    setSelectedKeys,
     updateQuantity,
     removeItem,
     removeItemsByKeys,
@@ -32,14 +31,6 @@ function CartPage() {
 
   const [productStocks, setProductStocks] = useState({})
   const [loadingStocks, setLoadingStocks] = useState(false)
-
-  // Initialize selected items (select all by default if newly opened)
-  useEffect(() => {
-    if (items.length > 0 && (!selectedItemKeys || selectedItemKeys.length === 0)) {
-      const allKeys = items.map(it => getItemKey(it))
-      setSelectedKeys(allKeys)
-    }
-  }, [items, selectedItemKeys, setSelectedKeys])
 
   // Fetch current stock for all cart items
   useEffect(() => {
@@ -100,10 +91,10 @@ function CartPage() {
   }, [items])
 
   // Selected items calculation
-  const selectedItems = useMemo(() => {
-    const currentSelected = selectedItemKeys || []
-    return items.filter(it => currentSelected.includes(getItemKey(it)))
-  }, [items, selectedItemKeys])
+  const selectedItems = useMemo(
+    () => filterSelectedItems(items, selectedItemKeys || []),
+    [items, selectedItemKeys]
+  )
 
   const selectedCount = selectedItems.length
   const isAllSelected = items.length > 0 && selectedCount === items.length

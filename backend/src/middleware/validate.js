@@ -231,6 +231,16 @@ export const validateCreateOrder = [
       'TRANSFER_PERMATA',
     ]).withMessage('Metode pembayaran tidak valid'),
 
+  body('items')
+    .isArray({ min: 1, max: 100 }).withMessage('Pilih minimal 1 produk untuk di-checkout'),
+
+  body('items.*.productId')
+    .isUUID().withMessage('ID produk tidak valid'),
+
+  body('items.*.variantId')
+    .optional({ nullable: true })
+    .isUUID().withMessage('ID varian tidak valid'),
+
   handleValidationErrors,
 ]
 

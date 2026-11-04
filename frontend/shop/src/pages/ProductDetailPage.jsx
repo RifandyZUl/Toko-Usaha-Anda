@@ -20,7 +20,7 @@ import { formatImageUrl, handleImageError } from '../utils/imageUtils'
 function ProductDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { addItem } = useCartStore()
+  const { addItem, buyNow } = useCartStore()
   const { user, isAuthenticated } = useAuthStore()
   const { showAlert } = useAlertStore()
   const [quantity, setQuantity] = useState(1)
@@ -190,10 +190,11 @@ function ProductDetailPage() {
       return
     }
 
-    // Add to cart and go to checkout
-    addItem(cartProduct, quantity)
-    navigate('/shop/checkout')
-  }, [product, selectedVariant, cartProduct, effectiveStock, quantity, addItem, navigate, isAuthenticated, user, showAlert])
+    // Checkout only this product (other cart items are left unselected)
+    if (buyNow(cartProduct, quantity)) {
+      navigate('/shop/checkout')
+    }
+  }, [product, selectedVariant, cartProduct, effectiveStock, quantity, buyNow, navigate, isAuthenticated, user, showAlert])
 
   const handleQuantityChange = useCallback(
     delta => {

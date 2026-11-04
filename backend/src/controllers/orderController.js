@@ -9,8 +9,25 @@ import { isPhoneNumberVerified, normalizePhoneNumber } from '../services/otpServ
 import { calculateOrderShippingFee } from '../services/shippingService.js'
 import { logInfo, logWarn, logError } from '../utils/logger.js'
 
+const toCartSelectionKey = (productId, variantId) => `${productId}:${variantId || ''}`
+
 /**
- * Create order
+ * Pick only the user's cart rows selected for checkout.
+ * Returns null if any selected item is missing from the server cart, so the order is never
+ * created with a different set of products than the customer saw.
+ */
+export const pickSelectedCartItems = (cartItems, selectedItems) => {
+  const selectedKeys = new Set(
+    selectedItems.map(item => toCartSelectionKey(item.productId, item.variantId))
+  )
+  const picked = cartItems.filter(item =>
+    selectedKeys.has(toCartSelectionKey(item.productId, item.variantId))
+  )
+  return picked.length === selectedKeys.size ? picked : null
+}
+
+/**
+ * Create order (only from the cart items selected in req.body.items)
  */
 export const createOrder = async (req, res, next) => {
   try {
@@ -28,6 +45,7 @@ export const createOrder = async (req, res, next) => {
       shippingCourier,
       shippingFee,
       paymentMethod,
+      items: selectedItems,
     } = req.body
 
     const shippingAddress = `${receiverName} | ${addressDetail}, ${kelurahan}, ${subdistrict}, ${city}, ${province} ${postalCode}`
@@ -45,8 +63,8 @@ export const createOrder = async (req, res, next) => {
       })
     }
 
-    // Get user cart
-    const cartItems = await prisma.cartItem.findMany({
+    // Get user cart, then keep only the items selected for checkout
+    const userCartItems = await prisma.cartItem.findMany({
       where: { userId: req.userId },
       include: {
         product: true,
@@ -54,8 +72,17 @@ export const createOrder = async (req, res, next) => {
       },
     })
 
-    if (cartItems.length === 0) {
+    if (userCartItems.length === 0) {
       return res.status(400).json({ error: 'Cart is empty' })
+    }
+
+    const cartItems = pickSelectedCartItems(userCartItems, selectedItems)
+    if (!cartItems) {
+      return res.status(400).json({
+        error:
+          'Sebagian produk yang dipilih tidak ada di keranjang atau stoknya habis. Silakan muat ulang keranjang dan pilih kembali produk Anda.',
+        code: 'CART_SELECTION_MISMATCH',
+      })
     }
 
     // Calculate total and validate stock
@@ -210,9 +237,9 @@ export const createOrder = async (req, res, next) => {
         }
       }
 
-      // 3. Clear cart
+      // 3. Remove only the purchased items from the cart (unselected items stay)
       await tx.cartItem.deleteMany({
-        where: { userId: req.userId },
+        where: { userId: req.userId, id: { in: cartItems.map(item => item.id) } },
       })
 
       return newOrder

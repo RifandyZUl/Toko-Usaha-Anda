@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@shared/components'
 import Icon from '@shared/components/Icon.jsx'
-import { useCartStore, getItemKey } from '../stores/cartStore'
+import { useCartStore, getItemKey, filterSelectedItems } from '../stores/cartStore'
 import { useAuthStore } from '../stores/authStore'
 import { useForm } from '../hooks/useForm'
 import { useLocation } from '../hooks/useLocation'
@@ -26,7 +26,7 @@ import CheckoutOrderSummary from '../components/checkout/CheckoutOrderSummary'
  */
 function CheckoutPage() {
   const navigate = useNavigate()
-  const { items, getSelectedItems, removeItemsByKeys } = useCartStore()
+  const { items, selectedItemKeys, removeItemsByKeys } = useCartStore()
   const { user, setAuth } = useAuthStore()
   const [orderError, setOrderError] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -37,11 +37,11 @@ function CheckoutPage() {
   const setValuesRef = useRef(null)
   const onSubmitRef = useRef(null)
 
-  // Only checkout items that were selected in CartPage (or all if opened directly)
-  const checkoutItems = useMemo(() => {
-    const selected = getSelectedItems()
-    return selected.length > 0 ? selected : items
-  }, [getSelectedItems, items])
+  // Only checkout items explicitly selected (CartPage checkbox or Buy Now) — never fall back to the whole cart
+  const checkoutItems = useMemo(
+    () => filterSelectedItems(items, selectedItemKeys || []),
+    [items, selectedItemKeys]
+  )
 
   const totalPrice = useMemo(() => {
     return checkoutItems.reduce((acc, it) => acc + Number(it.price) * it.quantity, 0)
@@ -464,8 +464,8 @@ function CheckoutPage() {
           return
         }
 
-        // 1. Sync local cart to backend
-        const syncResult = await syncCartToBackend(checkoutItems)
+        // 1. Sync the FULL local cart so unselected items are never dropped from the server cart
+        const syncResult = await syncCartToBackend(items)
         if (!syncResult.success) {
           setOrderError(syncResult.error || 'Gagal menyinkronkan keranjang belanja ke server.')
           setIsProcessing(false)
@@ -494,6 +494,11 @@ function CheckoutPage() {
             currentValues.paymentMethod === 'transfer'
               ? `TRANSFER_${currentValues.selectedBank.toUpperCase()}`
               : currentValues.paymentMethod.toUpperCase(),
+          // Server builds the order only from these cart items (price & stock re-checked server-side)
+          items: checkoutItems.map(it => ({
+            productId: String(it.id),
+            variantId: it.variantId || null,
+          })),
         }
 
         // 3. Create order with Idempotency Key protection
@@ -577,6 +582,7 @@ function CheckoutPage() {
       }
     },
     [
+      items,
       checkoutItems,
       removeItemsByKeys,
       navigate,
