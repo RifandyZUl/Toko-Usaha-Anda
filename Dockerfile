@@ -1,5 +1,5 @@
 # Production Dockerfile for Backend API (Default)
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ COPY . .
 RUN npx prisma generate --schema=./backend/prisma/schema.prisma
 
 # Final lightweight production image
-FROM node:18-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 

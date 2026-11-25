@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
 
@@ -6,17 +7,23 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('🌱 Seeding database...')
 
-  // Create admin user
-  const hashedPassword = await bcrypt.hash('admin123', 10)
+  // Create admin user — credentials come from env so no usable password lives in the repo
+  const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase()
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD
+  if (!adminEmail || !adminPassword || adminPassword.length < 12) {
+    throw new Error('Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD (min. 12 characters) before seeding.')
+  }
+  const hashedPassword = await bcrypt.hash(adminPassword, 12)
+  // update: {} — never overwrite an existing admin's password on re-seed
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@toko.com' },
+    where: { email: adminEmail },
     update: {},
     create: {
-      email: 'admin@toko.com',
+      email: adminEmail,
       name: 'Admin Toko',
       password: hashedPassword,
-      phone: '081234567890',
       role: 'ADMIN',
+      isEmailVerified: true,
     },
   })
   console.log('✅ Admin user created:', admin.email)

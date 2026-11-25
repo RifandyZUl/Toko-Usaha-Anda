@@ -27,7 +27,7 @@ const router = express.Router()
 router.get('/', optionalAuthenticate, validatePagination, getProducts)
 router.get('/featured', getFeaturedProducts)
 router.get('/categories', getCategories)
-router.get('/:id', validateUuidParam('id'), getProductById)
+router.get('/:id', optionalAuthenticate, validateUuidParam('id'), getProductById)
 router.get('/:id/reviews', validateUuidParam('id'), getProductReviews)
 
 // ── Admin-only routes ─────────────────────────────────────────────────────────

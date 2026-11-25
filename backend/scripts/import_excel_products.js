@@ -1,7 +1,15 @@
 import { PrismaClient } from '@prisma/client'
 
-const SUPABASE_DB_URL = 'postgresql://postgres.bmgvyczvqvvgiuxdgwma:Zul7!andra123@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres'
-const dbUrl = process.argv[2] === '--supabase' ? SUPABASE_DB_URL : (process.env.DATABASE_URL || SUPABASE_DB_URL)
+import 'dotenv/config'
+
+// Never hardcode database credentials: this file is in a public repository.
+const SUPABASE_DB_URL = process.env.SUPABASE_DB_URL
+// --supabase targets SUPABASE_DB_URL explicitly; otherwise DATABASE_URL (no silent fallback to another DB)
+const dbUrl = process.argv[2] === '--supabase' ? SUPABASE_DB_URL : process.env.DATABASE_URL
+if (!dbUrl) {
+  console.error(process.argv[2] === '--supabase' ? 'Set SUPABASE_DB_URL in backend/.env.' : 'Set DATABASE_URL in backend/.env.')
+  process.exit(1)
+}
 
 const prisma = new PrismaClient({
   datasources: {

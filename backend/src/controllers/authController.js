@@ -14,7 +14,8 @@ import jwt from 'jsonwebtoken'
 import prisma from '../config/database.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HTTP_STATUS } from '../constants/index.js'
-import { logWarn } from '../utils/logger.js'
+import { logWarn, maskPersonal } from '../utils/logger.js'
+import { passwordVersion } from '../middleware/auth.js'
 
 import {
   verifyEmailVerificationOtp,
@@ -24,6 +25,9 @@ import {
   sendPasswordResetOtp,
   verifyPasswordResetOtp,
   consumeResetToken,
+  phoneVariants,
+  findVerifiedPhoneOwner,
+  releaseUnverifiedPhone,
 } from '../services/otpService.js'
 
 // Bcrypt cost factor — 12 is the current industry recommendation
@@ -50,7 +54,8 @@ const COOKIE_OPTIONS = {
  */
 const sendTokenResponse = (res, user, statusCode, message) => {
   const token = jwt.sign(
-    { userId: user.id, role: user.role },
+    // pwv ties the token to the current password: a password reset revokes all older tokens
+    { userId: user.id, role: user.role, pwv: passwordVersion(user.password) },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   )
@@ -96,16 +101,8 @@ export const register = asyncHandler(async (req, res) => {
       })
     }
 
-    // Cek apakah nomor WhatsApp sudah pernah terdaftar
-    const existingPhone = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { phone: cleanPhone },
-          { phone: normalized },
-          ...(normalized.startsWith('62') ? [{ phone: '0' + normalized.slice(2) }] : []),
-        ],
-      },
-    })
+    // Cek apakah nomor WhatsApp sudah dimiliki akun lain (hanya nomor yang sudah diverifikasi OTP)
+    const existingPhone = await findVerifiedPhoneOwner(normalized)
     if (existingPhone) {
       return res.status(HTTP_STATUS.CONFLICT).json({
         error: 'Nomor WhatsApp ini sudah terdaftar pada akun lain. Silakan login atau gunakan nomor lain.',
@@ -149,6 +146,8 @@ export const register = asyncHandler(async (req, res) => {
         phoneVerifiedAt: new Date(),
       },
     })
+    // The number is now proven to be this user's: drop it from accounts that only typed it in
+    await releaseUnverifiedPhone(normalized, user.id)
 
     return sendTokenResponse(res, user, HTTP_STATUS.CREATED, 'Pendaftaran akun via WhatsApp berhasil diverifikasi.')
   }
@@ -173,18 +172,10 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   // 3. Validasi nomor telepon/WhatsApp jika diisi opsional
-  if (phone?.trim()) {
-    const cleanPhone = phone.trim()
-    const normalized = normalizePhoneNumber(cleanPhone)
-    const existingPhone = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { phone: cleanPhone },
-          { phone: normalized },
-          ...(normalized.startsWith('62') ? [{ phone: '0' + normalized.slice(2) }] : []),
-        ],
-      },
-    })
+  // Optional, unverified number: stored normalized, and only blocked if someone verified it already
+  const optionalPhone = phone?.trim() ? normalizePhoneNumber(phone) : null
+  if (optionalPhone) {
+    const existingPhone = await findVerifiedPhoneOwner(optionalPhone)
     if (existingPhone) {
       return res.status(HTTP_STATUS.CONFLICT).json({
         error: 'Nomor telepon/WhatsApp sudah terdaftar pada akun lain. Silakan login atau gunakan nomor lain.',
@@ -207,7 +198,7 @@ export const register = asyncHandler(async (req, res) => {
       email: cleanEmail,
       name,
       password: hashedPassword,
-      phone: phone?.trim() || null,
+      phone: optionalPhone,
       isEmailVerified: true,
       emailVerifiedAt: new Date(),
       isPhoneVerified: false,
@@ -225,14 +216,13 @@ export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body
   const identifier = (email || '').trim()
 
-  const normalizedPhone = normalizePhoneNumber(identifier)
+  // Phone login only for OTP-verified numbers: a number someone merely typed into a profile must not
+  // shadow (or stand in for) the real owner's account
   const user = await prisma.user.findFirst({
     where: {
       OR: [
         { email: identifier.toLowerCase() },
-        { phone: identifier },
-        ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
-        ...(identifier.startsWith('0') ? [{ phone: '62' + identifier.slice(1) }] : []),
+        { phone: { in: phoneVariants(identifier) }, isPhoneVerified: true },
       ],
     },
   })
@@ -241,7 +231,7 @@ export const login = asyncHandler(async (req, res) => {
   const isValidPassword = await bcrypt.compare(password, hashToCompare)
 
   if (!user || !isValidPassword) {
-    logWarn('Failed login attempt', { identifier, ip: req.ip })
+    logWarn('Failed login attempt', { identifier: maskPersonal(identifier), ip: req.ip })
     return res.status(HTTP_STATUS.UNAUTHORIZED).json({
       error: 'Email, nomor WhatsApp, atau kata sandi tidak sesuai.',
     })
@@ -380,18 +370,10 @@ export const updateProfile = asyncHandler(async (req, res) => {
         normalizedPhone = normalizePhoneNumber(cleanPhone)
 
         // Cek apakah nomor baru sudah dipakai oleh user lain
-        const existingUserWithPhone = await prisma.user.findFirst({
-          where: {
-            id: { not: req.userId },
-            OR: [
-              { phone: cleanPhone },
-              { phone: normalizedPhone },
-              ...(normalizedPhone.startsWith('62') ? [{ phone: '0' + normalizedPhone.slice(2) }] : []),
-            ],
-          },
-        })
+        // Only a number another account verified by OTP is "taken"; unverified entries never block
+        const existingUserWithPhone = await findVerifiedPhoneOwner(normalizedPhone)
 
-        if (existingUserWithPhone) {
+        if (existingUserWithPhone && existingUserWithPhone.id !== req.userId) {
           return res.status(HTTP_STATUS.CONFLICT).json({
             error: 'Nomor WhatsApp/telepon ini sudah digunakan oleh akun lain.',
           })
@@ -463,33 +445,36 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     const cleanEmail = cleanId.toLowerCase()
     user = await prisma.user.findUnique({ where: { email: cleanEmail } })
   } else {
-    const normalizedPhone = normalizePhoneNumber(cleanId)
-    user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { phone: cleanId },
-          { phone: normalizedPhone },
-          ...(normalizedPhone.startsWith('62') ? [{ phone: '0' + normalizedPhone.slice(2) }] : []),
-        ],
-      },
-    })
+    // Reset codes only go to a number the account verified; otherwise whoever owns a number someone
+    // mistyped into their profile could reset that person's password
+    user = await findVerifiedPhoneOwner(cleanId)
   }
 
   // To prevent user enumeration / account harvesting:
   // If user is not found, we delay slightly to mimic processing time and return a generic success message
+  const genericResponse = {
+    success: true,
+    message: isEmail
+      ? 'Jika akun terdaftar, kode verifikasi reset kata sandi telah dikirim ke email Anda.'
+      : 'Jika akun terdaftar, kode verifikasi reset kata sandi telah dikirim ke WhatsApp Anda.',
+    cooldownSeconds: 60,
+  }
   if (!user) {
     await new Promise((resolve) => setTimeout(resolve, 350))
-    return res.status(HTTP_STATUS.OK).json({
-      success: true,
-      message: isEmail
-        ? 'Jika akun terdaftar, kode verifikasi reset kata sandi telah dikirim ke email Anda.'
-        : 'Jika akun terdaftar, kode verifikasi reset kata sandi telah dikirim ke WhatsApp Anda.',
-      cooldownSeconds: 60,
-    })
+    return res.status(HTTP_STATUS.OK).json(genericResponse)
   }
 
   const target = isEmail ? user.email : user.phone
-  const result = await sendPasswordResetOtp(target, channel)
+  let result
+  try {
+    result = await sendPasswordResetOtp(target, channel)
+  } catch (err) {
+    // A resend cooldown (429, only possible for real accounts) or a WhatsApp delivery failure must look
+    // like "account not found", or it reveals which emails/numbers are registered
+    if (isEmail && err.statusCode !== 429) throw err
+    logWarn('Password reset OTP not sent (cooldown or delivery failure)', { userId: user.id, channel, error: err.message })
+    return res.status(HTTP_STATUS.OK).json(genericResponse)
+  }
 
   return res.status(HTTP_STATUS.OK).json({
     success: true,
@@ -561,14 +546,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
   if (session.channel === 'EMAIL') {
     user = await prisma.user.findUnique({ where: { email: session.identifier } })
   } else {
-    user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { phone: session.identifier },
-          ...(session.identifier.startsWith('62') ? [{ phone: '0' + session.identifier.slice(2) }] : []),
-        ],
-      },
-    })
+    user = await findVerifiedPhoneOwner(session.identifier)
   }
 
   if (!user) {
@@ -585,7 +563,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
     data: { password: hashedPassword },
   })
 
-  logWarn('Password successfully reset for user', { userId: user.id, email: user.email })
+  logWarn('Password successfully reset for user', { userId: user.id })
 
   return res.status(HTTP_STATUS.OK).json({
     success: true,

@@ -8,6 +8,7 @@
 
 import { body, param, query, validationResult } from 'express-validator'
 import { HTTP_STATUS } from '../constants/index.js'
+import { SUPPORTED_COURIERS } from '../services/shippingService.js'
 
 // ─── Validation Result Handler ────────────────────────────────────────────────
 
@@ -149,6 +150,12 @@ export const validateOrderStatus = [
     .isIn(['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'])
     .withMessage('Invalid order status'),
 
+  body('trackingNumber')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^[A-Za-z0-9-]{6,40}$/)
+    .withMessage('Nomor resi tidak valid (6–40 huruf/angka)'),
+
   handleValidationErrors,
 ]
 
@@ -181,21 +188,10 @@ export const validateCreateOrder = [
     .notEmpty().withMessage('Kota/Kabupaten wajib diisi')
     .escape(),
 
-  body('subdistrict')
+  body('villageId')
     .trim()
-    .notEmpty().withMessage('Kecamatan wajib diisi')
-    .escape(),
-
-  body('kelurahan')
-    .trim()
-    .notEmpty().withMessage('Kelurahan wajib diisi')
-    .escape(),
-
-  body('postalCode')
-    .trim()
-    .notEmpty().withMessage('Kode pos wajib diisi')
-    .isLength({ min: 5, max: 5 }).withMessage('Kode pos harus terdiri dari 5 digit angka')
-    .isNumeric().withMessage('Kode pos harus berupa angka'),
+    .notEmpty().withMessage('Kelurahan wajib dipilih')
+    .matches(/^\d{2}\.\d{2}\.\d{2}\.\d{4}$/).withMessage('Kelurahan tidak valid, silakan pilih ulang alamat'),
 
   body('latitude')
     .optional({ nullable: true, checkFalsy: true })
@@ -210,7 +206,12 @@ export const validateCreateOrder = [
   body('shippingCourier')
     .trim()
     .notEmpty().withMessage('Kurir pengiriman wajib dipilih')
-    .isIn(['JNE', 'J&T', 'POS', 'GOSEND']).withMessage('Kurir pengiriman tidak valid'),
+    .isIn(SUPPORTED_COURIERS).withMessage('Kurir pengiriman tidak valid'),
+
+  body('shippingService')
+    .trim()
+    .notEmpty().withMessage('Layanan kurir wajib dipilih')
+    .isLength({ max: 50 }).withMessage('Layanan kurir tidak valid'),
 
   body('shippingFee')
     .notEmpty().withMessage('Biaya pengiriman wajib diisi')
@@ -219,9 +220,8 @@ export const validateCreateOrder = [
 
   body('paymentMethod')
     .notEmpty().withMessage('Metode pembayaran wajib dipilih')
+    // Only methods that create a real Midtrans charge (others would reserve stock with nothing to pay)
     .isIn([
-      'CASH',
-      'TRANSFER',
       'MIDTRANS',
       'QRIS',
       'TRANSFER_BCA',
@@ -251,6 +251,30 @@ export const validateCreateOrder = [
     .optional()
     .isBoolean({ strict: true }).withMessage('Nilai buyNow tidak valid')
     .toBoolean(true),
+
+  handleValidationErrors,
+]
+
+// ─── Shipping Rate Validator ──────────────────────────────────────────────────
+
+export const validateShippingCalculate = [
+  body('villageId')
+    .isString().withMessage('Kelurahan wajib dipilih')
+    .matches(/^\d{2}\.\d{2}\.\d{2}\.\d{4}$/).withMessage('Kelurahan tidak valid, silakan pilih ulang alamat'),
+
+  body('items')
+    .isArray({ min: 1, max: 100 }).withMessage('Pilih minimal 1 produk untuk menghitung ongkir'),
+
+  body('items.*.productId')
+    .isUUID().withMessage('ID produk tidak valid'),
+
+  body('items.*.variantId')
+    .optional({ nullable: true })
+    .isUUID().withMessage('ID varian tidak valid'),
+
+  body('items.*.quantity')
+    .isInt({ min: 1, max: 1000 }).withMessage('Jumlah produk harus antara 1 sampai 1000')
+    .toInt(),
 
   handleValidationErrors,
 ]

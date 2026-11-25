@@ -103,7 +103,7 @@ export default function OrderSuccessPaymentInfo({
           <div className="space-y-4">
             {order.paymentDetails ? (
               <div className="p-5 border border-gray-200 rounded-xl bg-gradient-to-br from-white to-gray-50/50 shadow-xs">
-                {order.paymentDetails.isMock && (
+                {import.meta.env.DEV && order.paymentDetails.isMock && (
                   <div className="mb-4 p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-center">
                     <p className="text-[11px] text-amber-900 font-bold uppercase tracking-wider mb-1">
                       Mode Simulasi / Testing Sandbox
@@ -304,7 +304,7 @@ export default function OrderSuccessPaymentInfo({
             createdAt={order.createdAt}
           />
 
-          {order.paymentDetails?.isMock && (
+          {import.meta.env.DEV && order.paymentDetails?.isMock && (
             <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-xl max-w-sm mx-auto text-center shadow-2xs">
               <p className="text-[11px] text-amber-900 font-bold uppercase tracking-wider mb-1">
                 Mode Simulasi / Testing Sandbox

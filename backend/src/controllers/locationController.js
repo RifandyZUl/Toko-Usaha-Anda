@@ -1,39 +1,29 @@
 /**
  * Location Controller
- * Handles geographic and postal code resolution endpoints
+ * Serves Indonesian administrative regions (BinderByte wilayah) to the storefront
  */
 
-import { searchPostalCodes } from '../services/postalCodeService.js'
+import { getProvinces, getRegencies, getDistricts, getVillages } from '../services/wilayahService.js'
 
-/**
- * GET /api/location/postal-code
- * Resolves postal codes based on kelurahan, subdistrict, city, or query string
- */
-export async function getPostalCodes(req, res, next) {
-  try {
-    const { kelurahan, subdistrict, city, province, q } = req.query
-
-    // Validate that at least one location parameter is provided
-    if (!kelurahan && !subdistrict && !city && !q) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-      })
+function respondWith(loader) {
+  return async (req, res, next) => {
+    try {
+      const data = await loader(req.params.id)
+      res.status(200).json({ success: true, data })
+    } catch (error) {
+      next(error)
     }
-
-    const data = await searchPostalCodes({
-      kelurahan: typeof kelurahan === 'string' ? kelurahan.slice(0, 100) : '',
-      subdistrict: typeof subdistrict === 'string' ? subdistrict.slice(0, 100) : '',
-      city: typeof city === 'string' ? city.slice(0, 100) : '',
-      province: typeof province === 'string' ? province.slice(0, 100) : '',
-      q: typeof q === 'string' ? q.slice(0, 100) : '',
-    })
-
-    return res.status(200).json({
-      success: true,
-      data,
-    })
-  } catch (error) {
-    next(error)
   }
 }
+
+// GET /api/location/provinces
+export const listProvinces = respondWith(() => getProvinces())
+
+// GET /api/location/regencies/:id  (id = provinsi, e.g. "36")
+export const listRegencies = respondWith(id => getRegencies(id))
+
+// GET /api/location/districts/:id  (id = kabupaten/kota, e.g. "36.71")
+export const listDistricts = respondWith(id => getDistricts(id))
+
+// GET /api/location/villages/:id  (id = kecamatan, e.g. "36.71.11"); each village includes postalCode
+export const listVillages = respondWith(id => getVillages(id))

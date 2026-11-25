@@ -1,35 +1,18 @@
-import { API_BASE_URL } from '../config/api'
+import { apiClient } from '../config/api'
 
 /**
- * Fetch dynamic shipping options calculated from server (RajaOngkir / zonasi)
+ * Fetch exact courier tariffs (BinderByte) from the server.
+ * The server computes the parcel weight from the items, so the fee shown equals the fee charged.
  * @param {Object} params
- * @param {string} params.city - Destination city
- * @param {string} params.province - Destination province
- * @param {number} [params.weight] - Weight in grams
- * @returns {Promise<{zone: string, weightKg: number, options: Array}>}
+ * @param {string} params.villageId - Kelurahan ID, e.g. "36.71.11.1005"
+ * @param {Array<{productId: string, variantId: string|null, quantity: number}>} params.items - Items being checked out
+ * @returns {Promise<{options: Array, error: string|null}>} never an estimate: on failure options is empty
  */
-export async function getShippingRates({ city, province, weight = 1000 }) {
+export async function getShippingRates({ villageId, items }) {
   try {
-    const response = await fetch(`${API_BASE_URL}/shipping/calculate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        city,
-        province,
-        weight,
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error('Gagal mengambil tarif pengiriman')
-    }
-
-    const data = await response.json()
-    return data.data || null
+    const res = await apiClient.post('/shipping/calculate', { villageId, items })
+    return { options: res?.data?.options || [], error: null }
   } catch (error) {
-    console.warn('Shipping rate fetch fallback:', error.message)
-    return null
+    return { options: [], error: error.message || 'Ongkos kirim belum bisa dihitung. Silakan coba lagi.' }
   }
 }

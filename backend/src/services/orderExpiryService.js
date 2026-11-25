@@ -1,5 +1,6 @@
 import prisma from '../config/database.js'
 import paymentService from './paymentService.js'
+import { cancelPendingOrderAndRestock } from './orderStockService.js'
 import { logInfo, logError, logWarn } from '../utils/logger.js'
 
 /**
@@ -58,54 +59,16 @@ export const expireOrder = async (orderId) => {
 
     logInfo('Expiring pending order automatically', { orderId: order.id, method: order.paymentMethod })
 
-    const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Re-verify status inside transaction to prevent race conditions
-      const current = await tx.order.findUnique({
-        where: { id: orderId },
-      })
-
-      if (!current || current.status !== 'PENDING') {
-        return current
-      }
-
-      // Revert product and variant stocks atomically (safe even if variant or product deleted by admin)
-      for (const item of order.items) {
-        if (item.variantId) {
-          await tx.productVariant.updateMany({
-            where: { id: item.variantId },
-            data: {
-              stock: {
-                increment: item.quantity,
-              },
-            },
-          })
-        }
-        await tx.product.updateMany({
-          where: { id: item.productId },
-          data: {
-            stock: {
-              increment: item.quantity,
-            },
-          },
-        })
-      }
-
-      // Mark order as CANCELLED and payment as FAILED
-      return await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: 'CANCELLED',
-          paymentStatus: 'FAILED',
-        },
-        include: {
-          items: {
-            include: {
-              product: true,
-            },
-          },
-        },
-      })
+    // Conditional cancel + restock: a concurrent user cancel or webhook cannot restock twice
+    const cancelled = await cancelPendingOrderAndRestock(orderId, order.items)
+    const updatedOrder = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: { include: { product: true } } },
     })
+    if (!cancelled) {
+      // Someone else changed the order first (paid or cancelled): nothing to cancel at Midtrans
+      return updatedOrder
+    }
 
     // Cancel transaction with Midtrans if applicable
     try {

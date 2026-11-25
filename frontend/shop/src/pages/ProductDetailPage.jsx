@@ -573,14 +573,14 @@ function ProductDetailPage() {
                     )}
                   </div>
 
-                  {/* Free Delivery and Returns */}
+                  {/* Shipping and Returns */}
                   <div className="border-b border-gray-200">
                     <button
                       onClick={() => toggleSection('delivery')}
                       className="w-full flex items-center justify-between py-3 text-left hover:text-black transition-colors"
                     >
                       <span className="text-sm font-heading font-medium text-black">
-                        Gratis Ongkir dan Retur
+                        Pengiriman dan Retur
                       </span>
                       <Icon
                         name="ChevronDown"
@@ -593,10 +593,12 @@ function ProductDetailPage() {
                     {expandedSections.delivery && (
                       <div className="pb-4 space-y-2 text-xs font-body text-gray-600">
                         <div>
-                          <span className="font-medium">Gratis Ongkir:</span> Untuk pembelian di atas Rp 100.000
+                          <span className="font-medium">Ongkos Kirim:</span> Sesuai tarif resmi kurir (JNE, J&amp;T,
+                          POS) berdasarkan alamat dan berat paket, ditampilkan saat checkout
                         </div>
                         <div>
-                          <span className="font-medium">Pengiriman:</span> 2-5 hari kerja
+                          <span className="font-medium">Pengiriman:</span> Estimasi tergantung layanan kurir yang
+                          dipilih
                         </div>
                         <div>
                           <span className="font-medium">Retur:</span> Bebas retur dalam 7 hari setelah barang diterima

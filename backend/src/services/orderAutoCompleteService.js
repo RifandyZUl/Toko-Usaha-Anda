@@ -1,5 +1,6 @@
 import prisma from '../config/database.js'
 import { logInfo, logError } from '../utils/logger.js'
+import { updateOrderIfUnchanged } from './orderStockService.js'
 
 // 2 days in milliseconds: 2 * 24 * 60 * 60 * 1000 = 172,800,000 ms
 export const AUTO_COMPLETE_DELAY_MS = 2 * 24 * 60 * 60 * 1000
@@ -59,7 +60,8 @@ export const autoCompleteOrder = async (orderId) => {
       include: { items: true },
     })
 
-    if (!order || order.status !== 'SHIPPED') {
+    // Re-check on the fresh read: a dispute may have been filed since the caller checked
+    if (!isOrderEligibleForAutoComplete(order)) {
       return null
     }
 
@@ -79,23 +81,22 @@ export const autoCompleteOrder = async (orderId) => {
       },
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        status: 'DELIVERED',
-        paymentStatus: order.paymentMethod === 'COD' ? 'PAID' : order.paymentStatus,
-        paymentDetails: newPaymentDetails,
-      },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
+    // Conditional write: if a dispute (or anything else) landed after we read the order, skip this run
+    // instead of overwriting it; the next run re-reads and re-checks the dispute rule.
+    const written = await updateOrderIfUnchanged(order, {
+      status: 'DELIVERED',
+      paymentStatus: order.paymentMethod === 'COD' ? 'PAID' : order.paymentStatus,
+      paymentDetails: newPaymentDetails,
     })
+    if (!written) {
+      logInfo('Auto-complete skipped: order changed meanwhile', { orderId })
+      return null
+    }
 
-    return updatedOrder
+    return prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: { include: { product: true } } },
+    })
   } catch (error) {
     logError('Error auto-completing order', { orderId, error: error.message })
     return null

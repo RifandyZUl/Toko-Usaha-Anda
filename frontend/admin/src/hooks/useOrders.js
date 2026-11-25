@@ -29,9 +29,9 @@ export function useOrders() {
     }
   }, [])
 
-  const updateStatus = useCallback(async (orderId, newStatus) => {
+  const updateStatus = useCallback(async (orderId, newStatus, extra = {}) => {
     try {
-      const result = await updateOrderStatus(orderId, newStatus)
+      const result = await updateOrderStatus(orderId, newStatus, extra)
       if (result.success) {
         setOrders(prev => prev.map(o => o.id === orderId ? result.order : o))
         success(`Status pesanan berhasil diupdate`)

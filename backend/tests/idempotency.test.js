@@ -1,100 +1,124 @@
-import { describe, it } from 'node:test'
+import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import prisma from '../src/config/database.js'
 import { checkIdempotency } from '../src/middleware/idempotency.js'
 import { HTTP_STATUS } from '../src/constants/index.js'
 
-describe('Idempotency Middleware Tests', () => {
-  it('should call next() when no idempotency key is provided', () => {
-    let nextCalled = false
-    const req = { headers: {}, userId: 'user-1' }
-    const res = {}
-    const next = () => { nextCalled = true }
+// In-memory stand-in for the idempotency_keys table, including its unique constraint on cacheKey.
+// Lets the tests run without a database and exercise the concurrent path deterministically.
+function createFakeStore() {
+  const rows = new Map()
+  const tick = () => new Promise(resolve => setImmediate(resolve))
+  return {
+    rows,
+    async create({ data }) {
+      await tick()
+      if (rows.has(data.cacheKey)) throw Object.assign(new Error('Unique constraint'), { code: 'P2002' })
+      rows.set(data.cacheKey, { ...data, updatedAt: new Date() })
+      return rows.get(data.cacheKey)
+    },
+    async findUnique({ where }) {
+      await tick()
+      return rows.get(where.cacheKey) || null
+    },
+    async update({ where, data }) {
+      await tick()
+      rows.set(where.cacheKey, { ...rows.get(where.cacheKey), ...data })
+    },
+    async delete({ where }) {
+      await tick()
+      rows.delete(where.cacheKey)
+    },
+  }
+}
 
-    checkIdempotency(req, res, next)
+function createRes() {
+  return {
+    statusCode: 200,
+    sent: null,
+    status(code) {
+      this.statusCode = code
+      return this
+    },
+    json(body) {
+      this.sent = body
+      return this
+    },
+  }
+}
+
+// Runs the middleware and resolves once it either calls next() or sends a response
+async function run(key, userId = 'user-1') {
+  const req = { headers: key ? { 'x-idempotency-key': key } : {}, userId }
+  const res = createRes()
+  let nextCalled = false
+  await checkIdempotency(req, res, () => { nextCalled = true })
+  return { res, nextCalled }
+}
+
+describe('Idempotency Middleware Tests', () => {
+  const realDelegate = Object.getOwnPropertyDescriptor(prisma, 'idempotencyKey')
+  let store
+
+  before(() => {
+    store = createFakeStore()
+    Object.defineProperty(prisma, 'idempotencyKey', { value: store, configurable: true, writable: true })
+  })
+  after(() => {
+    if (realDelegate) Object.defineProperty(prisma, 'idempotencyKey', realDelegate)
+    else delete prisma.idempotencyKey
+  })
+
+  it('calls next() when no idempotency key is provided', async () => {
+    const { nextCalled } = await run(null)
     assert.equal(nextCalled, true)
   })
 
-  it('should block concurrent requests with identical idempotency key (HTTP 409 Conflict)', () => {
-    const key = `test-key-${Date.now()}`
-    const req1 = { headers: { 'x-idempotency-key': key }, userId: 'user-lock' }
-    let req1NextCalled = false
-    const res1 = {
-      json(body) { return body },
-      status() { return this },
-    }
-    const next1 = () => { req1NextCalled = true }
-
-    // First request begins processing
-    checkIdempotency(req1, res1, next1)
-    assert.equal(req1NextCalled, true)
-
-    // Second concurrent request with same key
-    const req2 = { headers: { 'x-idempotency-key': key }, userId: 'user-lock' }
-    let res2Status = null
-    let res2Body = null
-    const res2 = {
-      status(code) {
-        res2Status = code
-        return this
-      },
-      json(data) {
-        res2Body = data
-        return this
-      },
-    }
-    let req2NextCalled = false
-    const next2 = () => { req2NextCalled = true }
-
-    checkIdempotency(req2, res2, next2)
-    assert.equal(req2NextCalled, false, 'Next should not be called for duplicate concurrent request')
-    assert.equal(res2Status, HTTP_STATUS.CONFLICT)
-    assert.match(res2Body.error, /sedang diproses/)
+  it('lets exactly one of two concurrent identical requests through (other gets 409)', async () => {
+    const [a, b] = await Promise.all([run('race-key'), run('race-key')])
+    assert.equal([a, b].filter(r => r.nextCalled).length, 1)
+    const blocked = a.nextCalled ? b : a
+    assert.equal(blocked.res.statusCode, HTTP_STATUS.CONFLICT)
+    assert.match(blocked.res.sent.error, /sedang diproses/)
   })
 
-  it('should return cached response when request was completed previously', () => {
-    const key = `completed-key-${Date.now()}`
-    const req1 = { headers: { 'x-idempotency-key': key }, userId: 'user-cache' }
-    let capturedBody = null
-    let originalJsonCalled = false
-    const res1 = {
-      statusCode: 201,
-      status(code) {
-        this.statusCode = code
-        return this
-      },
-      json(data) {
-        originalJsonCalled = true
-        capturedBody = data
-        return this
-      },
-    }
+  it('replays the stored response once the first request completed', async () => {
+    const first = await run('done-key')
+    assert.equal(first.nextCalled, true)
+    const payload = { id: 'order-123', status: 'PENDING', totalAmount: 50000 }
+    await first.res.status(201).json(payload)
+    assert.deepEqual(first.res.sent, payload)
 
-    checkIdempotency(req1, res1, () => {})
+    const second = await run('done-key')
+    assert.equal(second.nextCalled, false)
+    assert.equal(second.res.statusCode, 201)
+    assert.deepEqual(second.res.sent, payload)
+  })
 
-    // Simulate completion
-    const mockOrderPayload = { id: 'order-123', status: 'PENDING', totalAmount: 50000 }
-    res1.json(mockOrderPayload)
-    assert.equal(originalJsonCalled, true)
+  it('releases the key after a 5xx so the client can retry', async () => {
+    const first = await run('error-key')
+    await first.res.status(503).json({ error: 'down' })
+    assert.equal(store.rows.has('user-1:error-key'), false)
 
-    // Subsequent request with the same idempotency key
-    const req2 = { headers: { 'x-idempotency-key': key }, userId: 'user-cache' }
-    let res2Status = null
-    let res2Body = null
-    const res2 = {
-      status(code) {
-        res2Status = code
-        return this
-      },
-      json(data) {
-        res2Body = data
-        return this
-      },
-    }
-    let req2NextCalled = false
+    const retry = await run('error-key')
+    assert.equal(retry.nextCalled, true)
+  })
 
-    checkIdempotency(req2, res2, () => { req2NextCalled = true })
-    assert.equal(req2NextCalled, false, 'Next should not be called when cached')
-    assert.equal(res2Status, 201)
-    assert.deepEqual(res2Body, mockOrderPayload)
+  it('tells the client to check its orders (and does not re-run) when a key is stuck in PROCESSING', async () => {
+    const first = await run('stuck-key')
+    assert.equal(first.nextCalled, true)
+    // Simulate the first request crashing: it never responded, 3 minutes ago
+    store.rows.get('user-1:stuck-key').updatedAt = new Date(Date.now() - 3 * 60 * 1000)
+
+    const retry = await run('stuck-key')
+    assert.equal(retry.nextCalled, false, 'must not create the order a second time')
+    assert.equal(retry.res.statusCode, HTTP_STATUS.CONFLICT)
+    assert.equal(retry.res.sent.code, 'IDEMPOTENCY_STALE')
+  })
+
+  it('scopes keys per user', async () => {
+    await run('shared-key', 'user-a')
+    const other = await run('shared-key', 'user-b')
+    assert.equal(other.nextCalled, true)
   })
 })

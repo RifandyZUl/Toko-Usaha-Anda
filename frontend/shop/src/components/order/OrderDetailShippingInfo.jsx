@@ -29,7 +29,7 @@ export default function OrderDetailShippingInfo({ order, onOpenTracking }) {
           </span>
           <p className="font-semibold text-gray-900 text-sm flex items-center gap-2">
             <Icon name="Truck" size={16} className="text-primary-600" />
-            <span>{order.shippingCourier || 'JNE'} Express</span>
+            <span>{order.shippingCourier || 'JNE'}</span>
           </p>
         </div>
 

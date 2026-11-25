@@ -7,7 +7,10 @@ import {
   verifyEmailVerificationOtp,
   sendRegisterOtpToWhatsApp,
   validateEmailDomain,
+  findVerifiedPhoneOwner,
+  releaseUnverifiedPhone,
 } from '../services/otpService.js'
+import { logWarn } from '../utils/logger.js'
 
 /**
  * Send OTP via WhatsApp
@@ -45,17 +48,22 @@ export async function verifyOtp(req, res) {
 
     // If authenticated, also sync verified phone to user record in DB
     if (req.userId) {
+      const owner = await findVerifiedPhoneOwner(result.verifiedPhone)
+      if (owner && owner.id !== req.userId) {
+        return res.status(409).json({ error: 'Nomor WhatsApp ini sudah terverifikasi pada akun lain.' })
+      }
       try {
         await prisma.user.update({
           where: { id: req.userId },
           data: {
-            phone,
+            phone: result.verifiedPhone,
             isPhoneVerified: true,
             phoneVerifiedAt: new Date(),
           },
         })
+        await releaseUnverifiedPhone(result.verifiedPhone, req.userId)
       } catch (dbErr) {
-        console.warn('Could not update user phone in DB:', dbErr.message)
+        logWarn('Could not update user phone in DB', { userId: req.userId, error: dbErr.message })
       }
     }
 

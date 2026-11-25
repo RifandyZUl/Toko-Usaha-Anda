@@ -1,4 +1,5 @@
 import prisma from '../config/database.js'
+import { updateOrderIfUnchanged } from '../services/orderStockService.js'
 
 /**
  * Submit product review & star rating for a completed order
@@ -58,15 +59,13 @@ export const createOrderReview = async (req, res, next) => {
     }
     updatedReviews.push(newReview)
 
-    await prisma.order.update({
-      where: { id },
-      data: {
-        paymentDetails: {
-          ...existingDetails,
-          reviews: updatedReviews,
-        },
-      },
+    // Conditional write so a parallel review/dispute/shipping update is never erased
+    const written = await updateOrderIfUnchanged(order, {
+      paymentDetails: { ...existingDetails, reviews: updatedReviews },
     })
+    if (!written) {
+      return res.status(409).json({ error: 'Pesanan baru saja diperbarui. Silakan muat ulang halaman dan coba lagi.' })
+    }
 
     res.status(201).json({
       success: true,

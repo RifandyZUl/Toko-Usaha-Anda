@@ -43,7 +43,9 @@ function resolvePsqlCommand(dbUrl) {
     }
   }
 
-  // 3. Fallback: check if Docker container toko-postgres is running
+  // 3. Fallback: the local Docker container, but only when DATABASE_URL itself points to a local database.
+  //    Otherwise a remote (production) DATABASE_URL would silently be swapped for the local container.
+  if (!isLocalDatabase(dbUrl)) return null
   try {
     const isDockerRunning = execSync('docker ps --filter "name=toko-postgres" --format "{{.Names}}"', { encoding: 'utf-8' }).trim()
     if (isDockerRunning === 'toko-postgres') {
@@ -54,6 +56,14 @@ function resolvePsqlCommand(dbUrl) {
   }
 
   return null
+}
+
+function isLocalDatabase(url) {
+  try {
+    return ['localhost', '127.0.0.1', 'postgres'].includes(new URL(url).hostname)
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -112,7 +122,15 @@ export function performRestore() {
     process.exit(1)
   }
 
-  console.log(`⚠️ Restoring database from: ${backupFile}`)
+  // Restoring overwrites data: show the target and require an explicit --yes
+  const targetHost = (() => { try { return new URL(dbUrl).hostname } catch { return 'unknown host' } })()
+  if (!process.argv.includes('--yes')) {
+    console.error(`⚠️  This will overwrite the database at "${targetHost}" with ${path.basename(backupFile)}.`)
+    console.error('   Re-run with --yes to confirm, e.g. npm run db:restore -- --file=<file>.sql --yes')
+    process.exit(1)
+  }
+
+  console.log(`⚠️ Restoring database at "${targetHost}" from: ${backupFile}`)
 
   try {
     execSync(`${psqlCmd} < "${backupFile}"`, { stdio: 'inherit', shell: true })

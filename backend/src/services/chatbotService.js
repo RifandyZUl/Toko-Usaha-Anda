@@ -80,18 +80,15 @@ const handleOrderCheckResponse = async (senderPhone, customOrderId = null) => {
 
     let order = null
 
-    if (customOrderId) {
-      order = await prisma.order.findUnique({
-        where: { id: customOrderId },
-        include: { items: true },
-      })
-    } else {
+    // Only ever reveal orders tied to the sender's own number (shipping phone or account phone)
+    if (cleanPhone.length >= 10) {
+      const senderForms = [cleanPhone, localPhone]
       order = await prisma.order.findFirst({
         where: {
+          ...(customOrderId && { id: customOrderId }),
           OR: [
-            { shippingPhone: cleanPhone },
-            { shippingPhone: localPhone },
-            { shippingPhone: { contains: localPhone.slice(2) } },
+            { shippingPhone: { in: senderForms } },
+            { user: { phone: { in: senderForms } } },
           ],
         },
         orderBy: { createdAt: 'desc' },

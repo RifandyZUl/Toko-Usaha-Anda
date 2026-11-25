@@ -1,14 +1,16 @@
 /**
  * Location Routes
- * Public endpoints for location and postal code lookups
+ * Public endpoints for Indonesian region lookups (provinsi → kelurahan + kode pos)
  */
 
 import { Router } from 'express'
-import { getPostalCodes } from '../controllers/locationController.js'
+import { listProvinces, listRegencies, listDistricts, listVillages } from '../controllers/locationController.js'
 
 const router = Router()
 
-// GET /api/location/postal-code
-router.get('/postal-code', getPostalCodes)
+router.get('/provinces', listProvinces)
+router.get('/regencies/:id', listRegencies)
+router.get('/districts/:id', listDistricts)
+router.get('/villages/:id', listVillages)
 
 export default router

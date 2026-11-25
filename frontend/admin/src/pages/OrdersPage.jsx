@@ -3,7 +3,7 @@
  * Displays and manages all orders with status updates
  */
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import {
   Eye,
   CheckCircle,
@@ -22,6 +22,7 @@ import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
   ORDER_STATUS_OPTIONS,
+  getPaymentAlert,
 } from '../constants/orderStatus'
 import { formatCurrency, formatDateTime, formatDate, formatOrderId, getMediaUrl } from '../utils/format'
 import { ToastContainer } from '../components/common/Toast'
@@ -64,17 +65,25 @@ export default function OrdersPage() {
 
   const pagination = usePagination(itemsPerPage, filteredOrders.length)
   const statusDialog = useConfirmDialog()
+  // Courier waybill typed when shipping; a ref so the dialog's onConfirm reads the latest value
+  const [pendingStatus, setPendingStatus] = useState(null)
+  const [trackingInput, setTrackingInput] = useState('')
+  const trackingRef = useRef('')
 
   /**
    * Handle status update
    */
   const handleStatusUpdateClick = useCallback((orderId, newStatus, orderNumber) => {
+    setPendingStatus(newStatus)
+    setTrackingInput('')
+    trackingRef.current = ''
     statusDialog.openDialog({
       title: 'Update Status Pesanan',
       message: `Ubah status pesanan ${orderNumber} menjadi "${ORDER_STATUS_LABELS[newStatus]}"?`,
       onConfirm: async () => {
         setUpdatingStatus(orderId)
-        const updated = await updateStatus(orderId, newStatus)
+        const extra = newStatus === ORDER_STATUS.SHIPPED ? { trackingNumber: trackingRef.current.trim() } : {}
+        const updated = await updateStatus(orderId, newStatus, extra)
         if (updated) {
           if (selectedOrder?.id === orderId) setSelectedOrder(updated)
           statusDialog.closeDialog()
@@ -288,6 +297,11 @@ export default function OrdersPage() {
                         >
                           {ORDER_STATUS_LABELS[order.status] || order.status}
                         </span>
+                        {getPaymentAlert(order) && (
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                            {getPaymentAlert(order)}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-600">{formatDateTime(order.createdAt)}</p>
                     </div>
@@ -446,7 +460,25 @@ export default function OrdersPage() {
         cancelText={statusDialog.dialog.cancelText}
         variant="primary"
         isLoading={statusDialog.dialog.isLoading}
-      />
+      >
+        {pendingStatus === ORDER_STATUS.SHIPPED && (
+          <label className="block text-left">
+            <span className="text-sm font-medium text-gray-700">Nomor resi dari kurir</span>
+            <input
+              type="text"
+              value={trackingInput}
+              onChange={e => {
+                setTrackingInput(e.target.value)
+                trackingRef.current = e.target.value
+              }}
+              placeholder="contoh: JP1234567890"
+              autoFocus
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <span className="text-xs text-gray-500">Wajib. Pelanggan melacak paket memakai nomor ini.</span>
+          </label>
+        )}
+      </ConfirmDialog>
 
       {/* Order Detail Modal */}
       {selectedOrder && (
@@ -508,6 +540,9 @@ function OrderDetailModal({ order, onClose, onStatusUpdate }) {
               >
                 {ORDER_STATUS_LABELS[order.status] || order.status}
               </span>
+              {getPaymentAlert(order) && (
+                <p className="mt-2 text-xs font-medium text-orange-800">{getPaymentAlert(order)}</p>
+              )}
             </div>
             <div>
               <p className="text-sm text-gray-500 mb-1">Total</p>

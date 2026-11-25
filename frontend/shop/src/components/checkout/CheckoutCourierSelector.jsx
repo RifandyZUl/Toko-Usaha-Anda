@@ -1,3 +1,4 @@
+import Icon from '@shared/components/Icon.jsx'
 import { formatCurrency } from '../../utils/format'
 
 /**
@@ -5,9 +6,11 @@ import { formatCurrency } from '../../utils/format'
  */
 export default function CheckoutCourierSelector({
   courierOptions = [],
-  selectedCourier = 'JNE',
+  selectedCourier = '',
   onSelectCourier,
   error,
+  isLoading = false,
+  emptyMessage = null,
 }) {
   return (
     <div className="pt-6 border-t border-gray-100">
@@ -15,9 +18,18 @@ export default function CheckoutCourierSelector({
         <label className="block text-xs font-heading font-semibold text-gray-900 uppercase tracking-wider">
           Pilih Kurir Pengiriman
         </label>
-        <span className="text-[11px] text-gray-400 font-normal">Tarif otomatis dihitung per wilayah</span>
+        <span className="text-[11px] text-gray-400 font-normal">Tarif resmi kurir sesuai alamat & berat</span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+      {isLoading && (
+        <div className="flex items-center gap-2 px-4 py-3 border border-gray-200 bg-gray-50 text-gray-600 text-xs font-body">
+          <Icon name="Loader2" size={16} className="animate-spin" />
+          <span>Menghitung ongkos kirim...</span>
+        </div>
+      )}
+      {!isLoading && emptyMessage && courierOptions.length === 0 && (
+        <p className="text-xs font-body text-gray-500">{emptyMessage}</p>
+      )}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
         {courierOptions.map(courier => {
           const isSelected = selectedCourier === courier.id
           return (

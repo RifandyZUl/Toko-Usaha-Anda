@@ -3,9 +3,6 @@ import { SHOP_URL } from '../../utils/constants'
 const COURIER_LOGOS = [
   { name: 'JNE Express', src: '/assets/logos/jne.webp' },
   { name: 'J&T Express', src: '/assets/logos/jnt.webp' },
-  { name: 'SiCepat Ekspres', src: '/assets/logos/sicepat.webp' },
-  { name: 'GoSend', src: '/assets/logos/gosend.webp' },
-  { name: 'GrabExpress', src: '/assets/logos/grab.webp' },
 ]
 
 const PAYMENT_LOGOS = [

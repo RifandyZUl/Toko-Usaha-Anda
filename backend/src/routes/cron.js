@@ -1,6 +1,6 @@
 /**
  * Cron Job: Expire pending orders that have passed their payment deadline.
- * Triggered by Vercel Cron — runs every 5 minutes.
+ * Triggered by Vercel Cron — schedules in vercel.json (daily on the Hobby plan).
  *
  * Route: GET /api/cron/expire-orders
  * Auth:  CRON_SECRET header (set in Vercel environment variables)
@@ -11,9 +11,16 @@ import { checkAndExpirePendingOrders } from '../services/orderExpiryService.js'
 import { checkAndAutoCompleteShippedOrders } from '../services/orderAutoCompleteService.js'
 import { cleanupExpiredIdempotencyKeys } from '../middleware/idempotency.js'
 import { cleanupExpiredOtpSessions } from '../services/otpService.js'
+import { cleanupExpiredBinderbyteCache } from '../services/binderbyteCache.js'
 import { logInfo, logError } from '../utils/logger.js'
 
 const router = express.Router()
+
+// Vercel Cron invokes jobs with GET; POST is kept for manual/authorised triggers
+const cronRoute = (path, ...handlers) => {
+  router.get(path, ...handlers)
+  router.post(path, ...handlers)
+}
 
 /**
  * Verify the request comes from Vercel Cron (or an authorised caller).
@@ -22,8 +29,8 @@ const router = express.Router()
 const verifyCronSecret = (req, res, next) => {
   const secret = process.env.CRON_SECRET
   if (!secret) {
-    // No secret configured — only allow in development
-    if (process.env.NODE_ENV !== 'production') return next()
+    // No secret configured — only allow in local development (preview deployments often have no NODE_ENV)
+    if (process.env.NODE_ENV === 'development') return next()
     return res.status(500).json({ error: 'CRON_SECRET is not configured.' })
   }
 
@@ -38,10 +45,10 @@ const verifyCronSecret = (req, res, next) => {
 }
 
 /**
- * POST /api/cron/expire-orders
+ * GET|POST /api/cron/expire-orders  (Vercel Cron calls with GET)
  * Expires pending orders past their payment deadline and restores stock.
  */
-router.post('/expire-orders', verifyCronSecret, async (req, res) => {
+cronRoute('/expire-orders', verifyCronSecret, async (req, res) => {
   try {
     await checkAndExpirePendingOrders()
     logInfo('[Cron] expire-orders completed')
@@ -53,10 +60,10 @@ router.post('/expire-orders', verifyCronSecret, async (req, res) => {
 })
 
 /**
- * POST /api/cron/auto-complete-orders
+ * GET|POST /api/cron/auto-complete-orders  (Vercel Cron calls with GET)
  * Auto-completes shipped orders that have passed the 2-day delivery window.
  */
-router.post('/auto-complete-orders', verifyCronSecret, async (req, res) => {
+cronRoute('/auto-complete-orders', verifyCronSecret, async (req, res) => {
   try {
     await checkAndAutoCompleteShippedOrders()
     logInfo('[Cron] auto-complete-orders completed')
@@ -68,17 +75,18 @@ router.post('/auto-complete-orders', verifyCronSecret, async (req, res) => {
 })
 
 /**
- * POST /api/cron/cleanup
- * Deletes expired idempotency keys and stale OTP sessions from the database.
+ * GET|POST /api/cron/cleanup  (Vercel Cron calls with GET)
+ * Deletes expired idempotency keys, stale OTP sessions and expired BinderByte cache rows.
  */
-router.post('/cleanup', verifyCronSecret, async (req, res) => {
+cronRoute('/cleanup', verifyCronSecret, async (req, res) => {
   try {
-    const [idempotencyCount, otpCount] = await Promise.all([
+    const [idempotencyCount, otpCount, binderbyteCacheCount] = await Promise.all([
       cleanupExpiredIdempotencyKeys(),
       cleanupExpiredOtpSessions(),
+      cleanupExpiredBinderbyteCache(),
     ])
-    logInfo('[Cron] cleanup completed', { idempotencyCount, otpCount })
-    res.json({ ok: true, job: 'cleanup', idempotencyCount, otpCount })
+    logInfo('[Cron] cleanup completed', { idempotencyCount, otpCount, binderbyteCacheCount })
+    res.json({ ok: true, job: 'cleanup', idempotencyCount, otpCount, binderbyteCacheCount })
   } catch (error) {
     logError('[Cron] cleanup failed', { error: error.message })
     res.status(500).json({ ok: false, error: error.message })

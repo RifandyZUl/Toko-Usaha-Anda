@@ -86,7 +86,7 @@ export const addToCart = async (req, res, next) => {
       },
     })
 
-    if (!product) {
+    if (!product || !product.isActive) {
       return res.status(404).json({ error: 'Product not found' })
     }
 
@@ -365,7 +365,7 @@ export const syncCart = async (req, res, next) => {
           },
         })
 
-        if (!product) continue
+        if (!product || !product.isActive) continue
 
         let maxStock = product.stock
         if (vId) {

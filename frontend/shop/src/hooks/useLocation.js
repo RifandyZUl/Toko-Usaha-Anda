@@ -1,6 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { apiClient } from '../config/api'
 
-const BASE_URL = 'https://www.emsifa.com/api-wilayah-indonesia/api'
+/**
+ * Indonesian region dropdown data (provinsi → kota → kecamatan → kelurahan).
+ * Served by our backend (BinderByte wilayah, cached); villages include `postalCode`.
+ * Fetchers are memoized so effects that depend on them don't re-fire every render.
+ */
+const loadRegions = async (endpoint, setter) => {
+  try {
+    const res = await apiClient.get(endpoint)
+    setter(Array.isArray(res?.data) ? res.data : [])
+  } catch (err) {
+    console.error(`Failed to load regions from ${endpoint}:`, err)
+    setter([])
+  }
+}
 
 export const useLocation = () => {
   const [provinces, setProvinces] = useState([])
@@ -9,43 +23,31 @@ export const useLocation = () => {
   const [villages, setVillages] = useState([])
 
   useEffect(() => {
-    fetch(`${BASE_URL}/provinces.json`)
-      .then(res => res.json())
-      .then(setProvinces)
-      .catch(console.error)
+    loadRegions('/location/provinces', setProvinces)
   }, [])
 
-  const fetchCities = (provinceId) => {
-    fetch(`${BASE_URL}/regencies/${provinceId}.json`)
-      .then(res => res.json())
-      .then(setCities)
-      .catch(console.error)
-  }
+  const fetchCities = useCallback(provinceId => {
+    loadRegions(`/location/regencies/${encodeURIComponent(provinceId)}`, setCities)
+  }, [])
 
-  const fetchSubdistricts = (cityId) => {
-    fetch(`${BASE_URL}/districts/${cityId}.json`)
-      .then(res => res.json())
-      .then(setSubdistricts)
-      .catch(console.error)
-  }
+  const fetchSubdistricts = useCallback(cityId => {
+    loadRegions(`/location/districts/${encodeURIComponent(cityId)}`, setSubdistricts)
+  }, [])
 
-  const fetchVillages = (subdistrictId) => {
-    fetch(`${BASE_URL}/villages/${subdistrictId}.json`)
-      .then(res => res.json())
-      .then(setVillages)
-      .catch(console.error)
-  }
+  const fetchVillages = useCallback(subdistrictId => {
+    loadRegions(`/location/villages/${encodeURIComponent(subdistrictId)}`, setVillages)
+  }, [])
 
-  return { 
-    provinces, 
-    cities, 
-    subdistricts, 
-    villages, 
-    fetchCities, 
-    fetchSubdistricts, 
+  return {
+    provinces,
+    cities,
+    subdistricts,
+    villages,
+    fetchCities,
+    fetchSubdistricts,
     fetchVillages,
     setCities,
     setSubdistricts,
-    setVillages
+    setVillages,
   }
 }

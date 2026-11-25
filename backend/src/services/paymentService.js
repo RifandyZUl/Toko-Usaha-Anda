@@ -1,6 +1,19 @@
 import { logError, logInfo } from '../utils/logger.js'
 
 /**
+ * Mock (unpayable) VA / QRIS / Snap codes must never reach real customers:
+ * a Midtrans failure outside local development makes checkout fail and roll back instead.
+ */
+export const isMockPaymentAllowed = () => process.env.NODE_ENV === 'development'
+
+/**
+ * Amount charged to Midtrans for an order: subtotal + shipping fee (rounded rupiah).
+ * The webhook compares notifications against this same value.
+ */
+export const expectedGrossAmount = order =>
+  Math.round(Number(order.totalAmount) + Number(order.shippingFee || 15000))
+
+/**
  * Midtrans Payment Service
  * Isolates and manages all payment gateway integrations.
  */
@@ -36,7 +49,7 @@ class PaymentService {
    */
   _prepareBasePayload(order, items, user, shippingPhone, shippingAddress) {
     const shippingFee = Number(order.shippingFee || 15000)
-    const grossAmount = Math.round(Number(order.totalAmount) + shippingFee) // subtotal + dynamic shipping fee
+    const grossAmount = expectedGrossAmount(order)
 
     return {
       transaction_details: {
@@ -109,8 +122,8 @@ class PaymentService {
     } catch (error) {
       logError('Failed to create Midtrans Snap transaction', error)
       
-      // Fallback to mock Snap details in Sandbox or development mode
-      if (!this.isProduction || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || error.message?.includes('not configured')) {
+      // Fake payment codes only in local development; elsewhere the order is rolled back
+      if (isMockPaymentAllowed()) {
         logInfo('Falling back to mock Snap Token for testing')
         return {
           success: true,
@@ -207,15 +220,8 @@ class PaymentService {
     } catch (error) {
       logError(`Failed to charge Midtrans VA (${bankName})`, error)
       
-      // Fallback to mock VA in Sandbox mode or if payment channel is not activated (status 402)
-      if (
-        !this.isProduction ||
-        process.env.NODE_ENV === 'development' ||
-        process.env.NODE_ENV === 'test' ||
-        error.message?.includes('402') ||
-        error.message?.includes('not activated') ||
-        error.message?.includes('not configured')
-      ) {
+      // Fake payment codes only in local development; elsewhere the order is rolled back
+      if (isMockPaymentAllowed()) {
         logInfo('Falling back to mock Virtual Account for development testing')
         const bankKey = bankName.toLowerCase()
         const mockVa = bankKey === 'mandiri' ? null : `8910${Math.floor(10000000 + Math.random() * 90000000)}`
@@ -230,7 +236,7 @@ class PaymentService {
           vaNumber: mockVa,
           billerCode: mockBillerCode,
           billKey: mockBillKey,
-          grossAmount: Math.round(Number(order.totalAmount) + Number(order.shippingFee || 15000)),
+          grossAmount: expectedGrossAmount(order),
           expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           isMock: true,
         }
@@ -293,15 +299,8 @@ class PaymentService {
     } catch (error) {
       logError('Failed to charge Midtrans QRIS', error)
       
-      // Fallback to mock QRIS in Sandbox mode or if payment channel is not activated (status 402)
-      if (
-        !this.isProduction ||
-        process.env.NODE_ENV === 'development' ||
-        process.env.NODE_ENV === 'test' ||
-        error.message?.includes('402') ||
-        error.message?.includes('not activated') ||
-        error.message?.includes('not configured')
-      ) {
+      // Fake payment codes only in local development; elsewhere the order is rolled back
+      if (isMockPaymentAllowed()) {
         logInfo('Falling back to mock QRIS for development testing')
         return {
           success: true,
@@ -309,7 +308,7 @@ class PaymentService {
           paymentType: 'qris',
           qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://simulator.sandbox.midtrans.com/qris/show?trade_type=qris%26transaction_id=mock-tx-${order.id}`,
           qrString: '00020101021226300016ID.CO.MANDIRI.WWW01189360000200123456785204592253033605802ID5915TOKO_USAHA_ANDA6007JAKARTA61051211062070703A016304A35F',
-          grossAmount: Math.round(Number(order.totalAmount) + Number(order.shippingFee || 15000)),
+          grossAmount: expectedGrossAmount(order),
           expiredAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
           isMock: true,
         }
