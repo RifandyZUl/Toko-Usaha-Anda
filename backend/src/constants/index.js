@@ -45,15 +45,6 @@ export const ORDER_STATUS = {
 }
 
 /**
- * Payment Methods
- */
-export const PAYMENT_METHOD = {
-  CASH: 'CASH',
-  TRANSFER: 'TRANSFER',
-  COD: 'COD',
-}
-
-/**
  * Pagination Defaults
  */
 export const PAGINATION = {

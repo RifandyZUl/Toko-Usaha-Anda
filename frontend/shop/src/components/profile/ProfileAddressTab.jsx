@@ -241,9 +241,9 @@ export default function ProfileAddressTab({
                 type="text"
                 name="postalCode"
                 value={addressForm.postalCode}
-                onChange={handleAddressInputChange}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-                placeholder="Kode Pos"
+                readOnly
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 focus:outline-none text-sm"
+                placeholder="Terisi otomatis dari kelurahan"
               />
             </div>
           </div>

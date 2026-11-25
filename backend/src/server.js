@@ -57,6 +57,11 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const app = express()
+
+// On Vercel every request passes through Vercel's proxy, which sets X-Forwarded-For to the real client IP.
+// Without this, req.ip is the proxy's address and the rate limiters count all visitors as one.
+// Only trusted on Vercel: elsewhere (Docker) the header could be forged by the client to dodge limits.
+if (process.env.VERCEL) app.set('trust proxy', 1)
 const PORT = process.env.PORT || 5000
 const NODE_ENV = process.env.NODE_ENV || 'development'
 
@@ -90,11 +95,8 @@ app.use(
       if (!origin && NODE_ENV === 'development') {
         return callback(null, true)
       }
-      if (
-        !origin ||
-        allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app')
-      ) {
+      // Exact match only: a *.vercel.app wildcard would let anyone's Vercel app make credentialed requests
+      if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true)
       }
       logWarn('CORS blocked request from unknown origin', { origin })

@@ -94,6 +94,19 @@ export const logDebug = (message, data = {}) => {
 }
 
 /**
+ * Mask personal data before it goes to (third-party, long-retained) logs:
+ * "budi.santoso@gmail.com" → "bu***@gmail.com", "6281234567890" → "62*******7890".
+ */
+export const maskPersonal = value => {
+  const text = String(value ?? '')
+  if (text.includes('@')) {
+    const [local, domain] = text.split('@')
+    return `${local.slice(0, 2)}***@${domain}`
+  }
+  return text.length > 6 ? `${text.slice(0, 2)}${'*'.repeat(text.length - 6)}${text.slice(-4)}` : '***'
+}
+
+/**
  * Request logger middleware
  * @param {Object} req - Express request
  * @param {Object} res - Express response

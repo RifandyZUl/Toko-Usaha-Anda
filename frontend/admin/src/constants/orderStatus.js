@@ -29,3 +29,15 @@ export const ORDER_STATUS_COLORS = {
 
 export const ORDER_STATUS_OPTIONS = Object.values(ORDER_STATUS)
 
+/**
+ * Payment problems recorded by the Midtrans webhook that need an admin decision (refund / restore).
+ * Returns a short label, or null when the order needs no attention.
+ */
+export const getPaymentAlert = order => {
+  if (order?.status === ORDER_STATUS.CANCELLED && order.paymentStatus === 'PAID') {
+    return 'Sudah dibayar — perlu refund / aktifkan ulang'
+  }
+  if (order?.paymentDetails?.amountMismatch) return 'Nominal pembayaran tidak cocok'
+  return null
+}
+

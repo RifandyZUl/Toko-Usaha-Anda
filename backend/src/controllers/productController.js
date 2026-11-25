@@ -22,7 +22,7 @@ export const getProducts = asyncHandler(async (req, res) => {
  * Get product by ID
  */
 export const getProductById = asyncHandler(async (req, res) => {
-  const product = await productService.getProductById(req.params.id)
+  const product = await productService.getProductById(req.params.id, { isAdmin: req.userRole === 'ADMIN' })
   res.status(HTTP_STATUS.OK).json({ product })
 })
 

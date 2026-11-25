@@ -1,21 +1,26 @@
 /**
  * Shipping Tracking Service
- * Integrates with Indonesian courier APIs (e.g. BinderByte / RajaOngkir)
- * with graceful simulation fallbacks and in-memory caching.
+ * Live waybill tracking via BinderByte (/v1/track), cached in memory and in the database.
+ * Never invents checkpoints: without a real waybill or courier data it returns { available: false }.
  */
 
-import prisma from '../config/database.js'
+import { binderbyteGet } from './binderbyteClient.js'
+import { getOrLoad } from './binderbyteCache.js'
+import { updateOrderIfUnchanged } from './orderStockService.js'
+import { logWarn } from '../utils/logger.js'
 
-const trackingCache = new Map()
 const CACHE_TTL_MS = 15 * 60 * 1000 // 15 minutes
-const MAX_CACHE_SIZE = 1000
+
+// Older orders got a server-made placeholder "RESI-JNE-XXXXXXXX"; that is not a courier waybill
+export const isRealWaybill = waybill => typeof waybill === 'string' && waybill.trim() !== '' && !waybill.trim().startsWith('RESI-')
 
 /**
  * Normalizes courier names to standardized API slugs
  */
 export function normalizeCourierCode(courierName) {
   if (!courierName || typeof courierName !== 'string') return 'jne'
-  const clean = courierName.toLowerCase().replace(/[^a-z0-9]/g, '')
+  // Orders store "<COURIER> <SERVICE>" (e.g. "JNE JTR"); only the first word is the courier
+  const clean = courierName.trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, '')
   if (clean.includes('sicepat')) return 'sicepat'
   if (clean.includes('jnt') || clean.includes('jt')) return 'jnt'
   if (clean.includes('pos')) return 'pos'
@@ -47,185 +52,74 @@ export function extractDestination(shippingAddress) {
 }
 
 /**
- * Performs real-time lookup against BinderByte API
+ * Performs real-time lookup against BinderByte API.
+ * Returns null on any failure (missing key, network, unknown waybill) so the caller can fall back.
  */
 async function fetchFromBinderByte(courier, awb) {
-  const apiKey = process.env.BINDERBYTE_API_KEY
-  if (!apiKey || !awb) return null
-
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 4500)
-
+  if (!awb) return null
   try {
-    const url = `https://api.binderbyte.com/v1/track?api_key=${apiKey}&courier=${courier}&awb=${encodeURIComponent(awb)}`
-    const res = await fetch(url, { signal: controller.signal })
-    if (!res.ok) return null
-    const json = await res.json()
-    if (json.status === 200 && json.data) {
-      return json.data
-    }
+    // Shared cache (memory + DB): the resi quota is small, so repeat lookups across instances reuse one hit
+    return await getOrLoad(`track:${courier}:${awb}`, CACHE_TTL_MS, async () => {
+      const json = await binderbyteGet('/v1/track', { courier, awb })
+      return Number(json?.status) === 200 && json.data ? json.data : null
+    })
+  } catch {
     return null
-  } catch (err) {
-    return null
-  } finally {
-    clearTimeout(timeoutId)
   }
 }
 
 /**
- * Generates realistic chronological checkpoints for Indonesian courier tracking
- */
-function generateRealisticCheckpoints(order, waybillNumber, courierName, destinationCity) {
-  const createdDate = new Date(order.createdAt || Date.now())
-  const courierUpper = courierName.toUpperCase()
-  const history = []
-
-  // Checkpoint 1: Order confirmed & packaging
-  const t1 = new Date(createdDate.getTime() + 15 * 60 * 1000)
-  history.push({
-    date: t1.toISOString(),
-    desc: `Pesanan telah dikonfirmasi dan sedang dikemas oleh penjual di Toko Usaha Anda [Tangerang]`,
-    location: 'Tangerang',
-    status: 'PACKED',
-  })
-
-  // Checkpoint 2: Picked up by courier drop point
-  const t2 = new Date(createdDate.getTime() + 2 * 60 * 60 * 1000)
-  history.push({
-    date: t2.toISOString(),
-    desc: `Paket telah diserahkan kepada kurir penjemput ${courierUpper} [Drop Point Tangerang]`,
-    location: 'Tangerang',
-    status: 'PICKED_UP',
-  })
-
-  if (order.status === 'SHIPPED' || order.status === 'DELIVERED') {
-    // Checkpoint 3: Sorting center
-    const t3 = new Date(createdDate.getTime() + 6 * 60 * 60 * 1000)
-    history.push({
-      date: t3.toISOString(),
-      desc: `Paket telah tiba di Sorting Center ${courierUpper} [Gateway Hub Jakarta Barat]`,
-      location: 'Jakarta Barat',
-      status: 'SORTING',
-    })
-
-    // Checkpoint 4: Transit to destination
-    const t4 = new Date(createdDate.getTime() + 14 * 60 * 60 * 1000)
-    history.push({
-      date: t4.toISOString(),
-      desc: `Paket sedang dalam perjalanan transit menuju ${destinationCity} [In Transit]`,
-      location: destinationCity,
-      status: 'IN_TRANSIT',
-    })
-
-    // Checkpoint 5: Out for delivery
-    const t5 = new Date(createdDate.getTime() + 22 * 60 * 60 * 1000)
-    history.push({
-      date: t5.toISOString(),
-      desc: `Paket dibawa oleh kurir pengantar ${courierUpper} menuju alamat penerima`,
-      location: destinationCity,
-      status: 'OUT_FOR_DELIVERY',
-    })
-  }
-
-  if (order.status === 'DELIVERED') {
-    // Checkpoint 6: Delivered
-    const t6 = new Date(createdDate.getTime() + 26 * 60 * 60 * 1000)
-    history.push({
-      date: t6.toISOString(),
-      desc: `Paket telah berhasil diterima oleh penerima yang bersangkutan di alamat tujuan.`,
-      location: destinationCity,
-      status: 'DELIVERED',
-    })
-  }
-
-  // Newest checkpoint first
-  history.reverse()
-
-  return {
-    waybillNumber,
-    courier: courierUpper,
-    service: `${courierUpper} Reguler`,
-    status: order.status === 'DELIVERED' ? 'DELIVERED' : order.status === 'SHIPPED' ? 'ON_PROCESS' : 'PROCESSED',
-    statusLabel: order.status === 'DELIVERED' ? 'Paket Telah Diterima' : order.status === 'SHIPPED' ? 'Dalam Pengiriman' : 'Sedang Dikemas',
-    origin: 'TANGERANG (Gudang Toko Usaha Anda)',
-    destination: destinationCity,
-    receiver: extractDestination(order.shippingAddress).receiver,
-    currentLocation: history[0]?.location || 'Tangerang',
-    lastUpdate: history[0]?.date || new Date().toISOString(),
-    isMock: true,
-    history,
-  }
-}
-
-/**
- * Tracks order shipping package with caching and upstream fallbacks
+ * Tracking for an order: courier data when a real waybill exists and BinderByte answers,
+ * otherwise { available: false, message } so the shop shows an honest "not yet available".
  */
 export async function trackOrderShipping(order) {
   if (!order) throw new Error('Order is required')
 
   const shippingDetails = order.paymentDetails?.shippingDetails || {}
   const courierCode = normalizeCourierCode(shippingDetails.courier || order.shippingCourier)
-  const waybillNumber = shippingDetails.trackingNumber || `RESI-${courierCode.toUpperCase()}-${order.id.slice(0, 8).toUpperCase()}`
+  const waybill = isRealWaybill(shippingDetails.trackingNumber) ? shippingDetails.trackingNumber.trim() : null
+  const { city, receiver } = extractDestination(order.shippingAddress)
+  const unavailable = message => ({
+    available: false,
+    message,
+    waybillNumber: waybill,
+    courier: courierCode.toUpperCase(),
+    destination: city,
+    history: [],
+  })
 
-  const cacheKey = `${courierCode}|${waybillNumber}|${order.status}`
-  const cached = trackingCache.get(cacheKey)
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.data
+  if (!waybill) return unavailable('Nomor resi belum diinput oleh toko. Silakan cek kembali nanti.')
+
+  const realData = await fetchFromBinderByte(courierCode, waybill)
+  if (!realData) return unavailable('Data pelacakan dari kurir belum tersedia. Silakan coba beberapa saat lagi.')
+
+  if (realData.summary?.status === 'DELIVERED' && !shippingDetails.deliveredAt && order.id) {
+    syncDeliveredAt(order, realData.history?.[0]?.date || new Date().toISOString())
   }
 
-  const { city } = extractDestination(order.shippingAddress)
-
-  // 1. Try real external API (BinderByte)
-  const realData = await fetchFromBinderByte(courierCode, waybillNumber)
-  if (realData) {
-    const formatted = {
-      waybillNumber: realData.summary?.waybill_number || waybillNumber,
-      courier: realData.summary?.courier || courierCode.toUpperCase(),
-      service: realData.summary?.service || `${courierCode.toUpperCase()} Reguler`,
-      status: realData.summary?.status || 'ON_PROCESS',
-      statusLabel: realData.summary?.status === 'DELIVERED' ? 'Paket Telah Diterima' : 'Dalam Pengiriman',
-      origin: realData.detail?.origin || 'Tangerang',
-      destination: realData.detail?.destination || city,
-      receiver: realData.detail?.receiver || extractDestination(order.shippingAddress).receiver,
-      currentLocation: realData.history?.[0]?.location || city,
-      lastUpdate: realData.history?.[0]?.date || new Date().toISOString(),
-      isMock: false,
-      history: (realData.history || []).map(h => ({
-        date: h.date,
-        desc: h.desc,
-        location: h.location || city,
-      })),
-    }
-
-    // Sync deliveredAt timestamp to database if live courier confirmed delivery
-    if (realData.summary?.status === 'DELIVERED' && !shippingDetails.deliveredAt && order.id) {
-      const deliveredTime = realData.history?.[0]?.date || new Date().toISOString()
-      prisma.order.update({
-        where: { id: order.id },
-        data: {
-          paymentDetails: {
-            ...(order.paymentDetails || {}),
-            shippingDetails: {
-              ...shippingDetails,
-              deliveredAt: deliveredTime,
-            },
-          },
-        },
-      }).catch(err => console.warn('Failed to update deliveredAt from live tracking:', err.message))
-    }
-
-    trackingCache.set(cacheKey, { data: formatted, timestamp: Date.now() })
-    return formatted
+  return {
+    available: true,
+    waybillNumber: realData.summary?.waybill_number || waybill,
+    courier: realData.summary?.courier || courierCode.toUpperCase(),
+    service: realData.summary?.service || null,
+    status: realData.summary?.status || 'ON_PROCESS',
+    statusLabel: realData.summary?.status === 'DELIVERED' ? 'Paket Telah Diterima' : 'Dalam Pengiriman',
+    origin: realData.detail?.origin || null,
+    destination: realData.detail?.destination || city,
+    receiver: realData.detail?.receiver || receiver,
+    currentLocation: realData.history?.[0]?.location || null,
+    lastUpdate: realData.history?.[0]?.date || null,
+    history: (realData.history || []).map(h => ({ date: h.date, desc: h.desc, location: h.location || null })),
   }
+}
 
-  // 2. Realistic simulation fallback
-  const result = generateRealisticCheckpoints(order, waybillNumber, courierCode, city)
-
-  if (trackingCache.size >= MAX_CACHE_SIZE) {
-    const oldestKey = trackingCache.keys().next().value
-    trackingCache.delete(oldestKey)
-  }
-  trackingCache.set(cacheKey, { data: result, timestamp: Date.now() })
-
-  return result
+/**
+ * Record the courier-confirmed delivery time. Fire-and-forget; skipped if the order changed meanwhile
+ * (conditional on updatedAt so it never overwrites a dispute/review written in parallel).
+ */
+function syncDeliveredAt(order, deliveredAt) {
+  const details = order.paymentDetails || {}
+  updateOrderIfUnchanged(order, {
+    paymentDetails: { ...details, shippingDetails: { ...(details.shippingDetails || {}), deliveredAt } },
+  }).catch(err => logWarn('Failed to save deliveredAt from live tracking', { orderId: order.id, error: err.message }))
 }

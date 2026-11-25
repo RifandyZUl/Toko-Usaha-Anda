@@ -35,8 +35,7 @@ Landing Page Toko/
   - **Auth Garbage Collector**: Runs hourly to purge expired OTP verification entries and password reset sessions.
 - **Third-Party Integrations**:
   - **Midtrans**: Payment Gateway (Snap token, GoPay, QRIS, BCA/BNI/BRI/Mandiri/Permata Virtual Accounts).
-  - **RajaOngkir & Fallback**: Tiered shipping rate calculation with automated failover.
-  - **BinderByte**: Real-time multi-courier tracking (JNE, J&T, SiCepat, Pos, etc.) with LRU caching.
+  - **BinderByte**: Wilayah (provinsi→kelurahan), exact courier tariffs (JNE, J&T, POS; no estimated fallback — checkout is blocked if pricing fails), and real-time waybill tracking.
   - **Supabase Cloud Storage & Local Fallback**: Dynamic image asset persistence.
 - 📖 *For deeper technical details, refer to [backend/README.md](file:///c:/Cursor-Project/Landing%20Page%20Toko/backend/README.md).*
 

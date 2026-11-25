@@ -17,6 +17,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react'
  * @param {string} props.cancelText - Cancel button text
  * @param {string} props.variant - Dialog variant (danger, warning, info)
  * @param {boolean} props.isLoading - Loading state
+ * @param {React.ReactNode} props.children - Optional extra content (e.g. an input) shown above the buttons
  */
 export default function ConfirmDialog({
   isOpen,
@@ -28,6 +29,7 @@ export default function ConfirmDialog({
   cancelText = 'Batal',
   variant = 'danger',
   isLoading = false,
+  children = null,
 }) {
   if (!isOpen) return null
 
@@ -84,6 +86,8 @@ export default function ConfirmDialog({
             <p className="text-sm text-gray-600 text-center mb-6">
               {message}
             </p>
+
+            {children && <div className="mb-6">{children}</div>}
 
             {/* Actions */}
             <div className="flex flex-col sm:flex-row gap-3">

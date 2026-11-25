@@ -217,7 +217,7 @@ export default function OrderDetailPaymentCard({
         )}
 
         {/* Offline Simulation (Dev Mode) */}
-        {isPending && order.paymentDetails?.isMock && (
+        {import.meta.env.DEV && isPending && order.paymentDetails?.isMock && (
           <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-center mt-3 animate-pulse">
             <p className="text-[10px] text-yellow-800 font-bold uppercase tracking-wider mb-1">
               ⚠️ MODE TESTING SIMULASI

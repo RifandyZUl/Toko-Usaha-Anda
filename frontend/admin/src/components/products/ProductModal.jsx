@@ -223,6 +223,7 @@ export default function ProductModal({
             sku: v.sku?.trim() || null,
             price: parseFloat(v.price) || 0,
             stock: parseInt(v.stock, 10) || 0,
+            originalStock: v.id ? v.originalStock : undefined,
             attributes: v.attributes || null,
           }))
         : []
@@ -241,6 +242,8 @@ export default function ProductModal({
         description: formData.description?.trim() || null,
         price: calculatedPrice,
         stock: calculatedStock,
+        // Lets the server keep units sold while this form was open (stock edit = change from this value)
+        ...(product && { originalStock: formData.originalStock }),
         categoryId: formData.categoryId,
         isActive: formData.isActive ?? true,
         image: (formData.images && formData.images.length > 0) ? formData.images[0] : (formData.image || null),

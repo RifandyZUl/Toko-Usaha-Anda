@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import dns from 'dns/promises'
 import prisma from '../config/database.js'
 import { sendEmailOtp, sendPasswordResetEmail } from './emailService.js'
-import { logInfo, logError, logWarn } from '../utils/logger.js'
+import { logInfo, logError, logWarn, maskPersonal } from '../utils/logger.js'
 
 /**
  * Validate email format and verify domain has active DNS MX records
@@ -64,6 +64,20 @@ export async function validateEmailDomain(email) {
 export const OTP_TTL_MS = 1 * 60 * 1000 // 1 minute validity (60 seconds)
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours validity
 const MAX_VERIFY_ATTEMPTS = 5
+
+/**
+ * Reserve one guess before comparing the code. The conditional increment is atomic, so even many
+ * guesses sent at the same moment get at most MAX_VERIFY_ATTEMPTS comparisons in total.
+ */
+async function claimAttempt(table, id) {
+  const { count } = await table.updateMany({
+    where: { id, attempts: { lt: MAX_VERIFY_ATTEMPTS } },
+    data: { attempts: { increment: 1 } },
+  })
+  return count === 1
+}
+
+const remainingAttempts = record => Math.max(0, MAX_VERIFY_ATTEMPTS - (record.attempts + 1))
 const RESEND_COOLDOWN_MS = 60 * 1000 // 60 seconds cooldown
 
 /**
@@ -79,6 +93,36 @@ export function normalizePhoneNumber(phone) {
     cleaned = '62' + cleaned
   }
   return cleaned
+}
+
+/**
+ * Every stored form of a phone number (older rows may hold "08…", "628…" or the raw input).
+ */
+export function phoneVariants(phone) {
+  const raw = String(phone || '').trim()
+  const normalized = normalizePhoneNumber(raw)
+  const local = normalized.startsWith('62') ? '0' + normalized.slice(2) : normalized
+  return [...new Set([raw, normalized, local].filter(Boolean))]
+}
+
+/**
+ * The account that proved ownership of this number by OTP, or null.
+ * Numbers typed into a profile without verification never identify, block or log in anyone.
+ */
+export function findVerifiedPhoneOwner(phone) {
+  const variants = phoneVariants(phone)
+  if (variants.length === 0) return Promise.resolve(null)
+  return prisma.user.findFirst({ where: { phone: { in: variants }, isPhoneVerified: true } })
+}
+
+/**
+ * After someone verified a number, remove it from other accounts that only typed it in (stops "squatting").
+ */
+export function releaseUnverifiedPhone(phone, ownerId) {
+  return prisma.user.updateMany({
+    where: { phone: { in: phoneVariants(phone) }, isPhoneVerified: false, id: { not: ownerId } },
+    data: { phone: null },
+  })
 }
 
 /**
@@ -147,7 +191,7 @@ async function deliverWhatsAppOtp(target, message, otp) {
     throw createHttpError(`Gagal mengirim WhatsApp: ${reason}`, 400)
   }
 
-  logInfo(`WhatsApp OTP sent to ${target}`)
+  logInfo('WhatsApp OTP sent', { to: maskPersonal(target) })
   return { simulated: false }
 }
 
@@ -236,16 +280,15 @@ export async function verifyOtpCode(phone, submittedCode) {
     }
   }
 
+  if (!(await claimAttempt(prisma.phoneVerificationOtp, record.id))) {
+    return { success: false, message: 'Batas percobaan memasukkan kode telah terlampaui. Silakan minta kode OTP baru.' }
+  }
   const isMatch = crypto.timingSafeEqual(
     Buffer.from(record.otpHash, 'utf8'),
     Buffer.from(hashOtp(String(submittedCode ?? '')), 'utf8')
   )
   if (!isMatch) {
-    const updated = await prisma.phoneVerificationOtp.update({
-      where: { id: record.id },
-      data: { attempts: { increment: 1 } },
-    })
-    return { success: false, message: `Kode OTP salah. Sisa kesempatan: ${MAX_VERIFY_ATTEMPTS - updated.attempts} kali.` }
+    return { success: false, message: `Kode OTP salah. Sisa kesempatan: ${remainingAttempts(record)} kali.` }
   }
 
   await prisma.phoneVerificationOtp.update({
@@ -352,15 +395,7 @@ export async function sendRegisterOtpToWhatsApp(rawPhone) {
   }
 
   // Check if phone number already registered to another user
-  const existingPhone = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { phone: rawPhone.trim() },
-        { phone: normalized },
-        ...(normalized.startsWith('62') ? [{ phone: '0' + normalized.slice(2) }] : []),
-      ],
-    },
-  })
+  const existingPhone = await findVerifiedPhoneOwner(normalized)
   if (existingPhone) {
     throw createHttpError('Nomor WhatsApp ini sudah terdaftar pada akun lain. Silakan masuk atau gunakan nomor lain.', 409)
   }
@@ -420,6 +455,9 @@ export async function verifyEmailVerificationOtp(rawEmail, submittedCode) {
     }
   }
 
+  if (!(await claimAttempt(prisma.emailVerificationOtp, record.id))) {
+    return { success: false, message: 'Batas percobaan memasukkan kode telah terlampaui. Silakan minta kode OTP baru.' }
+  }
   const submittedHash = hashOtp(cleanCode)
   const isMatch = crypto.timingSafeEqual(
     Buffer.from(record.otpHash, 'utf8'),
@@ -427,14 +465,9 @@ export async function verifyEmailVerificationOtp(rawEmail, submittedCode) {
   )
 
   if (!isMatch) {
-    await prisma.emailVerificationOtp.update({
-      where: { id: record.id },
-      data: { attempts: { increment: 1 } },
-    })
-
     return {
       success: false,
-      message: `Kode OTP salah. Sisa kesempatan: ${MAX_VERIFY_ATTEMPTS - (record.attempts + 1)} kali.`,
+      message: `Kode OTP salah. Sisa kesempatan: ${remainingAttempts(record)} kali.`,
     }
   }
 
@@ -491,7 +524,7 @@ export async function sendPasswordResetOtp(targetIdentifier, channel = 'EMAIL') 
   })
 
   // Create new session in PostgreSQL database
-  await prisma.passwordResetSession.create({
+  const session = await prisma.passwordResetSession.create({
     data: {
       identifier: key,
       channel,
@@ -500,65 +533,32 @@ export async function sendPasswordResetOtp(targetIdentifier, channel = 'EMAIL') 
     },
   })
 
-  if (isEmail) {
-    const emailResult = await sendPasswordResetEmail(key, otp)
-    return {
-      success: true,
-      message: 'Kode reset kata sandi telah dikirim ke email.',
-      simulated: emailResult.simulated,
-      devOtp: emailResult.devOtp,
-      cooldownSeconds: 60,
+  if (!isEmail) {
+    // Shared WhatsApp delivery: simulation (devOtp) only in development, any failure throws
+    let delivery
+    try {
+      delivery = await deliverWhatsAppOtp(
+        key,
+        `[Toko Usaha Anda] Kode reset kata sandi akun Anda adalah: *${otp}*.\n\nKode berlaku selama 15 menit. Jangan berikan kode ini kepada siapa pun demi keamanan Anda.`,
+        otp
+      )
+    } catch (err) {
+      await prisma.passwordResetSession.delete({ where: { id: session.id } }).catch(() => {})
+      throw err
+    }
+    return buildWhatsAppSendResponse(delivery, `Kode reset kata sandi telah dikirim ke WhatsApp (${key}).`, {
       expiresInSeconds: 900,
-    }
-  } else {
-    // Send via WhatsApp
-    const fonnteToken = process.env.FONNTE_TOKEN?.trim()
-    if (fonnteToken && fonnteToken !== 'your_fonnte_token_here') {
-      try {
-        const response = await fetch('https://api.fonnte.com/send', {
-          method: 'POST',
-          headers: {
-            Authorization: fonnteToken,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            target: key,
-            message: `[Toko Usaha Anda] Kode reset kata sandi akun Anda adalah: *${otp}*.\n\nKode berlaku selama 15 menit. Jangan berikan kode ini kepada siapa pun demi keamanan Anda.`,
-          }),
-        })
+    })
+  }
 
-        const result = await response.json()
-        if (result.status === true) {
-          logInfo(`Password reset WhatsApp OTP sent to ${key}`)
-          return {
-            success: true,
-            message: `Kode reset kata sandi telah dikirim ke WhatsApp (${key}).`,
-            simulated: false,
-            cooldownSeconds: 60,
-            expiresInSeconds: 900,
-          }
-        }
-      } catch (err) {
-        logError('Error sending reset WA OTP:', err)
-      }
-    }
-
-    // WhatsApp simulation mode
-    console.log(`\n======================================================`)
-    console.log(`[SIMULASI OTP WHATSAPP RESET KATA SANDI]`)
-    console.log(`Nomor Tujuan : ${key}`)
-    console.log(`Kode OTP     : ${otp}`)
-    console.log(`Masa Berlaku : 15 Menit`)
-    console.log(`======================================================\n`)
-
-    return {
-      success: true,
-      message: `Kode reset kata sandi telah dikirim ke WhatsApp (${key}) [Mode Simulasi].`,
-      simulated: true,
-      devOtp: otp,
-      cooldownSeconds: 60,
-      expiresInSeconds: 900,
-    }
+  const emailResult = await sendPasswordResetEmail(key, otp)
+  return {
+    success: true,
+    message: 'Kode reset kata sandi telah dikirim ke email.',
+    simulated: emailResult.simulated,
+    devOtp: emailResult.devOtp,
+    cooldownSeconds: 60,
+    expiresInSeconds: 900,
   }
 }
 
@@ -601,6 +601,9 @@ export async function verifyPasswordResetOtp(targetIdentifier, channel = 'EMAIL'
     }
   }
 
+  if (!(await claimAttempt(prisma.passwordResetSession, session.id))) {
+    return { success: false, message: 'Batas percobaan memasukkan kode telah terlampaui. Silakan minta kode OTP baru.' }
+  }
   const submittedHash = hashOtp(cleanCode)
   const isMatch = crypto.timingSafeEqual(
     Buffer.from(session.otpHash, 'utf8'),
@@ -608,13 +611,9 @@ export async function verifyPasswordResetOtp(targetIdentifier, channel = 'EMAIL'
   )
 
   if (!isMatch) {
-    const updated = await prisma.passwordResetSession.update({
-      where: { id: session.id },
-      data: { attempts: { increment: 1 } },
-    })
     return {
       success: false,
-      message: `Kode OTP salah. Sisa kesempatan: ${MAX_VERIFY_ATTEMPTS - updated.attempts} kali.`,
+      message: `Kode OTP salah. Sisa kesempatan: ${remainingAttempts(session)} kali.`,
     }
   }
 
@@ -689,15 +688,25 @@ export async function cleanupExpiredResetSessions() {
       },
     })
 
-    const totalCleaned = resetResult.count + emailOtpResult.count
+    // 3. Expired WhatsApp OTPs and lapsed phone verifications (isPhoneNumberVerified ignores them already)
+    const phoneOtpResult = await prisma.phoneVerificationOtp.deleteMany({
+      where: {
+        expiresAt: { lt: now },
+      },
+    })
+
+    const totalCleaned = resetResult.count + emailOtpResult.count + phoneOtpResult.count
     if (totalCleaned > 0) {
       logInfo('🧹 Auth background cleanup executed', {
         deletedResetSessions: resetResult.count,
         deletedEmailOtps: emailOtpResult.count,
+        deletedPhoneOtps: phoneOtpResult.count,
       })
     }
+    return totalCleaned
   } catch (error) {
     logError('Error executing auth session cleanup cron', error)
+    return 0
   }
 }
 

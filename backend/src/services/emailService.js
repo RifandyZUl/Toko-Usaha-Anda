@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer'
-import { logInfo, logError } from '../utils/logger.js'
+import { logInfo, logError, maskPersonal } from '../utils/logger.js'
 
 /**
  * Buat transporter nodemailer jika kredensial SMTP tersedia
@@ -80,7 +80,7 @@ export const sendEmailOtp = async (email, otp) => {
         text: `Kode verifikasi Toko Usaha Anda: ${otp}. Berlaku selama 1 menit. Jangan bagikan kode ini kepada siapa pun.`,
       })
 
-      logInfo(`Email OTP successfully sent to: ${email}`)
+      logInfo('Email OTP sent', { to: maskPersonal(email) })
       return {
         success: true,
         message: 'Kode OTP telah berhasil dikirim ke email Anda.',
@@ -160,7 +160,7 @@ export const sendPasswordResetEmail = async (email, otp) => {
         text: `Kode reset kata sandi Toko Usaha Anda: ${otp}. Berlaku selama 15 menit. Jangan bagikan kode ini kepada siapa pun demi keamanan akun Anda.`,
       })
 
-      logInfo(`Password reset email successfully sent to: ${email}`)
+      logInfo('Password reset email sent', { to: maskPersonal(email) })
       return {
         success: true,
         message: 'Kode reset kata sandi telah dikirim ke email Anda.',

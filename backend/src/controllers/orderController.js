@@ -1,12 +1,19 @@
 import prisma from '../config/database.js'
 import { transformProduct } from '../utils/productUtils.js'
 import paymentService from '../services/paymentService.js'
+import {
+  cancelPendingOrderAndRestock,
+  restockItems,
+  updateOrderIfStatus,
+  updateOrderIfUnchanged,
+} from '../services/orderStockService.js'
 import { isOrderExpired, expireOrder } from '../services/orderExpiryService.js'
 import { isOrderEligibleForAutoComplete, autoCompleteOrder } from '../services/orderAutoCompleteService.js'
-import { trackOrderShipping } from '../services/shippingTrackingService.js'
+import { trackOrderShipping, isRealWaybill } from '../services/shippingTrackingService.js'
 import { validateCodEligibility } from '../services/codGuardService.js'
 import { isPhoneNumberVerified, normalizePhoneNumber } from '../services/otpService.js'
-import { calculateOrderShippingFee } from '../services/shippingService.js'
+import { calculateOrderShippingFee, itemWeightGrams } from '../services/shippingService.js'
+import { getVillageById } from '../services/wilayahService.js'
 import { logInfo, logWarn, logError } from '../utils/logger.js'
 
 const toCartSelectionKey = (productId, variantId) => `${productId}:${variantId || ''}`
@@ -99,19 +106,24 @@ export const createOrder = async (req, res, next) => {
       addressDetail,
       province,
       city,
-      subdistrict,
-      kelurahan,
-      postalCode,
       latitude,
       longitude,
+      villageId,
       shippingCourier,
+      shippingService,
       shippingFee,
       paymentMethod,
       items: selectedItems,
       buyNow: isBuyNow = false,
     } = req.body
 
-    const shippingAddress = `${receiverName} | ${addressDetail}, ${kelurahan}, ${subdistrict}, ${city}, ${province} ${postalCode}`
+    // Kelurahan, kecamatan, kota, provinsi & kode pos come from BinderByte (server), not from the client,
+    // so the address on the order always matches the location used to price shipping.
+    const village = await getVillageById(villageId)
+    if (!village) {
+      return res.status(400).json({ error: 'Kelurahan tujuan tidak ditemukan. Silakan pilih ulang alamat.' })
+    }
+    const shippingAddress = `${receiverName} | ${addressDetail}, ${village.name}, ${village.districtName}, ${village.regencyName || city}, ${village.provinceName || province} ${village.postalCode || ''}`.trim()
 
     // Validasi profil: Pastikan pengguna sudah melengkapi email asli (bukan placeholder @whatsapp.user)
     const orderUser = await prisma.user.findUnique({
@@ -143,6 +155,12 @@ export const createOrder = async (req, res, next) => {
       const currentPrice = isVariant ? Number(cartItem.variant.price) : Number(cartItem.product.price)
       const itemName = isVariant ? `${cartItem.product.name} (${cartItem.variant.name})` : cartItem.product.name
 
+      if (!cartItem.product.isActive) {
+        return res.status(400).json({
+          error: `Produk "${cartItem.product.name}" sudah tidak dijual. Silakan hapus dari keranjang belanja Anda.`,
+        })
+      }
+
       if (cartItem.variantId && (!cartItem.variant || cartItem.variant.deletedAt !== null || !cartItem.variant.isActive)) {
         return res.status(400).json({
           error: `Varian untuk produk "${cartItem.product.name}" sudah tidak tersedia atau telah dihapus dari katalog. Silakan sesuaikan keranjang belanja Anda.`,
@@ -170,18 +188,18 @@ export const createOrder = async (req, res, next) => {
     // Verify and calculate shipping fee on server (never trust client shipping fee directly)
     let totalWeight = 0
     for (const cartItem of cartItems) {
-      const itemWeight = Number(cartItem.variant?.weight ?? cartItem.product.weight ?? 1000)
-      totalWeight += itemWeight * cartItem.quantity
+      totalWeight += itemWeightGrams(cartItem.product, cartItem.variant) * cartItem.quantity
     }
+    // Exact tariff for the chosen courier + service, recalculated on the server (client fee is never trusted).
+    // Throws (blocks checkout) if BinderByte cannot price it — no estimated fallback.
     const verifiedShippingFee = await calculateOrderShippingFee({
-      city,
-      province,
-      courier: shippingCourier || 'JNE',
-      weight: totalWeight,
+      villageId,
+      courier: shippingCourier,
+      service: shippingService,
+      weightGrams: totalWeight,
     })
 
-    // Server-authoritative shipping fee: Always use verifiedShippingFee calculated securely by server
-    // Automatically corrects any client-side discrepancy so checkout proceeds smoothly without interruption
+    // Server-authoritative: always charge verifiedShippingFee; log any client-side discrepancy
     const clientShippingFee = Number(shippingFee)
     if (!isNaN(clientShippingFee) && Math.abs(clientShippingFee - verifiedShippingFee) > 1) {
       logInfo('Shipping fee automatically adjusted to verified rate at checkout', {
@@ -210,7 +228,7 @@ export const createOrder = async (req, res, next) => {
           totalAmount,
           shippingAddress,
           shippingPhone,
-          shippingCourier: shippingCourier || 'JNE',
+          shippingCourier: `${shippingCourier} ${shippingService}`,
           shippingFee: verifiedShippingFee,
           paymentMethod,
           latitude,
@@ -378,27 +396,9 @@ export const createOrder = async (req, res, next) => {
     } catch (paymentError) {
       console.error('Failed to create payment transaction:', paymentError)
 
-      // Rollback order status and restore product stock if payment gateway call failed
+      // Rollback order status and restore product + variant stock if payment gateway call failed
       try {
-        await prisma.$transaction(async (tx) => {
-          for (const cartItem of cartItems) {
-            await tx.product.update({
-              where: { id: cartItem.productId },
-              data: {
-                stock: {
-                  increment: cartItem.quantity,
-                },
-              },
-            })
-          }
-          await tx.order.update({
-            where: { id: order.id },
-            data: {
-              status: 'CANCELLED',
-              paymentStatus: 'FAILED',
-            },
-          })
-        })
+        await cancelPendingOrderAndRestock(order.id, cartItems)
       } catch (rollbackError) {
         console.error('Failed to rollback order after payment failure:', rollbackError)
       }
@@ -621,6 +621,12 @@ export const updateOrderStatus = async (req, res, next) => {
       return res.status(404).json({ error: 'Order not found' })
     }
 
+    // A shipped order needs the courier's real waybill: customers track it via the courier API
+    const existingWaybill = existingOrder.paymentDetails?.shippingDetails?.trackingNumber
+    if (status === 'SHIPPED' && !req.body.trackingNumber?.trim() && !isRealWaybill(existingWaybill)) {
+      return res.status(400).json({ error: 'Nomor resi dari kurir wajib diisi untuk status Dikirim.' })
+    }
+
     // 2. Adjust paymentStatus according to workflow
     let paymentStatus = existingOrder.paymentStatus
 
@@ -636,25 +642,13 @@ export const updateOrderStatus = async (req, res, next) => {
 
     // 3. Atomically update status and revert product stock if cancelled (e.g. COD return)
     const updatedOrder = await prisma.$transaction(async (tx) => {
+      // Claim the transition first: a concurrent status change (double click, webhook, cron) gets 409
+      // instead of adjusting stock a second time
+      await updateOrderIfStatus(tx, existingOrder, { status })
+
       // Revert product and variant stock when moving to CANCELLED from non-cancelled
-      // Uses updateMany so it never throws error or aborts transaction if variant/product was deleted by admin
       if (status === 'CANCELLED' && existingOrder.status !== 'CANCELLED') {
-        for (const item of existingOrder.items) {
-          if (item.variantId) {
-            await tx.productVariant.updateMany({
-              where: { id: item.variantId },
-              data: { stock: { increment: item.quantity } },
-            })
-          }
-          await tx.product.updateMany({
-            where: { id: item.productId },
-            data: {
-              stock: {
-                increment: item.quantity,
-              },
-            },
-          })
-        }
+        await restockItems(tx, existingOrder.items)
       }
 
       // Re-decrement stock if un-cancelling an order
@@ -702,7 +696,7 @@ export const updateOrderStatus = async (req, res, next) => {
 
       let newPaymentDetails = existingOrder.paymentDetails
       if (req.body.trackingNumber || status === 'SHIPPED') {
-        const trackingNum = req.body.trackingNumber?.trim() || existingDetails.shippingDetails?.trackingNumber || `RESI-${(req.body.courier || existingOrder.shippingCourier || 'JNE').toUpperCase()}-${existingOrder.id.slice(0, 8).toUpperCase()}`
+        const trackingNum = req.body.trackingNumber?.trim() || existingDetails.shippingDetails?.trackingNumber
         const courier = req.body.courier?.trim() || existingOrder.shippingCourier || 'JNE'
         newPaymentDetails = {
           ...existingDetails,
@@ -811,55 +805,33 @@ export const cancelOrder = async (req, res, next) => {
       })
     }
 
-    // 4. Cancel order and revert product stocks in a Prisma transaction
-    const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Revert product and variant stocks safely (gracefully ignores if deleted by admin)
-      for (const item of order.items) {
-        if (item.variantId) {
-          await tx.productVariant.updateMany({
-            where: { id: item.variantId },
-            data: {
-              stock: {
-                increment: item.quantity,
-              },
-            },
-          })
-        }
-        await tx.product.updateMany({
-          where: { id: item.productId },
-          data: {
-            stock: {
-              increment: item.quantity,
-            },
-          },
-        })
-      }
+    // 4. Conditional cancel + restock: concurrent cancels / expiry / webhook can only restock once
+    const cancelled = await cancelPendingOrderAndRestock(order.id, order.items)
+    if (!cancelled) {
+      return res.status(409).json({
+        error: 'Status pesanan baru saja berubah. Silakan muat ulang halaman pesanan.',
+      })
+    }
 
-      // Update order status to CANCELLED and paymentStatus to FAILED
-      return await tx.order.update({
-        where: { id: order.id },
-        data: {
-          status: 'CANCELLED',
-          paymentStatus: 'FAILED',
-        },
-        include: {
-          items: {
-            include: {
-              product: {
-                include: {
-                  category: {
-                    select: {
-                      id: true,
-                      name: true,
-                      slug: true,
-                    },
+    const updatedOrder = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: {
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                    slug: true,
                   },
                 },
               },
             },
           },
         },
-      })
+      },
     })
 
     // 5. Call Midtrans cancel transaction API
@@ -932,13 +904,18 @@ export const completeOrder = async (req, res, next) => {
       },
     }
 
-    const updatedOrder = await prisma.order.update({
+    // Conditional write: never overwrite a dispute/review/payment note saved since we read the order
+    const written = await updateOrderIfUnchanged(order, {
+      status: 'DELIVERED',
+      paymentStatus: order.paymentMethod === 'COD' ? 'PAID' : order.paymentStatus,
+      paymentDetails: newPaymentDetails,
+    })
+    if (!written) {
+      return res.status(409).json({ error: 'Pesanan baru saja diperbarui. Silakan muat ulang halaman.' })
+    }
+
+    const updatedOrder = await prisma.order.findUnique({
       where: { id },
-      data: {
-        status: 'DELIVERED',
-        paymentStatus: order.paymentMethod === 'COD' ? 'PAID' : order.paymentStatus,
-        paymentDetails: newPaymentDetails,
-      },
       include: {
         items: {
           include: {
@@ -997,37 +974,30 @@ export const rejectCodOrder = async (req, res, next) => {
       return res.status(400).json({ error: 'Pesanan sudah berstatus dibatalkan' })
     }
 
+    const existingDetails = (typeof order.paymentDetails === 'object' && order.paymentDetails !== null)
+      ? order.paymentDetails
+      : {}
+
     const updatedOrder = await prisma.$transaction(async (tx) => {
-      // 1. Revert product stocks to warehouse
-      for (const item of order.items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { increment: item.quantity } },
-        })
-      }
-
-      // 2. Update order status and record COD rejection metadata
-      const existingDetails = (typeof order.paymentDetails === 'object' && order.paymentDetails !== null)
-        ? order.paymentDetails
-        : {}
-
-      return await tx.order.update({
-        where: { id },
-        data: {
-          status: 'CANCELLED',
-          paymentStatus: 'FAILED',
-          paymentDetails: {
-            ...existingDetails,
-            codReturn: {
-              isCodRejected: true,
-              reason,
-              rejectedAt: new Date().toISOString(),
-              processedBy: req.userId,
-              returnedToWarehouse: true,
-            },
+      // 1. Cancel only if no one changed the order meanwhile (prevents double restock), with COD metadata
+      await updateOrderIfStatus(tx, order, {
+        status: 'CANCELLED',
+        paymentStatus: 'FAILED',
+        paymentDetails: {
+          ...existingDetails,
+          codReturn: {
+            isCodRejected: true,
+            reason,
+            rejectedAt: new Date().toISOString(),
+            processedBy: req.userId,
+            returnedToWarehouse: true,
           },
         },
       })
+
+      // 2. Revert product + variant stocks to warehouse
+      await restockItems(tx, order.items)
+      return tx.order.findUnique({ where: { id } })
     })
 
     res.json({

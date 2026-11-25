@@ -114,6 +114,8 @@ export default function ProductsPage() {
       description: product.description || '',
       price: product.price?.toString() || '',
       stock: product.stock?.toString() || '',
+      // Stock as loaded: the server applies the admin's edit as a change from this value
+      originalStock: product.stock,
       image: initialImages[0] || product.image || '',
       images: initialImages,
       categoryId: product.categoryId || '',
@@ -125,6 +127,7 @@ export default function ProductsPage() {
             name: v.name || '',
             price: v.price?.toString() || '',
             stock: v.stock?.toString() || '',
+            originalStock: v.stock,
             sku: v.sku || '',
             attributes: v.attributes || null,
           }))

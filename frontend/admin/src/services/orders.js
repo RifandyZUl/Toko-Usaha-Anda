@@ -76,9 +76,10 @@ export const getOrderById = async (id) => {
  * Update order status (Admin only)
  * @param {string} id - Order ID
  * @param {string} status - New order status (PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED)
+ * @param {Object} [extra] - Extra fields, e.g. { trackingNumber } when shipping
  * @returns {Promise<Object>} Updated order data
  */
-export const updateOrderStatus = async (id, status) => {
+export const updateOrderStatus = async (id, status, extra = {}) => {
   try {
     if (!id) {
       return {
@@ -98,7 +99,7 @@ export const updateOrderStatus = async (id, status) => {
       }
     }
 
-    const response = await apiClient.put(`/orders/${id}/status`, { status })
+    const response = await apiClient.put(`/orders/${id}/status`, { status, ...extra })
     return {
       success: true,
       order: response.order || response,

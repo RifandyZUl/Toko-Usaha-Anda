@@ -56,10 +56,12 @@ export default function TrackingModal({ orderId, onClose }) {
                 <h3 className="text-sm font-heading font-semibold text-white tracking-wide">
                   Lacak Pengiriman
                 </h3>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                  Live
-                </span>
+                {tracking?.available && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    Live
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-gray-300 font-mono mt-0.5">
                 Order #{orderId.slice(-8).toUpperCase()}
@@ -94,6 +96,28 @@ export default function TrackingModal({ orderId, onClose }) {
                 <Icon name="AlertCircle" size={24} />
               </div>
               <p className="text-xs font-semibold text-red-700">{error}</p>
+              <button
+                type="button"
+                onClick={fetchTracking}
+                className="inline-flex items-center gap-1.5 text-xs text-gray-900 hover:text-gray-700 font-semibold px-4 py-1.5 bg-white rounded-lg border border-gray-200 shadow-xs"
+              >
+                <Icon name="RefreshCw" size={12} />
+                <span>Coba Lagi</span>
+              </button>
+            </div>
+          ) : tracking?.available === false ? (
+            // No real courier data yet: say so honestly instead of showing a made-up timeline
+            <div className="py-10 text-center space-y-3 bg-gray-50 rounded-xl p-6 border border-gray-200">
+              <div className="w-12 h-12 mx-auto rounded-full bg-gray-100 text-gray-700 flex items-center justify-center">
+                <Icon name="Package" size={24} />
+              </div>
+              <p className="text-xs font-semibold text-gray-900">{tracking.message}</p>
+              {tracking.waybillNumber && (
+                <p className="text-[11px] text-gray-600">
+                  {tracking.courier} · Resi{' '}
+                  <span className="font-mono font-bold text-gray-900 select-all">{tracking.waybillNumber}</span>
+                </p>
+              )}
               <button
                 type="button"
                 onClick={fetchTracking}

@@ -52,7 +52,9 @@ function resolvePgDumpCommand(dbUrl) {
     }
   }
 
-  // 3. Fallback: check if Docker container toko-postgres is running
+  // 3. Fallback: the local Docker container, but only when DATABASE_URL itself points to a local database.
+  //    Otherwise a remote (production) DATABASE_URL would silently be swapped for the local container.
+  if (!isLocalDatabase(dbUrl)) return null
   try {
     const isDockerRunning = execSync('docker ps --filter "name=toko-postgres" --format "{{.Names}}"', { encoding: 'utf-8' }).trim()
     if (isDockerRunning === 'toko-postgres') {
@@ -63,6 +65,14 @@ function resolvePgDumpCommand(dbUrl) {
   }
 
   return null
+}
+
+function isLocalDatabase(url) {
+  try {
+    return ['localhost', '127.0.0.1', 'postgres'].includes(new URL(url).hostname)
+  } catch {
+    return false
+  }
 }
 
 /**

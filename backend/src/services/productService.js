@@ -10,6 +10,32 @@ import { NotFoundError, ConflictError, BadRequestError } from '../utils/errors.j
 
 const CANONICAL_CATEGORY_SLUGS = ['household', 'tools', 'motorcycle']
 
+const toStockOrNull = value => {
+  const n = parseInt(value, 10)
+  return Number.isInteger(n) ? n : null
+}
+
+/**
+ * Apply an admin stock edit as a change relative to what the form showed (originalStock), so units sold
+ * while the form was open are not "given back". Clients that send no originalStock keep the old absolute write.
+ * Throws ConflictError when the change would push stock below zero because of those sales.
+ */
+async function applyStockEdit(delegate, where, stock, originalStock) {
+  if (originalStock === null) {
+    await delegate.updateMany({ where, data: { stock } })
+    return
+  }
+  const delta = stock - originalStock
+  if (delta === 0) return
+  const { count } = await delegate.updateMany({
+    where: { ...where, stock: { gte: -delta } },
+    data: { stock: { increment: delta } },
+  })
+  if (count === 0) {
+    throw new ConflictError('Stok berubah karena ada pesanan masuk saat form dibuka. Muat ulang produk lalu ulangi.')
+  }
+}
+
 class ProductService {
   /**
    * Validate that the category exists and belongs to the 3 canonical categories
@@ -140,9 +166,10 @@ class ProductService {
   /**
    * Get single product by ID
    */
-  async getProductById(id) {
-    const product = await prisma.product.findUnique({
-      where: { id },
+  async getProductById(id, { isAdmin = false } = {}) {
+    const product = await prisma.product.findFirst({
+      // Inactive products are hidden from shoppers (same rule as the product list); admins still see them
+      where: isAdmin ? { id } : { id, isActive: true },
       include: {
         category: true,
         variants: {
@@ -245,7 +272,7 @@ class ProductService {
     })
     if (!existing) throw new NotFoundError(ERROR_MESSAGES.PRODUCT_NOT_FOUND)
 
-    const { variants, ...productData } = data
+    const { variants, originalStock, ...productData } = data
 
     if (productData.categoryId) {
       await this.validateCanonicalCategory(productData.categoryId)
@@ -268,6 +295,8 @@ class ProductService {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
+      const hasVariants = Array.isArray(variants) && variants.some(v => v && v.name && String(v.name).trim() !== '')
+
       if (Array.isArray(variants)) {
         const parsedVariants = variants
           .filter(v => v && v.name && String(v.name).trim() !== '')
@@ -277,6 +306,7 @@ class ProductService {
             sku: v.sku?.trim() || null,
             price: parseFloat(v.price) || 0,
             stock: isNaN(parseInt(v.stock, 10)) ? 0 : parseInt(v.stock, 10),
+            originalStock: toStockOrNull(v.originalStock),
             weight: v.weight ? parseInt(v.weight, 10) : null,
             image: v.image || null,
             attributes: v.attributes || null,
@@ -284,7 +314,6 @@ class ProductService {
           }))
 
         if (parsedVariants.length > 0) {
-          productData.stock = parsedVariants.reduce((sum, v) => sum + v.stock, 0)
           if (productData.price === undefined || productData.price === null || isNaN(productData.price) || Number(productData.price) === 0) {
             productData.price = Math.min(...parsedVariants.map(v => v.price))
           }
@@ -306,39 +335,33 @@ class ProductService {
         })
 
         // Upsert active variants
-        for (const v of parsedVariants) {
-          if (v.id) {
-            await tx.productVariant.update({
-              where: { id: v.id },
-              data: {
-                name: v.name,
-                sku: v.sku,
-                price: v.price,
-                stock: v.stock,
-                weight: v.weight,
-                image: v.image,
-                attributes: v.attributes,
-                isActive: v.isActive,
-                deletedAt: null,
-              },
+        for (const { id: variantId, stock, originalStock: variantOriginal, ...fields } of parsedVariants) {
+          if (variantId) {
+            // Scoped to this product so a wrong ID from the form can never edit another product's variant
+            const { count } = await tx.productVariant.updateMany({
+              where: { id: variantId, productId: id },
+              data: { ...fields, deletedAt: null },
             })
+            if (count === 0) throw new BadRequestError('Varian produk tidak ditemukan. Muat ulang halaman.')
+            await applyStockEdit(tx.productVariant, { id: variantId, productId: id }, stock, variantOriginal)
           } else {
             await tx.productVariant.create({
-              data: {
-                productId: id,
-                name: v.name,
-                sku: v.sku,
-                price: v.price,
-                stock: v.stock,
-                weight: v.weight,
-                image: v.image,
-                attributes: v.attributes,
-                isActive: v.isActive,
-                deletedAt: null,
-              },
+              data: { ...fields, productId: id, stock, deletedAt: null },
             })
           }
         }
+      }
+
+      if (hasVariants) {
+        // Product stock = sum of its variants, read after the writes above (keeps sales made meanwhile)
+        const { _sum } = await tx.productVariant.aggregate({
+          where: { productId: id, deletedAt: null },
+          _sum: { stock: true },
+        })
+        productData.stock = _sum.stock ?? 0
+      } else if (productData.stock !== undefined) {
+        await applyStockEdit(tx.product, { id }, toStockOrNull(productData.stock) ?? 0, toStockOrNull(originalStock))
+        delete productData.stock
       }
 
       return tx.product.update({

@@ -13,7 +13,6 @@ import Loading from '../components/common/Loading'
 import { logError } from '../utils/logger'
 import { updateProfile } from '../services/auth'
 import { getShippingRates } from '../services/shipping'
-import { apiClient } from '../config/api'
 import { loadMidtransSnap, validateCheckoutForm } from '../utils/checkoutHelpers'
 import CheckoutMapPicker from '../components/checkout/CheckoutMapPicker'
 import CheckoutCourierSelector from '../components/checkout/CheckoutCourierSelector'
@@ -31,10 +30,9 @@ function CheckoutPage() {
   const { user, setAuth } = useAuthStore()
   const [orderError, setOrderError] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [postalCodeOptions, setPostalCodeOptions] = useState([])
-  const [isLoadingPostalCodes, setIsLoadingPostalCodes] = useState(false)
-  const [isManualPostalCode, setIsManualPostalCode] = useState(false)
-  const [serverCourierOptions, setServerCourierOptions] = useState(null)
+  const [courierOptions, setCourierOptions] = useState([])
+  const [isLoadingRates, setIsLoadingRates] = useState(false)
+  const [shippingRateError, setShippingRateError] = useState(null)
   const setValuesRef = useRef(null)
   const onSubmitRef = useRef(null)
 
@@ -77,8 +75,8 @@ function CheckoutPage() {
       postalCode: parsedAddress.postalCode || '',
       latitude: parsedAddress.latitude || '',
       longitude: parsedAddress.longitude || '',
-      shippingCourier: 'JNE',
-      shippingFee: 15000,
+      shippingCourier: '',
+      shippingFee: 0,
       paymentMethod: 'transfer',
       selectedBank: 'bca',
     }
@@ -155,181 +153,59 @@ function CheckoutPage() {
     }
   }, [subdistricts, values.subdistrict, fetchVillages])
 
-  const fetchPostalCodeOptions = useCallback(
-    async (kelurahanName, subdistrictName, cityName, provinceName) => {
-      if (!kelurahanName && !subdistrictName) {
-        setPostalCodeOptions([])
-        return
-      }
-
-      setIsLoadingPostalCodes(true)
-      try {
-        const res = await apiClient.get('/location/postal-code', {
-          kelurahan: kelurahanName || '',
-          subdistrict: subdistrictName || '',
-          city: cityName || values.city || '',
-          province: provinceName || values.province || '',
-        })
-
-        const options = (res?.data || []).map(item => ({
-          code: item.postalCode,
-          label: item.label,
+  // Items to price shipping for; the server looks up their weights (same rule as order creation).
+  // Serialized so the rate request only re-runs when the items actually change.
+  const shippingItemsKey = useMemo(
+    () =>
+      JSON.stringify(
+        checkoutItems.map(item => ({
+          productId: String(item.id),
+          variantId: item.variantId || null,
+          quantity: item.quantity,
         }))
-
-        setPostalCodeOptions(options)
-
-        // Auto-select logic
-        if (options.length === 1) {
-          handleChange({ target: { name: 'postalCode', value: options[0].code } })
-        } else if (options.length > 1) {
-          if (!values.postalCode || !options.some(o => o.code === values.postalCode)) {
-            handleChange({ target: { name: 'postalCode', value: options[0].code } })
-          }
-        }
-      } catch (err) {
-        console.error('Failed to resolve postal code options:', err)
-        setPostalCodeOptions([])
-      } finally {
-        setIsLoadingPostalCodes(false)
-      }
-    },
-    [handleChange, values.city, values.postalCode, values.province]
+      ),
+    [checkoutItems]
   )
 
-  // Auto-resolve postal codes if kelurahan and subdistrict are pre-filled
-  useEffect(() => {
-    if (
-      values.kelurahan &&
-      values.subdistrict &&
-      postalCodeOptions.length === 0 &&
-      !isManualPostalCode
-    ) {
-      fetchPostalCodeOptions(values.kelurahan, values.subdistrict, values.city, values.province)
-    }
-  }, [
-    values.kelurahan,
-    values.subdistrict,
-    values.city,
-    values.province,
-    postalCodeOptions.length,
-    isManualPostalCode,
-    fetchPostalCodeOptions,
-  ])
+  // Selected kelurahan (from BinderByte wilayah) - its ID is what the server prices shipping with
+  const selectedVillage = useMemo(
+    () => villages.find(v => v.name.toLowerCase() === values.kelurahan.toLowerCase()) || null,
+    [villages, values.kelurahan]
+  )
 
-  // Calculate total weight of the checkout items in kilograms (aligned with backend weight rules)
-  const totalWeight = useMemo(() => {
-    return checkoutItems.reduce((sum, item) => {
-      const itemWeight = Number(item.weight || item.product?.weight || 1000)
-      return sum + (itemWeight / 1000) * item.quantity
-    }, 0)
-  }, [checkoutItems])
-
-  // Fetch live shipping rates from backend API
+  // Kode pos always follows the selected kelurahan (no manual entry: it must match the priced location).
+  // Also normalizes the casing of a saved kelurahan name so the dropdown shows it as selected.
   useEffect(() => {
-    if (!values.province || !values.city) {
-      setServerCourierOptions(null)
-      return
+    if (selectedVillage && values.kelurahan !== selectedVillage.name) {
+      handleChange({ target: { name: 'kelurahan', value: selectedVillage.name } })
     }
+    const postalCode = selectedVillage?.postalCode || ''
+    if (values.postalCode !== postalCode && (selectedVillage || villages.length > 0)) {
+      handleChange({ target: { name: 'postalCode', value: postalCode } })
+    }
+  }, [selectedVillage, villages.length, values.kelurahan, values.postalCode, handleChange])
+
+  // Fetch exact courier tariffs from the server. No estimated fallback: on failure, no courier can be chosen.
+  useEffect(() => {
+    setCourierOptions([])
+    setShippingRateError(null)
+    setIsLoadingRates(false)
+    const items = JSON.parse(shippingItemsKey)
+    if (!selectedVillage?.id || items.length === 0) return
 
     let isMounted = true
-    getShippingRates({
-      city: values.city,
-      province: values.province,
-      weight: Math.round(totalWeight * 1000),
-    }).then(result => {
-      if (isMounted && result?.options) {
-        setServerCourierOptions(result.options)
-      }
+    setIsLoadingRates(true)
+    getShippingRates({ villageId: selectedVillage.id, items }).then(result => {
+      if (!isMounted) return
+      setCourierOptions(result.options)
+      setShippingRateError(result.error)
+      setIsLoadingRates(false)
     })
 
     return () => {
       isMounted = false
     }
-  }, [values.province, values.city, totalWeight])
-
-  // Calculate dynamic courier shipping fees based on server rates with local fallback
-  const courierOptions = useMemo(() => {
-    if (serverCourierOptions && serverCourierOptions.length > 0) {
-      return serverCourierOptions
-    }
-
-    if (!values.province || !values.city) {
-      return [
-        { id: 'JNE', name: 'JNE Express', fee: 15000, desc: '2-3 hari kerja', available: true },
-        { id: 'J&T', name: 'J&T Express', fee: 18000, desc: '2-4 hari kerja', available: true },
-        { id: 'POS', name: 'Pos Indonesia', fee: 12000, desc: '3-5 hari kerja', available: true },
-        {
-          id: 'GOSEND',
-          name: 'GoSend',
-          fee: 25000,
-          desc: 'Same Day (Khusus Tangerang)',
-          available: false,
-        },
-      ]
-    }
-
-    const prov = values.province.toUpperCase()
-    const cityName = values.city.toUpperCase()
-    const isTangerangArea = cityName.includes('TANGERANG')
-
-    // Exact matching with backend ZONE_RATES
-    let jneRate = 35000
-    let jntRate = 38000
-    let posRate = 30000
-
-    if (isTangerangArea) {
-      jneRate = 9000
-      jntRate = 10000
-      posRate = 8000
-    } else if (
-      prov.includes('BANTEN') ||
-      prov.includes('JAKARTA') ||
-      cityName.includes('BEKASI') ||
-      cityName.includes('DEPOK') ||
-      cityName.includes('BOGOR')
-    ) {
-      jneRate = 11000
-      jntRate = 12000
-      posRate = 10000
-    } else if (prov.includes('JAWA') || prov.includes('YOGYAKARTA')) {
-      jneRate = 18000
-      jntRate = 20000
-      posRate = 16000
-    }
-
-    const weightKg = Math.max(1, Math.ceil(totalWeight))
-
-    return [
-      {
-        id: 'JNE',
-        name: 'JNE Express',
-        fee: jneRate * weightKg,
-        desc: `2-3 hari kerja (${weightKg} kg)`,
-        available: true,
-      },
-      {
-        id: 'J&T',
-        name: 'J&T Express',
-        fee: jntRate * weightKg,
-        desc: `2-4 hari kerja (${weightKg} kg)`,
-        available: true,
-      },
-      {
-        id: 'POS',
-        name: 'Pos Indonesia',
-        fee: posRate * weightKg,
-        desc: `3-5 hari kerja (${weightKg} kg)`,
-        available: true,
-      },
-      {
-        id: 'GOSEND',
-        name: 'GoSend',
-        fee: 25000,
-        desc: isTangerangArea ? 'Same Day (Max 20kg)' : 'Lokasi di luar jangkauan GoSend',
-        available: isTangerangArea && weightKg <= 20,
-      },
-    ]
-  }, [serverCourierOptions, values.province, values.city, totalWeight])
+  }, [selectedVillage?.id, shippingItemsKey])
 
   // Keep form's shippingFee and selected courier in sync with calculated courier options
   useEffect(() => {
@@ -350,14 +226,18 @@ function CheckoutPage() {
       }
     } else {
       const firstAvailable = courierOptions.find(opt => opt.available)
-      if (firstAvailable) {
-        handleChange({ target: { name: 'shippingCourier', value: firstAvailable.id } })
-        handleChange({ target: { name: 'shippingFee', value: firstAvailable.fee } })
+      const nextCourier = firstAvailable?.id || ''
+      const nextFee = firstAvailable?.fee || 0
+      if (values.shippingCourier !== nextCourier) {
+        handleChange({ target: { name: 'shippingCourier', value: nextCourier } })
+      }
+      if (values.shippingFee !== nextFee) {
+        handleChange({ target: { name: 'shippingFee', value: nextFee } })
       }
     }
   }, [courierOptions, values.shippingCourier, values.shippingFee, handleChange])
 
-  const shippingFee = Number(values.shippingFee || 15000)
+  const shippingFee = Number(values.shippingFee || 0)
   const finalTotal = useMemo(() => totalPrice + shippingFee, [totalPrice, shippingFee])
 
   const handleSelectCourier = useCallback(
@@ -481,7 +361,12 @@ function CheckoutPage() {
         }
 
         const matchedCourier = courierOptions.find(o => o.id === currentValues.shippingCourier && o.available)
-        const activeShippingFee = matchedCourier ? matchedCourier.fee : Number(currentValues.shippingFee || 15000)
+        if (!matchedCourier || !selectedVillage) {
+          setOrderError(shippingRateError || 'Silakan pilih kelurahan dan kurir pengiriman terlebih dahulu.')
+          setIsProcessing(false)
+          scrollToError()
+          return
+        }
 
         // 2. Prepare structured order payload
         orderPayload = {
@@ -490,13 +375,12 @@ function CheckoutPage() {
           addressDetail: currentValues.addressDetail?.trim(),
           province: currentValues.province?.trim(),
           city: currentValues.city?.trim(),
-          subdistrict: currentValues.subdistrict?.trim(),
-          kelurahan: currentValues.kelurahan?.trim(),
-          postalCode: currentValues.postalCode?.trim(),
+          villageId: selectedVillage.id,
           latitude: currentValues.latitude ? String(currentValues.latitude).trim() : null,
           longitude: currentValues.longitude ? String(currentValues.longitude).trim() : null,
-          shippingCourier: currentValues.shippingCourier,
-          shippingFee: activeShippingFee,
+          shippingCourier: matchedCourier.courier,
+          shippingService: matchedCourier.service,
+          shippingFee: matchedCourier.fee,
           paymentMethod:
             currentValues.paymentMethod === 'transfer'
               ? `TRANSFER_${currentValues.selectedBank.toUpperCase()}`
@@ -603,6 +487,8 @@ function CheckoutPage() {
       user?.phone,
       scrollToError,
       courierOptions,
+      selectedVillage,
+      shippingRateError,
       values,
     ]
   )
@@ -815,8 +701,6 @@ function CheckoutPage() {
 
                         setSubdistricts([])
                         setVillages([])
-                        setPostalCodeOptions([])
-                        setIsManualPostalCode(false)
                         handleChange({ target: { name: 'city', value: '' } })
                         handleChange({ target: { name: 'subdistrict', value: '' } })
                         handleChange({ target: { name: 'kelurahan', value: '' } })
@@ -860,8 +744,6 @@ function CheckoutPage() {
 
                         setSubdistricts([])
                         setVillages([])
-                        setPostalCodeOptions([])
-                        setIsManualPostalCode(false)
                         handleChange({ target: { name: 'subdistrict', value: '' } })
                         handleChange({ target: { name: 'kelurahan', value: '' } })
                         handleChange({ target: { name: 'postalCode', value: '' } })
@@ -905,8 +787,6 @@ function CheckoutPage() {
                         }
 
                         setVillages([])
-                        setPostalCodeOptions([])
-                        setIsManualPostalCode(false)
                         handleChange({ target: { name: 'kelurahan', value: '' } })
                         handleChange({ target: { name: 'postalCode', value: '' } })
                       }}
@@ -936,24 +816,7 @@ function CheckoutPage() {
                     <select
                       name="kelurahan"
                       value={values.kelurahan}
-                      onChange={e => {
-                        const selectedName = e.target.value
-                        handleChange(e)
-                        setIsManualPostalCode(false)
-
-                        if (selectedName && values.subdistrict) {
-                          handleChange({ target: { name: 'postalCode', value: '' } })
-                          fetchPostalCodeOptions(
-                            selectedName,
-                            values.subdistrict,
-                            values.city,
-                            values.province
-                          )
-                        } else {
-                          setPostalCodeOptions([])
-                          handleChange({ target: { name: 'postalCode', value: '' } })
-                        }
-                      }}
+                      onChange={handleChange}
                       onBlur={handleBlur}
                       className="w-full px-4 py-3 border border-gray-300 focus:border-gray-900 focus:outline-none transition-colors bg-white appearance-none"
                       disabled={isSubmitting || isProcessing || villages.length === 0}
@@ -971,74 +834,19 @@ function CheckoutPage() {
                   </div>
                 </div>
 
-                {/* Kode Pos */}
+                {/* Kode Pos (otomatis dari kelurahan) */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-xs font-body font-medium text-gray-900 uppercase tracking-wider">
-                      Kode Pos
-                    </label>
-                    {!isManualPostalCode ? (
-                      <button
-                        type="button"
-                        onClick={() => setIsManualPostalCode(true)}
-                        className="text-[11px] text-primary-700 hover:text-primary-900 hover:underline font-body transition-colors"
-                      >
-                        Input Manual
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setIsManualPostalCode(false)}
-                        className="text-[11px] text-primary-700 hover:text-primary-900 hover:underline font-body transition-colors"
-                      >
-                        Pilih dari Dropdown
-                      </button>
-                    )}
-                  </div>
-
-                  {isLoadingPostalCodes ? (
-                    <div className="flex items-center gap-2 px-4 py-3 border border-gray-300 bg-gray-50 text-gray-600 text-xs font-body">
-                      <Icon name="Loader2" size={16} className="animate-spin text-gray-600" />
-                      <span>
-                        Mencari kode pos wilayah {values.kelurahan || values.subdistrict}...
-                      </span>
-                    </div>
-                  ) : !isManualPostalCode ? (
-                    <select
-                      name="postalCode"
-                      value={values.postalCode}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      className="w-full px-4 py-3 border border-gray-300 focus:border-gray-900 focus:outline-none transition-colors bg-white appearance-none"
-                      disabled={isSubmitting || isProcessing}
-                    >
-                      <option value="">
-                        {postalCodeOptions.length === 0
-                          ? values.kelurahan
-                            ? 'Kode pos tidak ditemukan otomatis (klik Input Manual)'
-                            : 'Pilih Kelurahan terlebih dahulu'
-                          : '-- Pilih Kode Pos --'}
-                      </option>
-                      {postalCodeOptions.map(opt => (
-                        <option key={opt.code} value={opt.code}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      name="postalCode"
-                      maxLength="5"
-                      value={values.postalCode}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      className="w-full px-4 py-3 border border-gray-300 focus:border-gray-900 focus:outline-none transition-colors"
-                      placeholder="Contoh: 10330 (5 digit angka)"
-                      disabled={isSubmitting || isProcessing}
-                    />
-                  )}
-
+                  <label className="block text-xs font-body font-medium text-gray-900 mb-2 uppercase tracking-wider">
+                    Kode Pos
+                  </label>
+                  <input
+                    type="text"
+                    name="postalCode"
+                    value={values.postalCode}
+                    readOnly
+                    className="w-full px-4 py-3 border border-gray-300 bg-gray-50 text-gray-700 focus:outline-none"
+                    placeholder="Terisi otomatis setelah memilih kelurahan"
+                  />
                   {errors.postalCode && touched.postalCode && (
                     <p className="mt-1 text-xs text-red-500">{errors.postalCode}</p>
                   )}
@@ -1052,8 +860,11 @@ function CheckoutPage() {
                   courierOptions={courierOptions}
                   selectedCourier={values.shippingCourier}
                   onSelectCourier={handleSelectCourier}
-                  error={errors.shippingCourier}
-                  touched={touched.shippingCourier}
+                  error={shippingRateError || errors.shippingCourier}
+                  isLoading={isLoadingRates}
+                  emptyMessage={
+                    selectedVillage ? null : 'Pilih kelurahan terlebih dahulu untuk melihat tarif kurir.'
+                  }
                 />
 
                 {/* Payment Method */}

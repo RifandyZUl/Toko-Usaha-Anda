@@ -1,27 +1,25 @@
 /**
  * Shipping Routes
- * Endpoints for shipping rates and live courier tariff lookups
+ * Endpoints for exact courier tariff lookups (BinderByte)
  */
 
 import { Router } from 'express'
-import { calculateShippingRates } from '../services/shippingService.js'
+import { calculateShippingRates, getItemsWeightGrams } from '../services/shippingService.js'
+import { validateShippingCalculate } from '../middleware/validate.js'
 
 const router = Router()
 
 /**
  * POST /api/shipping/calculate
- * Calculate dynamic shipping options based on destination and weight
+ * Body: { villageId: "36.71.11.1005", items: [{ productId, variantId?, quantity }] }
+ * Weight is computed on the server from product data (same rule as order creation), so the fee shown
+ * at checkout matches the fee charged. Fails (no estimate) when BinderByte cannot price the route.
  */
-router.post('/calculate', async (req, res, next) => {
+router.post('/calculate', validateShippingCalculate, async (req, res, next) => {
   try {
-    const { city, province, destinationCityId, weight } = req.body
-
-    const rates = await calculateShippingRates({
-      city: typeof city === 'string' ? city : '',
-      province: typeof province === 'string' ? province : '',
-      destinationCityId: destinationCityId || null,
-      weight: Number(weight) || 1000,
-    })
+    const { villageId, items } = req.body
+    const weightGrams = await getItemsWeightGrams(items)
+    const rates = await calculateShippingRates({ villageId, weightGrams })
 
     res.status(200).json({
       success: true,

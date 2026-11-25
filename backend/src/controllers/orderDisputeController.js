@@ -1,4 +1,5 @@
 import prisma from '../config/database.js'
+import { restockItems, updateOrderIfStatus, updateOrderIfUnchanged } from '../services/orderStockService.js'
 
 /**
  * Customer files a dispute / complaint for a shipped or delivered order
@@ -31,22 +32,25 @@ export const createOrderDispute = async (req, res, next) => {
         ? order.paymentDetails
         : {}
 
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: {
-        paymentDetails: {
-          ...existingDetails,
-          disputeDetails: {
-            isDisputed: true,
-            reason,
-            description,
-            solutionExpected,
-            disputedAt: new Date().toISOString(),
-            status: 'PENDING_REVIEW',
-          },
+    // Conditional write: if auto-complete or another writer changed the order since we read it, answer 409
+    // instead of silently erasing their data (or having ours erased)
+    const written = await updateOrderIfUnchanged(order, {
+      paymentDetails: {
+        ...existingDetails,
+        disputeDetails: {
+          isDisputed: true,
+          reason,
+          description,
+          solutionExpected,
+          disputedAt: new Date().toISOString(),
+          status: 'PENDING_REVIEW',
         },
       },
     })
+    if (!written) {
+      return res.status(409).json({ error: 'Pesanan baru saja diperbarui. Silakan muat ulang halaman dan coba lagi.' })
+    }
+    const updatedOrder = await prisma.order.findUnique({ where: { id } })
 
     res.json({
       success: true,
@@ -74,6 +78,9 @@ export const resolveOrderDispute = async (req, res, next) => {
     })
 
     if (!order) return res.status(404).json({ error: 'Order not found' })
+    if (decision === 'ACCEPT_RETURN' && order.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'Pesanan sudah berstatus dibatalkan' })
+    }
     const existingDetails =
       typeof order.paymentDetails === 'object' && order.paymentDetails !== null
         ? order.paymentDetails
@@ -81,47 +88,37 @@ export const resolveOrderDispute = async (req, res, next) => {
 
     const updatedOrder = await prisma.$transaction(async tx => {
       if (decision === 'ACCEPT_RETURN') {
-        // Return product stock
-        for (const item of order.items) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { stock: { increment: item.quantity } },
-          })
-        }
-
-        return await tx.order.update({
-          where: { id },
-          data: {
-            status: 'CANCELLED',
-            paymentStatus: order.paymentStatus === 'PAID' ? 'REFUNDED' : 'FAILED',
-            paymentDetails: {
-              ...existingDetails,
-              disputeDetails: {
-                ...(existingDetails.disputeDetails || {}),
-                status: 'ACCEPTED_RETURN',
-                adminNotes,
-                resolvedAt: new Date().toISOString(),
-              },
-            },
-          },
-        })
-      }
-
-      // If rejected, restore dispute status
-      return await tx.order.update({
-        where: { id },
-        data: {
+        // Cancel only if the order is unchanged since we read it, so a double submit cannot restock twice
+        await updateOrderIfStatus(tx, order, {
+          status: 'CANCELLED',
+          paymentStatus: order.paymentStatus === 'PAID' ? 'REFUNDED' : 'FAILED',
           paymentDetails: {
             ...existingDetails,
             disputeDetails: {
               ...(existingDetails.disputeDetails || {}),
-              status: 'REJECTED',
+              status: 'ACCEPTED_RETURN',
               adminNotes,
               resolvedAt: new Date().toISOString(),
             },
           },
+        })
+        await restockItems(tx, order.items)
+        return tx.order.findUnique({ where: { id } })
+      }
+
+      // If rejected, restore dispute status (same unchanged-since-read guard as the accept path)
+      await updateOrderIfStatus(tx, order, {
+        paymentDetails: {
+          ...existingDetails,
+          disputeDetails: {
+            ...(existingDetails.disputeDetails || {}),
+            status: 'REJECTED',
+            adminNotes,
+            resolvedAt: new Date().toISOString(),
+          },
         },
       })
+      return tx.order.findUnique({ where: { id } })
     })
 
     res.json({

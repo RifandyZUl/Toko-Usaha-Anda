@@ -20,7 +20,7 @@ const FAQ_DATA = [
     id: 3,
     question: 'Bagaimana opsi pengiriman dan estimasi waktu sampai?',
     answer:
-      'Untuk pengiriman reguler ke seluruh kota di Indonesia, kami bekerjasama dengan ekspedisi resmi terpercaya seperti JNE, J&T Express, dan SiCepat dengan nomor resi otomatis yang bisa dilacak. Khusus wilayah Tangerang dan sekitarnya, tersedia opsi kurir instan/sameday seperti GoSend dan GrabExpress agar barang tiba di hari yang sama.',
+      'Kami mengirim ke seluruh Indonesia melalui ekspedisi resmi JNE, J&T Express, dan Pos Indonesia. Ongkos kirim dihitung otomatis sesuai tarif resmi kurir berdasarkan alamat tujuan dan berat paket, lengkap dengan estimasi waktu sampai. Setelah paket dikirim, nomor resi bisa dilacak langsung dari halaman pesanan Anda.',
   },
   {
     id: 4,

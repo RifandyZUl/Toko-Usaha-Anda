@@ -276,3 +276,14 @@ model IdempotencyKey {
   @@index([createdAt])
   @@map("idempotency_keys")
 }
+// Cache respons BinderByte (wilayah, pemetaan lokasi ongkir, tarif, cek resi) yang dibagi antar instance serverless.
+// Menghemat rate limit (60 req/menit) & kuota cek resi. Baris kedaluwarsa dibersihkan oleh cron /api/cron/cleanup.
+model BinderbyteCache {
+  key       String   @id
+  value     Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("binderbyte_cache")
+}

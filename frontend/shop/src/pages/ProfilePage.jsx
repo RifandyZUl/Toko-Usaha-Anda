@@ -6,7 +6,6 @@ import Loading from '../components/common/Loading'
 import { useAuthStore } from '../stores/authStore'
 import { getAllOrders, cancelOrder, completeOrder } from '../services/orders'
 import { updateProfile } from '../services/auth'
-import { apiClient } from '../config/api'
 import { logError } from '../utils/logger'
 import { useLocation as useLocationHook } from '../hooks/useLocation'
 import ProfileInfoTab from '../components/profile/ProfileInfoTab'
@@ -164,27 +163,13 @@ function ProfilePage() {
     }
   }, [subdistricts, addressForm.subdistrict, fetchVillages])
 
-  // Postal code resolver
+  // Postal code comes straight from the selected kelurahan (BinderByte wilayah data)
   const fetchPostalCode = useCallback(
-    async (kelurahanName, subdistrictName) => {
-      try {
-        const res = await apiClient.get('/location/postal-code', {
-          kelurahan: kelurahanName || '',
-          subdistrict: subdistrictName || '',
-          city: addressForm.city || '',
-          province: addressForm.province || '',
-        })
-        if (res?.data && res.data.length > 0) {
-          const match = res.data[0]
-          if (match && match.postalCode) {
-            setAddressForm(prev => ({ ...prev, postalCode: match.postalCode }))
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch postal code:', err)
-      }
+    kelurahanName => {
+      const match = villages.find(v => v.name === kelurahanName)
+      setAddressForm(prev => ({ ...prev, postalCode: match?.postalCode || '' }))
     },
-    [addressForm.city, addressForm.province]
+    [villages]
   )
 
   // Fetch orders API call
